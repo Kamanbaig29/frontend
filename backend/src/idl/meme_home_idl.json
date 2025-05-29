@@ -1,0 +1,551 @@
+{
+    "version": "0.1.0",
+    "name": "MEME-Home",
+    "instructions": [
+      {
+        "name": "configure",
+        "accounts": [
+          {
+            "name": "admin",
+            "isMut": true,
+            "isSigner": true
+          },
+          {
+            "name": "globalConfig",
+            "isMut": true,
+            "isSigner": false
+          },
+          {
+            "name": "systemProgram",
+            "isMut": false,
+            "isSigner": false
+          }
+        ],
+        "args": []
+      },
+      {
+        "name": "launch",
+        "accounts": [
+          {
+            "name": "creator",
+            "isMut": true,
+            "isSigner": true
+          },
+          {
+            "name": "globalConfig",
+            "isMut": false,
+            "isSigner": false
+          },
+          {
+            "name": "tokenMint",
+            "isMut": true,
+            "isSigner": true
+          },
+          {
+            "name": "bondingCurve",
+            "isMut": true,
+            "isSigner": false
+          },
+          {
+            "name": "curveTokenAccount",
+            "isMut": true,
+            "isSigner": false
+          },
+          {
+            "name": "tokenMetadataAccount",
+            "isMut": true,
+            "isSigner": false
+          },
+          {
+            "name": "tokenProgram",
+            "isMut": false,
+            "isSigner": false
+          },
+          {
+            "name": "associatedTokenProgram",
+            "isMut": false,
+            "isSigner": false
+          },
+          {
+            "name": "metadataProgram",
+            "isMut": false,
+            "isSigner": false
+          },
+          {
+            "name": "systemProgram",
+            "isMut": false,
+            "isSigner": false
+          },
+          {
+            "name": "rent",
+            "isMut": false,
+            "isSigner": false
+          }
+        ],
+        "args": [
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "symbol",
+            "type": "string"
+          },
+          {
+            "name": "uri",
+            "type": "string"
+          }
+        ]
+      },
+      {
+        "name": "swap",
+        "accounts": [
+          {
+            "name": "user",
+            "isMut": true,
+            "isSigner": true
+          },
+          {
+            "name": "globalConfig",
+            "isMut": false,
+            "isSigner": false
+          },
+          {
+            "name": "feeRecipient",
+            "isMut": true,
+            "isSigner": false
+          },
+          {
+            "name": "bondingCurve",
+            "isMut": true,
+            "isSigner": false
+          },
+          {
+            "name": "tokenMint",
+            "isMut": false,
+            "isSigner": false
+          },
+          {
+            "name": "curveTokenAccount",
+            "isMut": true,
+            "isSigner": false
+          },
+          {
+            "name": "userTokenAccount",
+            "isMut": true,
+            "isSigner": false
+          },
+          {
+            "name": "tokenProgram",
+            "isMut": false,
+            "isSigner": false
+          },
+          {
+            "name": "associatedTokenProgram",
+            "isMut": false,
+            "isSigner": false
+          },
+          {
+            "name": "systemProgram",
+            "isMut": false,
+            "isSigner": false
+          }
+        ],
+        "args": [
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "direction",
+            "type": "u8"
+          },
+          {
+            "name": "minOut",
+            "type": "u64"
+          }
+        ]
+      },
+      {
+        "name": "removeLiquidity",
+        "accounts": [
+          {
+            "name": "payer",
+            "isMut": true,
+            "isSigner": true
+          },
+          {
+            "name": "bondingCurve",
+            "isMut": true,
+            "isSigner": false
+          },
+          {
+            "name": "curveTokenAccount",
+            "isMut": true,
+            "isSigner": false
+          },
+          {
+            "name": "tokenMint",
+            "isMut": true,
+            "isSigner": false
+          },
+          {
+            "name": "creatorAccount",
+            "isMut": true,
+            "isSigner": false
+          },
+          {
+            "name": "opTokenAccount",
+            "isMut": true,
+            "isSigner": false
+          },
+          {
+            "name": "wrapSolAccount",
+            "isMut": true,
+            "isSigner": false
+          },
+          {
+            "name": "wsolMint",
+            "isMut": false,
+            "isSigner": false
+          },
+          {
+            "name": "tokenProgram",
+            "isMut": false,
+            "isSigner": false
+          },
+          {
+            "name": "systemProgram",
+            "isMut": false,
+            "isSigner": false
+          },
+          {
+            "name": "associatedTokenProgram",
+            "isMut": false,
+            "isSigner": false
+          }
+        ],
+        "args": []
+      },
+      {
+        "name": "proxyInitialize",
+        "accounts": [
+          {
+            "name": "cpSwapProgram",
+            "isMut": false,
+            "isSigner": false
+          },
+          {
+            "name": "creator",
+            "isMut": true,
+            "isSigner": true,
+            "docs": [
+              "Address paying to create the pool. Can be anyone"
+            ]
+          },
+          {
+            "name": "ammConfig",
+            "isMut": false,
+            "isSigner": false,
+            "docs": [
+              "Which config the pool belongs to."
+            ]
+          },
+          {
+            "name": "authority",
+            "isMut": false,
+            "isSigner": false
+          },
+          {
+            "name": "poolState",
+            "isMut": true,
+            "isSigner": false
+          },
+          {
+            "name": "token0Mint",
+            "isMut": false,
+            "isSigner": false,
+            "docs": [
+              "Token_0 mint, the key must smaller then token_1 mint."
+            ]
+          },
+          {
+            "name": "token1Mint",
+            "isMut": false,
+            "isSigner": false,
+            "docs": [
+              "Token_1 mint, the key must grater then token_0 mint."
+            ]
+          },
+          {
+            "name": "lpMint",
+            "isMut": true,
+            "isSigner": false
+          },
+          {
+            "name": "creatorToken0",
+            "isMut": true,
+            "isSigner": false,
+            "docs": [
+              "payer token0 account"
+            ]
+          },
+          {
+            "name": "creatorToken1",
+            "isMut": true,
+            "isSigner": false,
+            "docs": [
+              "creator token1 account"
+            ]
+          },
+          {
+            "name": "creatorLpToken",
+            "isMut": true,
+            "isSigner": false
+          },
+          {
+            "name": "token0Vault",
+            "isMut": true,
+            "isSigner": false
+          },
+          {
+            "name": "token1Vault",
+            "isMut": true,
+            "isSigner": false
+          },
+          {
+            "name": "createPoolFee",
+            "isMut": true,
+            "isSigner": false,
+            "docs": [
+              "create pool fee account"
+            ]
+          },
+          {
+            "name": "observationState",
+            "isMut": true,
+            "isSigner": false
+          },
+          {
+            "name": "tokenProgram",
+            "isMut": false,
+            "isSigner": false,
+            "docs": [
+              "Program to create mint account and mint tokens"
+            ]
+          },
+          {
+            "name": "token0Program",
+            "isMut": false,
+            "isSigner": false,
+            "docs": [
+              "Spl token program or token program 2022"
+            ]
+          },
+          {
+            "name": "token1Program",
+            "isMut": false,
+            "isSigner": false,
+            "docs": [
+              "Spl token program or token program 2022"
+            ]
+          },
+          {
+            "name": "associatedTokenProgram",
+            "isMut": false,
+            "isSigner": false,
+            "docs": [
+              "Program to create an ATA for receiving position NFT"
+            ]
+          },
+          {
+            "name": "systemProgram",
+            "isMut": false,
+            "isSigner": false,
+            "docs": [
+              "To create a new program account"
+            ]
+          },
+          {
+            "name": "rent",
+            "isMut": false,
+            "isSigner": false,
+            "docs": [
+              "Sysvar for program account"
+            ]
+          }
+        ],
+        "args": [
+          {
+            "name": "initAmount0",
+            "type": "u64"
+          },
+          {
+            "name": "initAmount1",
+            "type": "u64"
+          },
+          {
+            "name": "openTime",
+            "type": "u64"
+          }
+        ]
+      }
+    ],
+    "accounts": [
+      {
+        "name": "BondingCurve",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "virtualTokenReserves",
+              "type": "u64"
+            },
+            {
+              "name": "virtualSolReserves",
+              "type": "u64"
+            },
+            {
+              "name": "realTokenReserves",
+              "type": "u64"
+            },
+            {
+              "name": "realSolReserves",
+              "type": "u64"
+            },
+            {
+              "name": "tokenTotalSupply",
+              "type": "u64"
+            },
+            {
+              "name": "isCompleted",
+              "type": "bool"
+            }
+          ]
+        }
+      },
+      {
+        "name": "Config",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "authority",
+              "type": "publicKey"
+            },
+            {
+              "name": "feeRecipt",
+              "type": "publicKey"
+            },
+            {
+              "name": "curveLimit",
+              "type": "u64"
+            },
+            {
+              "name": "initialVirtualTokenReserves",
+              "type": "u64"
+            },
+            {
+              "name": "initialVirtualSolReserves",
+              "type": "u64"
+            },
+            {
+              "name": "initialRealTokenReserves",
+              "type": "u64"
+            },
+            {
+              "name": "totalTokenSupply",
+              "type": "u64"
+            },
+            {
+              "name": "buyFeePercent",
+              "type": "f64"
+            },
+            {
+              "name": "sellFeePercent",
+              "type": "f64"
+            },
+            {
+              "name": "migrationFeePercent",
+              "type": "f64"
+            }
+          ]
+        }
+      }
+    ],
+    "errors": [
+      {
+        "code": 6000,
+        "name": "NotAuthorized",
+        "msg": "Not authorized address"
+      },
+      {
+        "code": 6001,
+        "name": "IncorrectFeeRecipient",
+        "msg": "Fee recipient address is not match with the one in the config"
+      },
+      {
+        "code": 6002,
+        "name": "IncorrectValue",
+        "msg": "The value is not in the expected range"
+      },
+      {
+        "code": 6003,
+        "name": "ReturnAmountTooSmall",
+        "msg": "Amount out is smaller than required amount "
+      },
+      {
+        "code": 6004,
+        "name": "InvalidAmountIn",
+        "msg": "Invalid amount in"
+      },
+      {
+        "code": 6005,
+        "name": "OverflowOrUnderflowOccured",
+        "msg": "An overflow or underflow occured during calculation "
+      },
+      {
+        "code": 6006,
+        "name": "OverflowOrUnderflowOccuredOne",
+        "msg": "An overflow or underflow occured during calculation 1"
+      },
+      {
+        "code": 6007,
+        "name": "OverflowOrUnderflowOccuredTwo",
+        "msg": "An overflow or underflow occured during calculation 2"
+      },
+      {
+        "code": 6008,
+        "name": "OverflowOrUnderflowOccuredThree",
+        "msg": "An overflow or underflow occured during calculation 3"
+      },
+      {
+        "code": 6009,
+        "name": "OverflowOrUnderflowOccuredFour",
+        "msg": "An overflow or underflow occured during calculation 4"
+      },
+      {
+        "code": 6010,
+        "name": "OverflowOrUnderflowOccuredFive",
+        "msg": "An overflow or underflow occured during calculation 5"
+      },
+      {
+        "code": 6011,
+        "name": "CurveAlreadyCompleted",
+        "msg": "Curve is already completed"
+      },
+      {
+        "code": 6012,
+        "name": "CurveIsNotComplete",
+        "msg": "curve is not complete"
+      }
+    ],
+    "metadata": {
+      "address": "HX9REZoZccLoearGnUobFKMTUNmKmmCqWouY3hg4Qnk5"
+    }
+  }
+  
+  
+  
+  
+  
