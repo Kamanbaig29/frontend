@@ -3,6 +3,8 @@ import {
   TransactionInstruction,
   Transaction,
   PublicKey,
+  Connection,
+  Keypair,
 } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID, createInitializeAccountInstruction, getAccount } from "@solana/spl-token";
 import { SystemProgram } from "@solana/web3.js";
@@ -18,42 +20,34 @@ function calculateDiscriminator(name: string): Buffer {
   return Buffer.from(first8Bytes);
 }
 
+interface BuyTokenParams {
+  connection: Connection;
+  userKeypair: Keypair;
+  programId: PublicKey;
+  amount: number;
+  minOut: number;
+  direction: number;
+  swapAccounts: any; // Replace 'any' with your actual SwapAccounts type
+}
+
 export async function buyToken({
-  userKeypair,
   connection,
+  userKeypair,
   programId,
   amount,
   minOut,
+  direction,
   swapAccounts,
-}: {
-  userKeypair: any;
-  connection: any;
-  programId: PublicKey;
-  amount: bigint | number;
-  minOut: bigint | number;
-  swapAccounts: {
-    user: PublicKey;
-    globalConfig: PublicKey;
-    feeRecipient: PublicKey;
-    bondingCurve: PublicKey;
-    tokenMint: PublicKey;
-    curveTokenAccount: PublicKey;
-    userTokenAccount: PublicKey;
-    tokenProgram: PublicKey;
-    associatedTokenProgram: PublicKey;
-    systemProgram: PublicKey;
-  };
-}) {
+}: BuyTokenParams): Promise<string | undefined> {  // Update return type
   console.log("🔧 Preparing to buy token...");
 
   const discriminator = calculateDiscriminator("global:swap");
   console.log("🔑 Discriminator (hex):", discriminator.toString("hex"));
 
-  const direction = 0; // buy = 0
-
   const data = Buffer.alloc(25);
   discriminator.copy(data, 0);
   data.writeBigUInt64LE(BigInt(amount), 8);
+  // Encode direction as u8 at offset 16
   data.writeUInt8(direction, 16);
   data.writeBigUInt64LE(BigInt(minOut), 17);
 
@@ -89,7 +83,7 @@ export async function buyToken({
     // Account exists, proceed
   } catch (e) {
     console.error("❌ curveTokenAccount does not exist. Wait for program to create it (usually via launch).");
-    return;
+    return undefined;
   }
 
   // Transaction
@@ -98,11 +92,7 @@ export async function buyToken({
   try {
     console.log("📤 Sending transaction...");
     const signature = await connection.sendTransaction(tx, [userKeypair]);
-    console.log("✅ Transaction sent with signature:", signature);
-
-    console.log("⏳ Waiting for confirmation...");
-    await connection.confirmTransaction(signature);
-    console.log("🎉 Transaction confirmed!");
+    return signature;
   } catch (error: any) {
     console.error("❌ Error sending transaction:", error);
 
@@ -119,5 +109,6 @@ export async function buyToken({
     } else {
       console.error("No transaction logs available in error.");
     }
+    return undefined;  // Add explicit return for error case
   }
 }
