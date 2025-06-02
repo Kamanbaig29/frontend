@@ -1,54 +1,110 @@
-# React + TypeScript + Vite
+# Solana Token Sniper Bot Dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A real-time dashboard for monitoring and sniping Solana tokens with automatic detection and purchase capabilities.
 
-Currently, two official plugins are available:
+## Prerequisites
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Node.js 16+ installed
+- npm or yarn package manager
+- Solana CLI tools installed
+- A Solana wallet with SOL for transactions
 
-## Expanding the ESLint configuration
+## Environment Setup
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+Create a `.env` file in both frontend and backend directories:
 
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+### Frontend (.env)
+```env
+VITE_WS_URL=ws://localhost:3001
+VITE_API_URL=http://localhost:3001
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
+### Backend (.env)
+```env
+PORT=3001
+RPC_URL=your_solana_rpc_url
+PRIVATE_KEY=your_wallet_private_key
+MEMEHOME_PROGRAM_ID=your_program_id
 ```
+
+## Installation
+
+1. Clone the repository:
+```bash
+git clone <repository-url>
+cd frontend
+```
+
+2. Install dependencies for both frontend and backend:
+```bash
+# Install frontend dependencies
+npm install
+
+# Install backend dependencies
+cd backend
+npm install
+```
+
+## Starting the Application
+
+1. Start the backend server:
+```bash
+cd backend
+npm run dev
+```
+
+2. Start the frontend development server:
+```bash
+cd frontend
+npm run dev
+```
+
+The application will be available at:
+- Frontend: http://localhost:5173
+- Backend WebSocket: ws://localhost:3001
+
+## Features
+
+- Real-time token detection
+- Automatic token purchase
+- Transaction status monitoring
+- Copy-to-clipboard functionality for addresses
+- Dark theme interface
+- Status indicators for transactions
+
+## Tech Stack
+
+- Frontend: React + TypeScript + Vite
+- Backend: Node.js + TypeScript
+- Blockchain: Solana Web3.js
+- UI Framework: Material-UI (MUI)
+- State Management: React Context
+- Real-time Updates: WebSocket
+
+## Development
+
+To run in development mode with hot reloading:
+```bash
+# Terminal 1 - Backend
+cd backend
+npm run dev
+
+# Terminal 2 - Frontend
+cd frontend
+npm run dev
+```
+
+## Security Notes
+
+- Never commit your `.env` files
+- Keep your private keys secure
+- Use environment variables for sensitive data
+- Monitor your wallet balance
+- Set appropriate transaction limits
+
+## Troubleshooting
+
+- Ensure Solana RPC endpoint is responsive
+- Check WebSocket connection in browser console
+- Verify wallet has sufficient SOL balance
+- Monitor backend logs for transaction status

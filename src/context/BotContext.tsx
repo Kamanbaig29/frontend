@@ -1,154 +1,83 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useReducer, useContext } from 'react';
 import type { ReactNode } from 'react';
 
-interface BotState {
-  isRunning: boolean;
-  logs: Array<{
-    type: 'info' | 'success' | 'error';
-    message: string;
-    timestamp: number;
-  }>;
-  tokens: Array<{
-    mint: string;
-    creator: string;
-    bondingCurve: string;
-    curveTokenAccount: string;
-    userTokenAccount: string;
-    metadata: string;
-    decimals: number;
-    supply?: string;
-    status: 'detected' | 'buying' | 'bought' | 'failed';
-    timestamp: number;
-  }>;
+interface TokenStats {
+  mint: string;
+  buyPrice: number;
+  currentPrice: number;
+  profitLoss: number;
+  profitPercentage: number;
+  holdingTime: string;
+  status: 'holding' | 'selling' | 'sold';
 }
 
-const BotContext = createContext<{
-  state: BotState;
-} | null>(null);
+interface Token {
+  mint: string;
+  status: 'bought' | 'buying' | 'failed';
+  timestamp: number;
+  creator: string;
+  supply?: string;
+  bondingCurve: string;
+  curveTokenAccount: string;
+  userTokenAccount: string;
+  metadata: string;
+  decimals: number;
+  stats?: TokenStats;
+}
 
-export const BotProvider = ({ children }: { children: ReactNode }) => {
-  const [state, setState] = useState<BotState>({
-    isRunning: false,
-    logs: [],
-    tokens: []
-  });
+interface State {
+  tokens: Token[];
+  logs: { type: string; message: string; timestamp: number }[];
+  isRunning: boolean;
+}
 
-  useEffect(() => {
-    const ws = new WebSocket('ws://localhost:3001');
-    
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      
-      switch (data.type) {
-        case 'NEW_TOKEN':
-          setState(prev => ({
-            ...prev,
-            tokens: [...prev.tokens, {
-              ...data.tokenData,
-              status: 'detected',
-              timestamp: Date.now()
-            }],
-            logs: [...prev.logs, {
-              type: 'info',
-              message: `🎯 New token detected: ${data.tokenData.mint}`,
-              timestamp: Date.now()
-            }]
-          }));
-          break;
+type Action =
+  | { type: 'ADD_TOKEN'; payload: Token }
+  | { type: 'UPDATE_TOKEN_STATS'; payload: { mint: string; stats: TokenStats } }
+  | { type: 'ADD_LOG'; payload: { type: string; message: string } }
+  | { type: 'SET_BOT_STATUS'; payload: boolean };
 
-        case 'BUY_ATTEMPT':
-          setState(prev => ({
-            ...prev,
-            tokens: prev.tokens.map(token => 
-              token.mint === data.mintAddress 
-                ? { ...token, status: 'buying' }
-                : token
-            ),
-            logs: [...prev.logs, {
-              type: 'info',
-              message: `🔄 Attempting to buy: ${data.mintAddress}`,
-              timestamp: Date.now()
-            }]
-          }));
-          break;
+const initialState: State = {
+  tokens: [],
+  logs: [],
+  isRunning: false,
+};
 
-        case 'BUY_SUCCESS':
-          setState(prev => ({
-            ...prev,
-            tokens: prev.tokens.map(token => 
-              // Check if we have the mint address from tokenData or mintAddress
-              token.mint === (data.tokenData?.mint || data.mintAddress)
-                ? { ...token, status: 'bought' }
-                : token
-            ),
-            logs: [...prev.logs, {
-              type: 'success',
-              message: `✅ Successfully bought: ${data.tokenData?.mint || data.mintAddress || 'Unknown Token'}`,
-              timestamp: Date.now()
-            }]
-          }));
-          break;
+const reducer = (state: State, action: Action): State => {
+  switch (action.type) {
+    case 'ADD_TOKEN':
+      return { ...state, tokens: [...state.tokens, action.payload] };
+    case 'UPDATE_TOKEN_STATS':
+      return {
+        ...state,
+        tokens: state.tokens.map((token) =>
+          token.mint === action.payload.mint
+            ? { ...token, stats: action.payload.stats }
+            : token
+        ),
+      };
+    case 'ADD_LOG':
+      return { ...state, logs: [...state.logs, { ...action.payload, timestamp: Date.now() }] };
+    case 'SET_BOT_STATUS':
+      return { ...state, isRunning: action.payload };
+    default:
+      return state;
+  }
+};
 
-        case 'TRANSACTION_LOG':
-          setState(prev => ({
-            ...prev,
-            logs: [...prev.logs, {
-              type: 'info',
-              message: data.message,
-              timestamp: Date.now()
-            }]
-          }));
-          break;
+const BotContext = createContext<{ state: State; dispatch: React.Dispatch<Action> } | undefined>(
+  undefined
+);
 
-        case 'ERROR':
-          setState(prev => ({
-            ...prev,
-            logs: [...prev.logs, {
-              type: 'error',
-              message: `❌ ${data.message}`,
-              timestamp: Date.now()
-            }]
-          }));
-          break;
-      }
-    };
-
-    ws.onopen = () => {
-      setState(prev => ({
-        ...prev,
-        isRunning: true,
-        logs: [...prev.logs, {
-          type: 'info',
-          message: '🟢 Connected to bot',
-          timestamp: Date.now()
-        }]
-      }));
-    };
-
-    ws.onclose = () => {
-      setState(prev => ({
-        ...prev,
-        isRunning: false,
-        logs: [...prev.logs, {
-          type: 'error',
-          message: '🔴 Disconnected from bot',
-          timestamp: Date.now()
-        }]
-      }));
-    };
-
-    return () => ws.close();
-  }, []);
-
-  return (
-    <BotContext.Provider value={{ state }}>
-      {children}
-    </BotContext.Provider>
-  );
+export const BotProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [state, dispatch] = useReducer(reducer, initialState);
+  return <BotContext.Provider value={{ state, dispatch }}>{children}</BotContext.Provider>;
 };
 
 export const useBot = () => {
   const context = useContext(BotContext);
-  if (!context) throw new Error('useBot must be used within BotProvider');
+  if (!context) {
+    throw new Error('useBot must be used within a BotProvider');
+  }
   return context;
 };
