@@ -5,9 +5,10 @@ import ManageSearchIcon from '@mui/icons-material/ManageSearch';
 
 interface LandingPageProps {
   onSelectMode: (mode: 'manual' | 'automatic') => void;
+  onViewStats: () => void;
 }
 
-export const LandingPage = ({ onSelectMode }: LandingPageProps) => {
+export const LandingPage: React.FC<LandingPageProps> = ({ onSelectMode, onViewStats }) => {
   return (
     <Box 
       sx={{ 
@@ -41,7 +42,7 @@ export const LandingPage = ({ onSelectMode }: LandingPageProps) => {
           Token Sniper Bot
         </Typography>
         
-        <Box sx={{ display: 'flex', gap: 3, justifyContent: 'center' }}>
+        <Box sx={{ display: 'flex', gap: 3, flexDirection: 'column', alignItems: 'center' }}>
           <Button
             variant="contained"
             size="large"
@@ -52,7 +53,8 @@ export const LandingPage = ({ onSelectMode }: LandingPageProps) => {
               '&:hover': { bgcolor: '#372B7A' },
               py: 2,
               px: 4,
-              fontSize: '1.1rem'
+              fontSize: '1.1rem',
+              width: '100%'
             }}
           >
             Automatic Trading
@@ -68,10 +70,27 @@ export const LandingPage = ({ onSelectMode }: LandingPageProps) => {
               '&:hover': { bgcolor: '#372B7A' },
               py: 2,
               px: 4,
-              fontSize: '1.1rem'
+              fontSize: '1.1rem',
+              width: '100%'
             }}
           >
             Manual Trading
+          </Button>
+
+          <Button
+            variant="contained"
+            size="large"
+            onClick={onViewStats}
+            sx={{
+              bgcolor: '#3CB371',
+              '&:hover': { bgcolor: '#2E8B57' },
+              py: 2,
+              px: 4,
+              fontSize: '1.1rem',
+              width: '100%'
+            }}
+          >
+            View Statistics
           </Button>
         </Box>
       </Paper>

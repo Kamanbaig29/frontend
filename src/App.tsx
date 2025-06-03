@@ -4,12 +4,17 @@ import { BotProvider } from './context/BotContext';
 import { LandingPage } from './components/LandingPage';
 import { Dashboard } from './components/Dashboard';
 import { ManualBuyForm } from './components/ManualBuyForm';
+import { Stats } from './components/Stats';
 
 export const App = () => {
-  const [tradingMode, setTradingMode] = useState<'manual' | 'automatic' | null>(null);
+  const [currentView, setCurrentView] = useState<'landing' | 'automatic' | 'manual' | 'stats'>('landing');
 
   const handleModeSelect = (mode: 'manual' | 'automatic') => {
-    setTradingMode(mode);
+    setCurrentView(mode);
+  };
+
+  const handleViewStats = () => {
+    setCurrentView('stats');
   };
 
   const handleBackHome = () => {
@@ -21,7 +26,7 @@ export const App = () => {
       }));
       ws.close();
     };
-    setTradingMode(null);
+    setCurrentView('landing');
   };
 
   return (
@@ -36,11 +41,16 @@ export const App = () => {
           background: '#1a1a1a'
         }}
       >
-        {!tradingMode ? (
-          <LandingPage onSelectMode={handleModeSelect} />
-        ) : tradingMode === 'automatic' ? (
+        {currentView === 'landing' && (
+          <LandingPage 
+            onSelectMode={handleModeSelect} 
+            onViewStats={handleViewStats}
+          />
+        )}
+        {currentView === 'automatic' && (
           <Dashboard onBackHome={handleBackHome} />
-        ) : (
+        )}
+        {currentView === 'manual' && (
           <div className="container mx-auto p-4">
             <div className="flex justify-between items-center mb-6">
               <div>
@@ -62,6 +72,9 @@ export const App = () => {
             </div>
             <ManualBuyForm />
           </div>
+        )}
+        {currentView === 'stats' && (
+          <Stats onBackHome={handleBackHome} />
         )}
       </div>
     </BotProvider>

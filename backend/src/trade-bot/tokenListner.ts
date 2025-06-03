@@ -17,9 +17,15 @@ import { handleManualBuy } from "../action/manualBuy";
 import {
   createAssociatedTokenAccountInstruction,
   getAssociatedTokenAddress,
+  TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 import WebSocket, { WebSocketServer } from "ws";
 import bs58 from 'bs58';
+import { AutoTokenBuy } from '../models/AutoTokenBuy'; // Add at the top
+import { TokenStats } from '../models/TokenStats'; // Add at the top
+import { WalletToken } from '../models/WalletToken';
+import { Metaplex } from "@metaplex-foundation/js";
+import { getTokenPrice } from "../utils/getTokenPrice";
 
 const MEMEHOME_PROGRAM_ID = new PublicKey(process.env.MEMEHOME_PROGRAM_ID!);
 
@@ -69,8 +75,46 @@ const DIRECTION = 0;
 // Move sleep function outside
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Add after your other constants
-const wss = new WebSocketServer({ port: 3001 });
+// Replace the current WebSocket server creation
+let wss: WebSocketServer;
+
+const createWebSocketServer = (port: number = 3001, retries: number = 3): WebSocketServer => {
+  try {
+    const server = new WebSocketServer({ port });
+    console.log(`📡 WebSocket server started on port ${port}`);
+    return server;
+  } catch (error: any) {
+    if (error.code === 'EADDRINUSE') {
+      if (retries > 0) {
+        console.log(`Port ${port} in use, trying ${port + 1}...`);
+        return createWebSocketServer(port + 1, retries - 1);
+      }
+      console.error('❌ No available ports found after retries');
+      process.exit(1);
+    }
+    throw error;
+  }
+};
+
+// Create the WebSocket server with retry logic
+wss = createWebSocketServer();
+
+// Add cleanup handlers
+process.on('SIGINT', () => {
+  console.log('Shutting down WebSocket server...');
+  wss.close(() => {
+    console.log('WebSocket server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGTERM', () => {
+  console.log('Shutting down WebSocket server...');
+  wss.close(() => {
+    console.log('WebSocket server closed');
+    process.exit(0);
+  });
+});
 
 console.log("📡 WebSocket server started on port 3001");
 
@@ -121,10 +165,29 @@ const resetBotState = () => {
   });
 };
 
-// Add this function to check wallet balance
+// Update the checkWalletBalance function with better error handling
 async function checkWalletBalance(connection: Connection, publicKey: PublicKey, requiredAmount: number): Promise<boolean> {
   try {
-    const balance = await connection.getBalance(publicKey);
+    // Try multiple times to get balance
+    let retries = 3;
+    let balance = null;
+    
+    while (retries > 0) {
+      try {
+        balance = await connection.getBalance(publicKey);
+        break;
+      } catch (error) {
+        console.log(`Retry ${4-retries} failed, attempts left: ${retries-1}`);
+        retries--;
+        if (retries === 0) throw error;
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second between retries
+      }
+    }
+
+    if (balance === null) {
+      throw new Error('Failed to get wallet balance after multiple attempts');
+    }
+
     console.log(`💰 Current wallet balance: ${balance / 1e9} SOL`);
     console.log(`💵 Required amount: ${requiredAmount / 1e9} SOL`);
     
@@ -136,15 +199,121 @@ async function checkWalletBalance(connection: Connection, publicKey: PublicKey, 
       return false;
     }
     return true;
+
   } catch (error) {
     console.error('❌ Error checking wallet balance:', error);
-    return false;
+    throw new Error('Failed to verify wallet balance. Please try again.');
   }
 }
 
-export function startTokenListener() {
+async function fetchWalletTokens(connection: Connection, walletPublicKey: PublicKey) {
+  const tokenAccounts = await connection.getTokenAccountsByOwner(walletPublicKey, { programId: TOKEN_PROGRAM_ID });
+  return tokenAccounts.value;
+}
+
+async function updateWalletTokens(connection: Connection, walletPublicKey: PublicKey) {
+  try {
+    const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
+      walletPublicKey,
+      { programId: TOKEN_PROGRAM_ID }
+    );
+
+    for (const account of tokenAccounts.value) {
+      try {
+        const tokenMint = account.account.data.parsed.info.mint;
+        const tokenAmount = account.account.data.parsed.info.tokenAmount.amount;
+        const decimals = account.account.data.parsed.info.tokenAmount.decimals;
+
+        // Get metadata using Metaplex
+        const metaplex = new Metaplex(connection);
+        const nft = await metaplex.nfts().findByMint({ mintAddress: new PublicKey(tokenMint) });
+
+        // Get current price
+        const price = await getTokenPrice(tokenMint);
+
+        // Update with only the required fields
+        await WalletToken.findOneAndUpdate(
+          { mint: tokenMint },
+          {
+            mint: tokenMint,
+            amount: tokenAmount,
+            currentPrice: price || 0,
+            name: nft?.name || 'Unknown',
+            symbol: nft?.symbol || 'Unknown',
+            decimals: decimals,
+            description: nft?.json?.description || ''
+          },
+          { upsert: true, new: true }
+        );
+
+        console.log(`✅ Updated token ${tokenMint}`);
+      } catch (error) {
+        console.error(`❌ Error updating token: ${error}`);
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error fetching wallet tokens:', error);
+  }
+}
+
+// New function to update a single wallet token
+async function updateWalletToken(connection: Connection, tokenMint: string) {
+  try {
+    // Get token account info
+    const walletPublicKey = userKeypair.publicKey;
+    const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
+      walletPublicKey,
+      { mint: new PublicKey(tokenMint) }
+    );
+
+    if (tokenAccounts.value.length > 0) {
+      const account = tokenAccounts.value[0];
+      const tokenAmount = account.account.data.parsed.info.tokenAmount.amount;
+      const decimals = account.account.data.parsed.info.tokenAmount.decimals;
+
+      // Get metadata using Metaplex
+      const metaplex = new Metaplex(connection);
+      const nft = await metaplex.nfts().findByMint({ mintAddress: new PublicKey(tokenMint) });
+
+      // Get current price using Jupiter API
+      const price = await getTokenPrice(tokenMint);
+
+      // Update token data without description
+      await WalletToken.findOneAndUpdate(
+        { mint: tokenMint },
+        {
+          $set: {
+            mint: tokenMint,
+            amount: tokenAmount,
+            currentPrice: price || 0,
+            name: nft?.name || 'Unknown',
+            symbol: nft?.symbol || 'Unknown',
+            decimals: decimals
+          }
+        },
+        { upsert: true, new: true }
+      );
+
+      console.log(`✅ Updated token ${tokenMint} with price: ${price} SOL`);
+    }
+  } catch (error) {
+    console.error(`❌ Error updating token ${tokenMint}:`, error);
+  }
+}
+
+export async function startTokenListener() {
   const connection = getConnection();
   console.log('🚀 Bot initialized - Waiting for mode selection...');
+
+  // Check if database is empty
+  const existingTokens = await WalletToken.countDocuments();
+  
+  if (existingTokens === 0) {
+    console.log('📝 First run detected - Initializing wallet tokens...');
+    await updateWalletTokens(connection, userKeypair.publicKey);
+  } else {
+    console.log('✅ Existing tokens found, skipping initial update');
+  }
 
   // Function to start listening
   const startListening = () => {
@@ -451,47 +620,85 @@ export function startTokenListener() {
               );
             }
 
-            console.log("🎉 Buy transaction confirmed!");
+            // Add this after successful buy confirmation
+            try {
+              console.log("✅ Buy transaction confirmed!");
+              
+              // Only update the newly bought token
+              await updateWalletToken(connection, tokenData.mint);
+              console.log('✅ New token data updated');
 
-            // Get transaction details
-            const txDetails = await connection.getTransaction(signature, {
-              commitment: "confirmed",
-              maxSupportedTransactionVersion: 0,
-            });
+              // Store buy in AutoTokenBuy collection
+              await AutoTokenBuy.create({
+                mint: tokenData.mint,
+                creator: tokenData.creator,
+                bondingCurve: tokenData.bondingCurve,
+                curveTokenAccount: tokenData.curveTokenAccount,
+                userTokenAccount: tokenData.userTokenAccount,
+                metadata: tokenData.metadata,
+                decimals: tokenData.decimals,
+                supply: tokenData.supply,
+                buyTimestamp: Date.now(),
+                transactionSignature: signature,
+                status: 'bought'
+              });
 
-            if (!txDetails) {
-              throw new Error("Failed to fetch transaction details");
-            }
+              // Get transaction details
+              const txDetails = await connection.getTransaction(signature, {
+                commitment: "confirmed",
+                maxSupportedTransactionVersion: 0,
+              });
 
-            console.log(`✨ Transaction successful!`);
-            console.log(`📊 Transaction details:
-              Signature: ${signature}
-              Block: ${txDetails.slot}
-              Fee: ${txDetails.meta?.fee} lamports
-            `);
+              if (!txDetails) {
+                throw new Error("Failed to fetch transaction details");
+              }
 
-            // Only add to processed set after successful buy
-            if (mintAddress) {
-              processedMints.add(mintAddress);
-              console.log(`✅ Successfully processed mint: ${mintAddress}`);
-            }
+              console.log(`✨ Transaction successful!`);
+              console.log(`📊 Transaction details:
+                Signature: ${signature}
+                Block: ${txDetails.slot}
+                Fee: ${txDetails.meta?.fee} lamports
+              `);
 
-            // Broadcast successful buy
-            broadcastUpdate({
-              type: "BUY_SUCCESS",
-              tokenData: {
-                mint: mintAddress,
-                stats: {
+              // Only add to processed set after successful buy
+              if (mintAddress) {
+                processedMints.add(mintAddress);
+                console.log(`✅ Successfully processed mint: ${mintAddress}`);
+              }
+
+              // Broadcast successful buy
+              broadcastUpdate({
+                type: "BUY_SUCCESS",
+                tokenData: {
                   mint: mintAddress,
-                  buyPrice: BUY_AMOUNT / 1e9, // Convert lamports to SOL
+                  stats: {
+                    mint: mintAddress,
+                    buyPrice: BUY_AMOUNT / 1e9, // Convert lamports to SOL
+                    currentPrice: BUY_AMOUNT / 1e9,
+                    profitLoss: 0,
+                    profitPercentage: 0,
+                    holdingTime: '0m',
+                    status: 'holding'
+                  }
+                }
+              });
+              await TokenStats.findOneAndUpdate(
+                { mint: mintAddress },
+                {
+                  mint: mintAddress,
+                  buyPrice: BUY_AMOUNT / 1e9,
                   currentPrice: BUY_AMOUNT / 1e9,
                   profitLoss: 0,
                   profitPercentage: 0,
                   holdingTime: '0m',
-                  status: 'holding'
-                }
-              }
-            });
+                  status: 'holding',
+                  lastUpdated: Date.now()
+                },
+                { upsert: true, new: true }
+              );
+            } catch (error) {
+              console.error("❌ Error updating token data:", error);
+            }
           } catch (error) {
             console.error("❌ Buy transaction failed:", error);
             if (error instanceof Error) {
@@ -569,48 +776,34 @@ export function startTokenListener() {
               try {
                 const { mintAddress, amount, privateKey } = data.data;
                 
-                // Convert SOL to lamports and adjust amount (divide by 1000)
-                const amountInLamports = Math.floor(amount * 1e9); // Convert SOL to lamports
-                const adjustedAmount = Math.floor(amountInLamports / 1000); // Adjust amount like in auto mode
+                // Convert SOL to lamports and adjust amount
+                const amountInLamports = Math.floor(amount * 1e9);
+                const adjustedAmount = Math.floor(amountInLamports / 1000);
                 
                 console.log(`💰 Original amount: ${amountInLamports} lamports (${amount} SOL)`);
                 console.log(`💵 Adjusted amount: ${adjustedAmount} lamports (${adjustedAmount / 1e9} SOL)`);
 
-                // Handle private key
                 let secretKeyArray: number[];
                 try {
-                  // Handle base58 string format
+                  // Create a new connection for this specific transaction
+                  const connection = new Connection(process.env.RPC_ENDPOINT || 'https://api.devnet.solana.com', 'confirmed');
+                  
+                  // Parse private key
                   if (typeof privateKey === 'string' && !privateKey.startsWith('[')) {
-                    // Convert base58 string to Uint8Array
-                    const decodedKey = bs58.decode(privateKey);
-                    secretKeyArray = Array.from(decodedKey);
+                    secretKeyArray = Array.from(bs58.decode(privateKey));
                   } else {
-                    // Handle JSON array format
-                    if (typeof privateKey === 'string') {
-                      secretKeyArray = JSON.parse(privateKey);
-                    } else if (Array.isArray(privateKey)) {
-                      secretKeyArray = privateKey;
-                    } else {
-                      throw new Error('Invalid private key format');
-                    }
+                    secretKeyArray = Array.isArray(privateKey) ? privateKey : JSON.parse(privateKey);
                   }
 
-                  // Validate the array length
                   if (!Array.isArray(secretKeyArray) || secretKeyArray.length !== 64) {
-                    console.error('❌ Invalid private key length:', secretKeyArray?.length);
-                    ws.send(JSON.stringify({
-                      type: 'MANUAL_BUY_ERROR',
-                      error: 'Invalid private key length. Expected 64 bytes.'
-                    }));
-                    return;
+                    throw new Error('Invalid private key format');
                   }
 
-                  // Create keypair for balance check
                   const userKeypair = Keypair.fromSecretKey(Uint8Array.from(secretKeyArray));
 
-                  // Check wallet balance before proceeding
+                  // Check balance with retry logic
                   const hasEnoughBalance = await checkWalletBalance(
-                    getConnection(),
+                    connection,
                     userKeypair.publicKey,
                     amountInLamports
                   );
@@ -618,80 +811,74 @@ export function startTokenListener() {
                   if (!hasEnoughBalance) {
                     ws.send(JSON.stringify({
                       type: 'MANUAL_BUY_ERROR',
-                      error: 'Insufficient wallet balance. Please add more SOL to your wallet.'
+                      error: 'Insufficient wallet balance'
                     }));
                     return;
                   }
 
+                  // Proceed with buy
                   const result = await handleManualBuy(
                     mintAddress,
                     adjustedAmount,
-                    JSON.stringify(secretKeyArray), // Pass the stringified array
-                    getConnection(),
+                    JSON.stringify(secretKeyArray),
+                    connection,
                     MEMEHOME_PROGRAM_ID
                   );
 
+                  // Handle success
                   if (result.success) {
                     console.log('✅ Manual buy successful');
+                    await updateWalletToken(connection, mintAddress);
+                    
                     ws.send(JSON.stringify({
                       type: 'MANUAL_BUY_SUCCESS',
                       signature: result.signature,
                       details: result.details
                     }));
+                  }
 
-                    broadcastUpdate({
-                      type: 'NEW_TOKEN',
-                      tokenData: {
-                        mint: mintAddress,
-                        status: 'bought',
-                        timestamp: Date.now(),
-                        signature: result.signature,
-                        creator: 'manual-buy',
-                        bondingCurve: '',
-                        curveTokenAccount: '',
-                        userTokenAccount: '',
-                        metadata: '',
-                        decimals: 9
-                      }
-                    });
-                  } else {
-                    console.error('❌ Manual buy failed:', result.error);
-                    ws.send(JSON.stringify({
-                      type: 'MANUAL_BUY_ERROR',
-                      error: result.error || 'Transaction failed'
-                    }));
-                  }
-                } catch (parseError) {
-                  console.error('❌ Error parsing private key:', parseError);
-                  ws.send(JSON.stringify({
-                    type: 'MANUAL_BUY_ERROR',
-                    error: 'Invalid private key format. Please provide a valid private key.'
-                  }));
-                  return;
+                } catch (err: unknown) {
+                  const processError = err as Error;
+                  throw new Error(`Failed to process buy: ${processError.message}`);
                 }
-              } catch (error) {
-                console.error('❌ Manual buy error:', error);
-                let errorMessage = 'Unknown error occurred';
-                
-                if (error instanceof Error) {
-                  if (error.message.includes('insufficient lamports')) {
-                    errorMessage = 'Insufficient SOL balance in wallet';
-                  } else if (error.message.includes('custom program error')) {
-                    errorMessage = 'Transaction failed: Program error';
-                  } else {
-                    errorMessage = error.message;
-                  }
-                }
-                
+
+              } catch (err: unknown) {
+                const buyError = err as Error;
+                console.error('❌ Manual buy error:', buyError);
                 ws.send(JSON.stringify({
                   type: 'MANUAL_BUY_ERROR',
-                  error: errorMessage
+                  error: buyError.message || 'Failed to complete manual buy'
                 }));
               }
               break;
 
             case 'RESET_STATE':
               resetBotState();
+              break;
+
+            case 'GET_STATS':
+              try {
+                const [autoTokenBuys, tokenStats, walletTokens] = await Promise.all([
+                  AutoTokenBuy.find().sort({ buyTimestamp: -1 }),
+                  TokenStats.find().sort({ lastUpdated: -1 }),
+                  WalletToken.find().sort({ lastUpdated: -1 })
+                ]);
+
+                ws.send(JSON.stringify({
+                  type: 'STATS_DATA',
+                  data: {
+                    autoTokenBuys,
+                    tokenStats,
+                    walletTokens
+                  }
+                }));
+              } catch (error) {
+                console.error('Error fetching stats:', error);
+                ws.send(JSON.stringify({
+                  type: 'ERROR',
+                  error: 'Failed to fetch statistics'
+                }));
+              }
               break;
 
             default:
@@ -718,4 +905,68 @@ export function startTokenListener() {
   } catch (error) {
     console.error("Error starting bot:", error);
   }
+}
+
+// Add these interfaces at the top with your other interfaces
+interface ParsedTokenAccountData {
+  program: string;
+  parsed: {
+    info: {
+      mint: string;
+      owner: string;
+      state: string;
+      amount: string;
+      delegate?: string;
+      delegatedAmount?: string;
+      isNative?: boolean;
+      name?: string;
+      symbol?: string;
+      decimals?: number;
+    };
+    type: string;
+  };
+  space: number;
+}
+
+interface ParsedTokenMintData {
+  program: string;
+  parsed: {
+    info: {
+      decimals: number;
+      freezeAuthority: string | null;
+      isInitialized: boolean;
+      mintAuthority: string | null;
+      supply: string;
+      name?: string;
+      symbol?: string;
+    };
+    type: string;
+  };
+  space: number;
+}
+
+interface WalletToken {
+  mint: string;             // Token's mint address
+  amount: string;           // Amount of tokens held
+  valueInSol: number;       // Value in SOL
+  buyPrice: number;         // Price when bought
+  lastPrice: number;        // Latest price
+  lastUpdated: number;      // Last update timestamp
+  metadata: {
+    name: string;          // Token name
+    symbol: string;        // Token symbol
+    decimals: number;      // Token decimals
+  }
+}
+
+// First add this interface at the top of your file
+interface WebSocketError {
+  code?: string;
+  message: string;
+}
+
+// First add this interface at the top of your file
+interface BuyError extends Error {
+  code?: string;
+  message: string;
 }
