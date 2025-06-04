@@ -2,13 +2,21 @@ import React from 'react';
 import { Box, Button, Paper, Typography } from '@mui/material';
 import AutoModeIcon from '@mui/icons-material/AutoMode';
 import ManageSearchIcon from '@mui/icons-material/ManageSearch';
+import SellIcon from '@mui/icons-material/Sell';
 
 interface LandingPageProps {
   onSelectMode: (mode: 'manual' | 'automatic') => void;
   onViewStats: () => void;
+  onManualSell: () => void;
+  onAutomaticSell: () => void;
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({ onSelectMode, onViewStats }) => {
+export const LandingPage: React.FC<LandingPageProps> = ({
+  onSelectMode,
+  onViewStats,
+  onManualSell,
+  onAutomaticSell
+}) => {
   return (
     <Box 
       sx={{ 
@@ -75,6 +83,40 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectMode, onViewSt
             }}
           >
             Manual Trading
+          </Button>
+
+          <Button
+            variant="contained"
+            size="large"
+            startIcon={<SellIcon />}
+            onClick={onManualSell}
+            sx={{
+              bgcolor: '#FF8C00',
+              '&:hover': { bgcolor: '#FF7F50' },
+              py: 2,
+              px: 4,
+              fontSize: '1.1rem',
+              width: '100%'
+            }}
+          >
+            Manual Sell
+          </Button>
+
+          <Button
+            variant="contained"
+            size="large"
+            startIcon={<SellIcon />}
+            onClick={onAutomaticSell}
+            sx={{
+              bgcolor: '#CD5C5C',
+              '&:hover': { bgcolor: '#B22222' },
+              py: 2,
+              px: 4,
+              fontSize: '1.1rem',
+              width: '100%'
+            }}
+          >
+            Automatic Sell
           </Button>
 
           <Button

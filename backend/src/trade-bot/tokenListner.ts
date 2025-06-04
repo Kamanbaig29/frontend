@@ -20,12 +20,19 @@ import {
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 import WebSocket, { WebSocketServer } from "ws";
-import bs58 from 'bs58';
-import { AutoTokenBuy } from '../models/AutoTokenBuy'; // Add at the top
-import { TokenStats } from '../models/TokenStats'; // Add at the top
-import { WalletToken } from '../models/WalletToken';
+import bs58 from "bs58";
+import { AutoTokenBuy } from "../models/AutoTokenBuy"; // Add at the top
+import { TokenStats } from "../models/TokenStats"; // Add at the top
+import { WalletToken } from "../models/WalletToken";
 import { Metaplex } from "@metaplex-foundation/js";
 import { getTokenPrice } from "../utils/getTokenPrice";
+import { sellToken } from "../action/sell";
+
+import {
+  RPC_ENDPOINT,
+  BUYER_PUBLIC_KEY,
+  USER_SECRET_KEY,
+} from "../config/test-config";
 
 const MEMEHOME_PROGRAM_ID = new PublicKey(process.env.MEMEHOME_PROGRAM_ID!);
 
@@ -66,6 +73,19 @@ interface TokenData {
   supply?: string;
 }
 
+function calculateAmountOut(
+  amountIn: bigint,
+  tokenReserve: bigint,
+  solReserve: bigint,
+  feeNumerator = 997n,
+  feeDenominator = 1000n
+): bigint {
+  const amountInWithFee = amountIn * feeNumerator;
+  const numerator = amountInWithFee * solReserve;
+  const denominator = tokenReserve * feeDenominator + amountInWithFee;
+  return numerator / denominator;
+}
+
 // Add constants at the top
 const BUY_AMOUNT = 100_000_000; // 0.1 SOL
 const BUY_AMOUNT_ADJUSTED = Math.floor(BUY_AMOUNT / 1000); // 100_000
@@ -78,18 +98,21 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 // Replace the current WebSocket server creation
 let wss: WebSocketServer;
 
-const createWebSocketServer = (port: number = 3001, retries: number = 3): WebSocketServer => {
+const createWebSocketServer = (
+  port: number = 3001,
+  retries: number = 3
+): WebSocketServer => {
   try {
     const server = new WebSocketServer({ port });
     console.log(`📡 WebSocket server started on port ${port}`);
     return server;
   } catch (error: any) {
-    if (error.code === 'EADDRINUSE') {
+    if (error.code === "EADDRINUSE") {
       if (retries > 0) {
         console.log(`Port ${port} in use, trying ${port + 1}...`);
         return createWebSocketServer(port + 1, retries - 1);
       }
-      console.error('❌ No available ports found after retries');
+      console.error("❌ No available ports found after retries");
       process.exit(1);
     }
     throw error;
@@ -100,18 +123,18 @@ const createWebSocketServer = (port: number = 3001, retries: number = 3): WebSoc
 wss = createWebSocketServer();
 
 // Add cleanup handlers
-process.on('SIGINT', () => {
-  console.log('Shutting down WebSocket server...');
+process.on("SIGINT", () => {
+  console.log("Shutting down WebSocket server...");
   wss.close(() => {
-    console.log('WebSocket server closed');
+    console.log("WebSocket server closed");
     process.exit(0);
   });
 });
 
-process.on('SIGTERM', () => {
-  console.log('Shutting down WebSocket server...');
+process.on("SIGTERM", () => {
+  console.log("Shutting down WebSocket server...");
   wss.close(() => {
-    console.log('WebSocket server closed');
+    console.log("WebSocket server closed");
     process.exit(0);
   });
 });
@@ -120,11 +143,11 @@ console.log("📡 WebSocket server started on port 3001");
 
 // Create a function to send updates to all connected clients
 function broadcastUpdate(data: any) {
-  console.log('📤 Broadcasting update:', data);
+  console.log("📤 Broadcasting update:", data);
   wss.clients.forEach((client: WebSocket) => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(JSON.stringify(data));
-      console.log('✅ Update sent to client');
+      console.log("✅ Update sent to client");
     }
   });
 }
@@ -135,7 +158,7 @@ interface BotState {
 }
 
 const botState = {
-  isAutoMode: false
+  isAutoMode: false,
 };
 
 // Add these variables at the top with other state
@@ -150,68 +173,86 @@ const resetBotState = () => {
     connection.removeOnLogsListener(logListener);
     logListener = null;
   }
-  
+
   isListening = false;
   botState.isAutoMode = false;
-  
-  console.log('🔄 Bot state reset to initial state');
-  
+
+  console.log("🔄 Bot state reset to initial state");
+
   // Broadcast reset to all clients
   broadcastUpdate({
-    type: 'BOT_RESET',
-    status: 'ready',
-    mode: 'manual',
-    message: 'Bot has been reset to initial state'
+    type: "BOT_RESET",
+    status: "ready",
+    mode: "manual",
+    message: "Bot has been reset to initial state",
   });
 };
 
 // Update the checkWalletBalance function with better error handling
-async function checkWalletBalance(connection: Connection, publicKey: PublicKey, requiredAmount: number): Promise<boolean> {
+async function checkWalletBalance(
+  connection: Connection,
+  publicKey: PublicKey,
+  requiredAmount: number
+): Promise<boolean> {
   try {
     // Try multiple times to get balance
     let retries = 3;
     let balance = null;
-    
+
     while (retries > 0) {
       try {
         balance = await connection.getBalance(publicKey);
         break;
       } catch (error) {
-        console.log(`Retry ${4-retries} failed, attempts left: ${retries-1}`);
+        console.log(
+          `Retry ${4 - retries} failed, attempts left: ${retries - 1}`
+        );
         retries--;
         if (retries === 0) throw error;
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second between retries
+        await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait 1 second between retries
       }
     }
 
     if (balance === null) {
-      throw new Error('Failed to get wallet balance after multiple attempts');
+      throw new Error("Failed to get wallet balance after multiple attempts");
     }
 
     console.log(`💰 Current wallet balance: ${balance / 1e9} SOL`);
     console.log(`💵 Required amount: ${requiredAmount / 1e9} SOL`);
-    
+
     // Add buffer for transaction fees (0.01 SOL)
     const requiredWithBuffer = requiredAmount + 10_000_000;
-    
+
     if (balance < requiredWithBuffer) {
-      console.error(`❌ Insufficient balance. Need ${requiredWithBuffer / 1e9} SOL (including fees)`);
+      console.error(
+        `❌ Insufficient balance. Need ${
+          requiredWithBuffer / 1e9
+        } SOL (including fees)`
+      );
       return false;
     }
     return true;
-
   } catch (error) {
-    console.error('❌ Error checking wallet balance:', error);
-    throw new Error('Failed to verify wallet balance. Please try again.');
+    console.error("❌ Error checking wallet balance:", error);
+    throw new Error("Failed to verify wallet balance. Please try again.");
   }
 }
 
-async function fetchWalletTokens(connection: Connection, walletPublicKey: PublicKey) {
-  const tokenAccounts = await connection.getTokenAccountsByOwner(walletPublicKey, { programId: TOKEN_PROGRAM_ID });
+async function fetchWalletTokens(
+  connection: Connection,
+  walletPublicKey: PublicKey
+) {
+  const tokenAccounts = await connection.getTokenAccountsByOwner(
+    walletPublicKey,
+    { programId: TOKEN_PROGRAM_ID }
+  );
   return tokenAccounts.value;
 }
 
-async function updateWalletTokens(connection: Connection, walletPublicKey: PublicKey) {
+async function updateWalletTokens(
+  connection: Connection,
+  walletPublicKey: PublicKey
+) {
   try {
     const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
       walletPublicKey,
@@ -226,7 +267,9 @@ async function updateWalletTokens(connection: Connection, walletPublicKey: Publi
 
         // Get metadata using Metaplex
         const metaplex = new Metaplex(connection);
-        const nft = await metaplex.nfts().findByMint({ mintAddress: new PublicKey(tokenMint) });
+        const nft = await metaplex
+          .nfts()
+          .findByMint({ mintAddress: new PublicKey(tokenMint) });
 
         // Get current price
         const price = await getTokenPrice(tokenMint);
@@ -238,10 +281,10 @@ async function updateWalletTokens(connection: Connection, walletPublicKey: Publi
             mint: tokenMint,
             amount: tokenAmount,
             currentPrice: price || 0,
-            name: nft?.name || 'Unknown',
-            symbol: nft?.symbol || 'Unknown',
+            name: nft?.name || "Unknown",
+            symbol: nft?.symbol || "Unknown",
             decimals: decimals,
-            description: nft?.json?.description || ''
+            description: nft?.json?.description || "",
           },
           { upsert: true, new: true }
         );
@@ -252,7 +295,7 @@ async function updateWalletTokens(connection: Connection, walletPublicKey: Publi
       }
     }
   } catch (error) {
-    console.error('❌ Error fetching wallet tokens:', error);
+    console.error("❌ Error fetching wallet tokens:", error);
   }
 }
 
@@ -273,7 +316,9 @@ async function updateWalletToken(connection: Connection, tokenMint: string) {
 
       // Get metadata using Metaplex
       const metaplex = new Metaplex(connection);
-      const nft = await metaplex.nfts().findByMint({ mintAddress: new PublicKey(tokenMint) });
+      const nft = await metaplex
+        .nfts()
+        .findByMint({ mintAddress: new PublicKey(tokenMint) });
 
       // Get current price using Jupiter API
       const price = await getTokenPrice(tokenMint);
@@ -286,10 +331,10 @@ async function updateWalletToken(connection: Connection, tokenMint: string) {
             mint: tokenMint,
             amount: tokenAmount,
             currentPrice: price || 0,
-            name: nft?.name || 'Unknown',
-            symbol: nft?.symbol || 'Unknown',
-            decimals: decimals
-          }
+            name: nft?.name || "Unknown",
+            symbol: nft?.symbol || "Unknown",
+            decimals: decimals,
+          },
         },
         { upsert: true, new: true }
       );
@@ -303,26 +348,26 @@ async function updateWalletToken(connection: Connection, tokenMint: string) {
 
 export async function startTokenListener() {
   const connection = getConnection();
-  console.log('🚀 Bot initialized - Waiting for mode selection...');
+  console.log("🚀 Bot initialized - Waiting for mode selection...");
 
   // Check if database is empty
   const existingTokens = await WalletToken.countDocuments();
-  
+
   if (existingTokens === 0) {
-    console.log('📝 First run detected - Initializing wallet tokens...');
+    console.log("📝 First run detected - Initializing wallet tokens...");
     await updateWalletTokens(connection, userKeypair.publicKey);
   } else {
-    console.log('✅ Existing tokens found, skipping initial update');
+    console.log("✅ Existing tokens found, skipping initial update");
   }
 
   // Function to start listening
   const startListening = () => {
     if (isListening) {
-      console.log('👂 Already listening for tokens');
+      console.log("👂 Already listening for tokens");
       return;
     }
-    
-    console.log('👂 Starting token listener...');
+
+    console.log("👂 Starting token listener...");
     logListener = connection.onLogs(
       MEMEHOME_PROGRAM_ID,
       async (logInfo) => {
@@ -497,9 +542,7 @@ export async function startTokenListener() {
           const ataInfo = await connection.getAccountInfo(curveTokenATA);
           if (ataInfo) {
             // Check if it's a valid SPL Token Account
-            const parsed = await connection.getParsedAccountInfo(
-              curveTokenATA
-            );
+            const parsed = await connection.getParsedAccountInfo(curveTokenATA);
             if (
               parsed.value &&
               typeof parsed.value.data === "object" &&
@@ -557,9 +600,7 @@ export async function startTokenListener() {
               console.log("✅ curveTokenAccount created successfully!");
 
               // Verify ATA was created
-              const newAtaInfo = await connection.getAccountInfo(
-                curveTokenATA
-              );
+              const newAtaInfo = await connection.getAccountInfo(curveTokenATA);
               if (!newAtaInfo) {
                 throw new Error("ATA creation failed - account not found");
               }
@@ -623,10 +664,10 @@ export async function startTokenListener() {
             // Add this after successful buy confirmation
             try {
               console.log("✅ Buy transaction confirmed!");
-              
+
               // Only update the newly bought token
               await updateWalletToken(connection, tokenData.mint);
-              console.log('✅ New token data updated');
+              console.log("✅ New token data updated");
 
               // Store buy in AutoTokenBuy collection
               await AutoTokenBuy.create({
@@ -640,7 +681,7 @@ export async function startTokenListener() {
                 supply: tokenData.supply,
                 buyTimestamp: Date.now(),
                 transactionSignature: signature,
-                status: 'bought'
+                status: "bought",
               });
 
               // Get transaction details
@@ -677,10 +718,10 @@ export async function startTokenListener() {
                     currentPrice: BUY_AMOUNT / 1e9,
                     profitLoss: 0,
                     profitPercentage: 0,
-                    holdingTime: '0m',
-                    status: 'holding'
-                  }
-                }
+                    holdingTime: "0m",
+                    status: "holding",
+                  },
+                },
               });
               await TokenStats.findOneAndUpdate(
                 { mint: mintAddress },
@@ -690,9 +731,9 @@ export async function startTokenListener() {
                   currentPrice: BUY_AMOUNT / 1e9,
                   profitLoss: 0,
                   profitPercentage: 0,
-                  holdingTime: '0m',
-                  status: 'holding',
-                  lastUpdated: Date.now()
+                  holdingTime: "0m",
+                  status: "holding",
+                  lastUpdated: Date.now(),
                 },
                 { upsert: true, new: true }
               );
@@ -719,87 +760,106 @@ export async function startTokenListener() {
       },
       "confirmed"
     );
-    
+
     isListening = true;
-    console.log('✅ Token listener started successfully');
+    console.log("✅ Token listener started successfully");
   };
 
   // Function to stop listening
   const stopListening = () => {
     if (!isListening) {
-      console.log('🔇 Not currently listening');
+      console.log("🔇 Not currently listening");
       return;
     }
-    
+
     if (logListener) {
       connection.removeOnLogsListener(logListener);
       logListener = null;
     }
-    
+
     isListening = false;
-    console.log('🔇 Token listener stopped');
+    console.log("🔇 Token listener stopped");
   };
 
   try {
     // Single WebSocket connection handler for all functionality
-    wss.on('connection', (ws: WebSocket) => {
-      console.log('🔌 New client connected');
+    wss.on("connection", (ws: WebSocket) => {
+      console.log("🔌 New client connected");
 
-      ws.on('message', async (message: string) => {
+      ws.on("message", async (message: string) => {
         try {
           const data = JSON.parse(message);
-          console.log('📨 Received message:', data);
+          console.log("📨 Received message:", data);
 
           switch (data.type) {
-            case 'SET_MODE':
-              if (data.mode === 'automatic') {
+            case "SET_MODE":
+              if (data.mode === "automatic") {
                 botState.isAutoMode = true;
                 startListening();
                 broadcastUpdate({
-                  type: 'MODE_CHANGED',
-                  mode: 'automatic',
-                  message: 'Bot switched to automatic mode'
+                  type: "MODE_CHANGED",
+                  mode: "automatic",
+                  message: "Bot switched to automatic mode",
                 });
-              } else if (data.mode === 'manual') {
+              } else if (data.mode === "manual") {
                 botState.isAutoMode = false;
                 stopListening();
                 broadcastUpdate({
-                  type: 'MODE_CHANGED',
-                  mode: 'manual',
-                  message: 'Bot switched to manual mode'
+                  type: "MODE_CHANGED",
+                  mode: "manual",
+                  message: "Bot switched to manual mode",
                 });
               }
               break;
 
-            case 'MANUAL_BUY':
-              console.log('🛒 Manual buy request received');
+            case "MANUAL_BUY":
+              console.log("🛒 Manual buy request received");
               try {
                 const { mintAddress, amount, privateKey } = data.data;
-                
+
                 // Convert SOL to lamports and adjust amount
                 const amountInLamports = Math.floor(amount * 1e9);
                 const adjustedAmount = Math.floor(amountInLamports / 1000);
-                
-                console.log(`💰 Original amount: ${amountInLamports} lamports (${amount} SOL)`);
-                console.log(`💵 Adjusted amount: ${adjustedAmount} lamports (${adjustedAmount / 1e9} SOL)`);
+
+                console.log(
+                  `💰 Original amount: ${amountInLamports} lamports (${amount} SOL)`
+                );
+                console.log(
+                  `💵 Adjusted amount: ${adjustedAmount} lamports (${
+                    adjustedAmount / 1e9
+                  } SOL)`
+                );
 
                 let secretKeyArray: number[];
                 try {
                   // Create a new connection for this specific transaction
-                  const connection = new Connection(process.env.RPC_ENDPOINT || 'https://api.devnet.solana.com', 'confirmed');
-                  
+                  const connection = new Connection(
+                    process.env.RPC_ENDPOINT || "https://api.devnet.solana.com",
+                    "confirmed"
+                  );
+
                   // Parse private key
-                  if (typeof privateKey === 'string' && !privateKey.startsWith('[')) {
+                  if (
+                    typeof privateKey === "string" &&
+                    !privateKey.startsWith("[")
+                  ) {
                     secretKeyArray = Array.from(bs58.decode(privateKey));
                   } else {
-                    secretKeyArray = Array.isArray(privateKey) ? privateKey : JSON.parse(privateKey);
+                    secretKeyArray = Array.isArray(privateKey)
+                      ? privateKey
+                      : JSON.parse(privateKey);
                   }
 
-                  if (!Array.isArray(secretKeyArray) || secretKeyArray.length !== 64) {
-                    throw new Error('Invalid private key format');
+                  if (
+                    !Array.isArray(secretKeyArray) ||
+                    secretKeyArray.length !== 64
+                  ) {
+                    throw new Error("Invalid private key format");
                   }
 
-                  const userKeypair = Keypair.fromSecretKey(Uint8Array.from(secretKeyArray));
+                  const userKeypair = Keypair.fromSecretKey(
+                    Uint8Array.from(secretKeyArray)
+                  );
 
                   // Check balance with retry logic
                   const hasEnoughBalance = await checkWalletBalance(
@@ -809,10 +869,12 @@ export async function startTokenListener() {
                   );
 
                   if (!hasEnoughBalance) {
-                    ws.send(JSON.stringify({
-                      type: 'MANUAL_BUY_ERROR',
-                      error: 'Insufficient wallet balance'
-                    }));
+                    ws.send(
+                      JSON.stringify({
+                        type: "MANUAL_BUY_ERROR",
+                        error: "Insufficient wallet balance",
+                      })
+                    );
                     return;
                   }
 
@@ -827,81 +889,232 @@ export async function startTokenListener() {
 
                   // Handle success
                   if (result.success) {
-                    console.log('✅ Manual buy successful');
+                    console.log("✅ Manual buy successful");
                     await updateWalletToken(connection, mintAddress);
-                    
-                    ws.send(JSON.stringify({
-                      type: 'MANUAL_BUY_SUCCESS',
-                      signature: result.signature,
-                      details: result.details
-                    }));
-                  }
 
+                    ws.send(
+                      JSON.stringify({
+                        type: "MANUAL_BUY_SUCCESS",
+                        signature: result.signature,
+                        details: result.details,
+                      })
+                    );
+                  }
                 } catch (err: unknown) {
                   const processError = err as Error;
-                  throw new Error(`Failed to process buy: ${processError.message}`);
+                  throw new Error(
+                    `Failed to process buy: ${processError.message}`
+                  );
                 }
-
               } catch (err: unknown) {
                 const buyError = err as Error;
-                console.error('❌ Manual buy error:', buyError);
-                ws.send(JSON.stringify({
-                  type: 'MANUAL_BUY_ERROR',
-                  error: buyError.message || 'Failed to complete manual buy'
-                }));
+                console.error("❌ Manual buy error:", buyError);
+                ws.send(
+                  JSON.stringify({
+                    type: "MANUAL_BUY_ERROR",
+                    error: buyError.message || "Failed to complete manual buy",
+                  })
+                );
               }
               break;
+            case "SELL_TOKEN":
+              const parsed = JSON.parse(message);
+              console.log("🛒 Sell token request received:", parsed.data);
 
-            case 'RESET_STATE':
+              try {
+                const { mint, percent } = parsed.data; // ✅ FIXED
+
+                const token = await WalletToken.findOne({ mint });
+                if (!token) {
+                  ws.send(
+                    JSON.stringify({
+                      type: "SELL_RESULT",
+                      success: false,
+                      error: "Token not found in wallet",
+                    })
+                  );
+                  break;
+                }
+
+                // === STEP 1: Calculate token amount to sell ===
+                const userAmount = BigInt(token.amount); // amount in smallest units
+                const decimals = token.decimals;
+                const sellAmount = (userAmount * BigInt(percent)) / 100n;
+
+                if (sellAmount <= 0n) {
+                  ws.send(
+                    JSON.stringify({
+                      type: "SELL_RESULT",
+                      success: false,
+                      error: "Sell amount too low",
+                    })
+                  );
+                  break;
+                }
+
+                // === STEP 2: Setup Solana connection and keys ===
+                const connection = new Connection(RPC_ENDPOINT);
+                const userKeypair = Keypair.fromSecretKey(secretKey);
+                const programId = MEMEHOME_PROGRAM_ID;
+                const mintAddress = mint;
+                const mintPubkey = new PublicKey(mint);
+
+                // === STEP 3: Get reserves info ===
+                const swapAccounts = await getSwapAccounts({
+                  mintAddress,
+                  buyer: BUYER_PUBLIC_KEY,
+                  connection,
+                  programId,
+                });
+
+                const tokenVaultInfo = await connection.getTokenAccountBalance(
+                  swapAccounts.curveTokenAccount
+                );
+                const tokenReserve = BigInt(tokenVaultInfo.value.amount);
+
+                const bondingCurveInfo = await connection.getAccountInfo(
+                  swapAccounts.bondingCurve
+                );
+                if (!bondingCurveInfo)
+                  throw new Error("bondingCurve account info missing");
+
+                const solReserve = BigInt(bondingCurveInfo.lamports);
+
+                // === STEP 4: Estimate output and slippage ===
+                const expectedSolOut = calculateAmountOut(
+                  sellAmount,
+                  tokenReserve,
+                  solReserve
+                );
+
+                const slippagePercent = 10n;
+                const minOut =
+                  expectedSolOut > 100n ? expectedSolOut / 100n : 1n;
+
+                // === STEP 5: Execute Sell ===
+                const txSignature = await sellToken({
+                  connection,
+                  userKeypair,
+                  programId,
+                  amount: sellAmount,
+                  minOut,
+                  swapAccounts,
+                });
+
+                console.log("✅ Sell transaction signature:", txSignature);
+
+                // === STEP 6: Update DB ===
+                token.amount = (userAmount - sellAmount).toString();
+                await token.save();
+
+                ws.send(
+                  JSON.stringify({
+                    type: "SELL_RESULT",
+                    success: true,
+                    txSignature,
+                  })
+                );
+              } catch (err) {
+                const errorMessage =
+                  err instanceof Error
+                    ? err.message
+                    : "Internal server error during sell";
+                console.error("Error in SELL_TOKEN:", err);
+                ws.send(
+                  JSON.stringify({
+                    type: "SELL_RESULT",
+                    success: false,
+                    error: errorMessage,
+                  })
+                );
+              }
+              break;
+            case "MANUAL_SELL":
+              console.log("🛒 Manual sell request received");
+              try {
+                const [autoTokenBuys, tokenStats, walletTokens] =
+                  await Promise.all([
+                    AutoTokenBuy.find().sort({ buyTimestamp: -1 }),
+                    TokenStats.find().sort({ lastUpdated: -1 }),
+                    WalletToken.find().sort({ lastUpdated: -1 }),
+                  ]);
+
+                ws.send(
+                  JSON.stringify({
+                    type: "STATS_DATA",
+                    data: {
+                      autoTokenBuys,
+                      tokenStats,
+                      walletTokens,
+                    },
+                  })
+                );
+              } catch (error) {
+                console.error("Error fetching stats:", error);
+                ws.send(
+                  JSON.stringify({
+                    type: "ERROR",
+                    error: "Failed to fetch statistics",
+                  })
+                );
+              }
+              break;
+            case "RESET_STATE":
               resetBotState();
               break;
 
-            case 'GET_STATS':
+            case "GET_STATS":
               try {
-                const [autoTokenBuys, tokenStats, walletTokens] = await Promise.all([
-                  AutoTokenBuy.find().sort({ buyTimestamp: -1 }),
-                  TokenStats.find().sort({ lastUpdated: -1 }),
-                  WalletToken.find().sort({ lastUpdated: -1 })
-                ]);
+                const [autoTokenBuys, tokenStats, walletTokens] =
+                  await Promise.all([
+                    AutoTokenBuy.find().sort({ buyTimestamp: -1 }),
+                    TokenStats.find().sort({ lastUpdated: -1 }),
+                    WalletToken.find().sort({ lastUpdated: -1 }),
+                  ]);
 
-                ws.send(JSON.stringify({
-                  type: 'STATS_DATA',
-                  data: {
-                    autoTokenBuys,
-                    tokenStats,
-                    walletTokens
-                  }
-                }));
+                ws.send(
+                  JSON.stringify({
+                    type: "STATS_DATA",
+                    data: {
+                      autoTokenBuys,
+                      tokenStats,
+                      walletTokens,
+                    },
+                  })
+                );
               } catch (error) {
-                console.error('Error fetching stats:', error);
-                ws.send(JSON.stringify({
-                  type: 'ERROR',
-                  error: 'Failed to fetch statistics'
-                }));
+                console.error("Error fetching stats:", error);
+                ws.send(
+                  JSON.stringify({
+                    type: "ERROR",
+                    error: "Failed to fetch statistics",
+                  })
+                );
               }
               break;
 
             default:
-              console.log('⚠️ Unknown message type:', data.type);
+              console.log("⚠️ Unknown message type:", data.type);
           }
         } catch (error) {
-          console.error('❌ Error processing message:', error);
-          ws.send(JSON.stringify({
-            type: 'ERROR',
-            error: 'Failed to process message'
-          }));
+          console.error("❌ Error processing message:", error);
+          ws.send(
+            JSON.stringify({
+              type: "ERROR",
+              error: "Failed to process message",
+            })
+          );
         }
       });
 
-      ws.on('close', () => {
-        console.log('🔌 Client disconnected');
+      ws.on("close", () => {
+        console.log("🔌 Client disconnected");
       });
 
-      ws.on('error', (error) => {
-        console.error('❌ WebSocket error:', error);
+      ws.on("error", (error) => {
+        console.error("❌ WebSocket error:", error);
       });
     });
-
   } catch (error) {
     console.error("Error starting bot:", error);
   }
@@ -946,17 +1159,17 @@ interface ParsedTokenMintData {
 }
 
 interface WalletToken {
-  mint: string;             // Token's mint address
-  amount: string;           // Amount of tokens held
-  valueInSol: number;       // Value in SOL
-  buyPrice: number;         // Price when bought
-  lastPrice: number;        // Latest price
-  lastUpdated: number;      // Last update timestamp
+  mint: string; // Token's mint address
+  amount: string; // Amount of tokens held
+  valueInSol: number; // Value in SOL
+  buyPrice: number; // Price when bought
+  lastPrice: number; // Latest price
+  lastUpdated: number; // Last update timestamp
   metadata: {
-    name: string;          // Token name
-    symbol: string;        // Token symbol
-    decimals: number;      // Token decimals
-  }
+    name: string; // Token name
+    symbol: string; // Token symbol
+    decimals: number; // Token decimals
+  };
 }
 
 // First add this interface at the top of your file
