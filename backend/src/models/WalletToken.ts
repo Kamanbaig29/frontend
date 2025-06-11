@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 interface IWalletToken {
   mint: string;
   amount: string;
-  currentPrice: number;
+  buyPrice: number; // <-- changed here
   name: string;
   symbol: string;
   decimals: number;
@@ -12,15 +12,15 @@ interface IWalletToken {
 const walletTokenSchema = new mongoose.Schema<IWalletToken>({
   mint: { 
     type: String, 
-    required: true, 
+    // required: true, 
     unique: true 
   },
   amount: { 
     type: String, 
-    required: true 
+    // required: true 
   },
-  currentPrice: { 
-    type: Number, 
+  buyPrice: {  // <-- changed here
+    type: Number,
     default: 0 
   },
   name: { 

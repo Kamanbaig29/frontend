@@ -34,7 +34,7 @@ export const ManualSellList: React.FC = () => {
     setWs(socket);
 
     socket.onopen = () => {
-      socket.send(JSON.stringify({ type: 'MANUAL_SELL' }));
+      socket.send(JSON.stringify({ type: 'GET_STATS' }));
     };
 
     socket.onmessage = (event) => {
@@ -48,8 +48,7 @@ export const ManualSellList: React.FC = () => {
           setStatusMessage(message.success ? 'Sell successful!' : `Sell failed: ${message.error}`);
           setTimeout(() => setStatusMessage(null), 4000);
           if (message.success) {
-            // Optionally refresh tokens
-            ws?.send(JSON.stringify({ type: 'MANUAL_SELL' }));
+            ws?.send(JSON.stringify({ type: 'GET_STATS' }));
           }
         }
       } catch (e) {

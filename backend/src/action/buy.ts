@@ -39,19 +39,14 @@ export async function buyToken({
   direction,
   swapAccounts,
 }: BuyTokenParams): Promise<string | undefined> {  // Update return type
-  console.log("🔧 Preparing to buy token...");
+  console.log("💸 Initiating buy...");
 
   const discriminator = calculateDiscriminator("global:swap");
-  console.log("🔑 Discriminator (hex):", discriminator.toString("hex"));
-
   const data = Buffer.alloc(25);
   discriminator.copy(data, 0);
   data.writeBigUInt64LE(BigInt(amount), 8);
-  // Encode direction as u8 at offset 16
   data.writeUInt8(direction, 16);
   data.writeBigUInt64LE(BigInt(minOut), 17);
-
-  console.log("📦 Encoded instruction data:", data.toString("hex"));
 
   const instruction = new TransactionInstruction({
     keys: [
@@ -70,45 +65,20 @@ export async function buyToken({
     data,
   });
 
-  console.log("🚀 Instruction created with keys:");
-  instruction.keys.forEach((k, i) =>
-    console.log(
-      `  [${i}] Pubkey: ${k.pubkey.toBase58()}, Signer: ${k.isSigner}, Writable: ${k.isWritable}`
-    )
-  );
-
-  // Check if curveTokenAccount exists, else abort
   try {
     await getAccount(connection, swapAccounts.curveTokenAccount);
-    // Account exists, proceed
   } catch (e) {
-    console.error("❌ curveTokenAccount does not exist. Wait for program to create it (usually via launch).");
+    console.error("❌ Token account not ready");
     return undefined;
   }
 
-  // Transaction
   const tx = new Transaction().add(instruction);
 
   try {
-    console.log("📤 Sending transaction...");
     const signature = await connection.sendTransaction(tx, [userKeypair]);
     return signature;
   } catch (error: any) {
-    console.error("❌ Error sending transaction:", error);
-
-    if (error?.transactionLogs && Array.isArray(error.transactionLogs)) {
-      console.error("Transaction Logs:");
-      for (const log of error.transactionLogs) {
-        console.error(log);
-      }
-    } else if (error?.logs && Array.isArray(error.logs)) {
-      console.error("Transaction Logs (alternative 'logs' field):");
-      for (const log of error.logs) {
-        console.error(log);
-      }
-    } else {
-      console.error("No transaction logs available in error.");
-    }
-    return undefined;  // Add explicit return for error case
+    console.error("❌ Buy failed:", error.message);
+    return undefined;
   }
 }

@@ -2,10 +2,15 @@ import mongoose from 'mongoose';
 import { AutoTokenBuy } from '../models/AutoTokenBuy';
 import { TokenStats } from '../models/TokenStats';
 import { WalletToken } from '../models/WalletToken';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 export async function connectDatabase() {
   try {
-    const uri = 'mongodb://127.0.0.1:27017/token-sniper';
+    // MongoDB Atlas connection string
+    const uri = process.env.MONGODB_URI || 'mongodb+srv://kamranbaig2905:LKASxIIjGq8wrXXX@cluster0.cwndoj3.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
+    
     await mongoose.connect(uri);
     
     // Check if connection is established
@@ -13,7 +18,7 @@ export async function connectDatabase() {
       throw new Error('Database connection not established');
     }
     
-    console.log('📦 Connected to MongoDB');
+    console.log('📦 Connected to MongoDB Atlas');
     console.log(`🔗 Connection URI: ${uri}`);
 
     // Test collection creation

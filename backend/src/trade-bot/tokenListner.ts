@@ -88,6 +88,7 @@ function calculateAmountOut(
 
 // Add constants at the top
 const BUY_AMOUNT = 100_000_000; // 0.1 SOL
+const BUY_AMOUNT_SOL = BUY_AMOUNT / 1000000000; // 0.1 SOL
 const BUY_AMOUNT_ADJUSTED = Math.floor(BUY_AMOUNT / 1000); // 100_000
 const MIN_OUT_AMOUNT = 1;
 const DIRECTION = 0;
@@ -225,8 +226,7 @@ async function checkWalletBalance(
 
     if (balance < requiredWithBuffer) {
       console.error(
-        `❌ Insufficient balance. Need ${
-          requiredWithBuffer / 1e9
+        `❌ Insufficient balance. Need ${requiredWithBuffer / 1e9
         } SOL (including fees)`
       );
       return false;
@@ -249,116 +249,116 @@ async function fetchWalletTokens(
   return tokenAccounts.value;
 }
 
-async function updateWalletTokens(
-  connection: Connection,
-  walletPublicKey: PublicKey
-) {
-  try {
-    const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
-      walletPublicKey,
-      { programId: TOKEN_PROGRAM_ID }
-    );
+// async function updateWalletTokens(
+//   connection: Connection,
+//   walletPublicKey: PublicKey
+// ) {
+//   try {
+//     const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
+//       walletPublicKey,
+//       { programId: TOKEN_PROGRAM_ID }
+//     );
 
-    for (const account of tokenAccounts.value) {
-      try {
-        const tokenMint = account.account.data.parsed.info.mint;
-        const tokenAmount = account.account.data.parsed.info.tokenAmount.amount;
-        const decimals = account.account.data.parsed.info.tokenAmount.decimals;
+//     for (const account of tokenAccounts.value) {
+//       try {
+//         const tokenMint = account.account.data.parsed.info.mint;
+//         const tokenAmount = account.account.data.parsed.info.tokenAmount.amount;
+//         const decimals = account.account.data.parsed.info.tokenAmount.decimals;
 
-        // Get metadata using Metaplex
-        const metaplex = new Metaplex(connection);
-        const nft = await metaplex
-          .nfts()
-          .findByMint({ mintAddress: new PublicKey(tokenMint) });
+//         // Get metadata using Metaplex
+//         const metaplex = new Metaplex(connection);
+//         const nft = await metaplex
+//           .nfts()
+//           .findByMint({ mintAddress: new PublicKey(tokenMint) });
 
-        // Get current price
-        const price = await getTokenPrice(tokenMint);
+//         // Get current price
+//         const price = await getTokenPrice(tokenMint);
 
-        // Update with only the required fields
-        await WalletToken.findOneAndUpdate(
-          { mint: tokenMint },
-          {
-            mint: tokenMint,
-            amount: tokenAmount,
-            currentPrice: price || 0,
-            name: nft?.name || "Unknown",
-            symbol: nft?.symbol || "Unknown",
-            decimals: decimals,
-            description: nft?.json?.description || "",
-          },
-          { upsert: true, new: true }
-        );
+//         // Update with only the required fields
+//         await WalletToken.findOneAndUpdate(
+//           { mint: tokenMint },
+//           {
+//             mint: tokenMint,
+//             amount: tokenAmount,
+//             currentPrice: price || 0,
+//             name: nft?.name || "Unknown",
+//             symbol: nft?.symbol || "Unknown",
+//             decimals: decimals,
+//             description: nft?.json?.description || "",
+//           },
+//           { upsert: true, new: true }
+//         );
 
-        console.log(`✅ Updated token ${tokenMint}`);
-      } catch (error) {
-        console.error(`❌ Error updating token: ${error}`);
-      }
-    }
-  } catch (error) {
-    console.error("❌ Error fetching wallet tokens:", error);
-  }
-}
+//         console.log(`✅ Updated token ${tokenMint}`);
+//       } catch (error) {
+//         console.error(`❌ Error updating token: ${error}`);
+//       }
+//     }
+//   } catch (error) {
+//     console.error("❌ Error fetching wallet tokens:", error);
+//   }
+// }
 
 // New function to update a single wallet token
-async function updateWalletToken(connection: Connection, tokenMint: string) {
-  try {
-    // Get token account info
-    const walletPublicKey = userKeypair.publicKey;
-    const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
-      walletPublicKey,
-      { mint: new PublicKey(tokenMint) }
-    );
+// async function updateWalletToken(connection: Connection, tokenMint: string) {
+//   try {
+//     // Get token account info
+//     const walletPublicKey = userKeypair.publicKey;
+//     const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
+//       walletPublicKey,
+//       { mint: new PublicKey(tokenMint) }
+//     );
 
-    if (tokenAccounts.value.length > 0) {
-      const account = tokenAccounts.value[0];
-      const tokenAmount = account.account.data.parsed.info.tokenAmount.amount;
-      const decimals = account.account.data.parsed.info.tokenAmount.decimals;
+//     if (tokenAccounts.value.length > 0) {
+//       const account = tokenAccounts.value[0];
+//       const tokenAmount = account.account.data.parsed.info.tokenAmount.amount;
+//       const decimals = account.account.data.parsed.info.tokenAmount.decimals;
 
-      // Get metadata using Metaplex
-      const metaplex = new Metaplex(connection);
-      const nft = await metaplex
-        .nfts()
-        .findByMint({ mintAddress: new PublicKey(tokenMint) });
+//       // Get metadata using Metaplex
+//       const metaplex = new Metaplex(connection);
+//       const nft = await metaplex
+//         .nfts()
+//         .findByMint({ mintAddress: new PublicKey(tokenMint) });
 
-      // Get current price using Jupiter API
-      const price = await getTokenPrice(tokenMint);
+//       // Get current price using Jupiter API
+//       const price = await getTokenPrice(tokenMint);
 
-      // Update token data without description
-      await WalletToken.findOneAndUpdate(
-        { mint: tokenMint },
-        {
-          $set: {
-            mint: tokenMint,
-            amount: tokenAmount,
-            currentPrice: price || 0,
-            name: nft?.name || "Unknown",
-            symbol: nft?.symbol || "Unknown",
-            decimals: decimals,
-          },
-        },
-        { upsert: true, new: true }
-      );
+//       // Update token data without description
+//       await WalletToken.findOneAndUpdate(
+//         { mint: tokenMint },
+//         {
+//           $set: {
+//             mint: tokenMint,
+//             amount: tokenAmount,
+//             currentPrice: price || 0,
+//             name: nft?.name || "Unknown",
+//             symbol: nft?.symbol || "Unknown",
+//             decimals: decimals,
+//           },
+//         },
+//         { upsert: true, new: true }
+//       );
 
-      console.log(`✅ Updated token ${tokenMint} with price: ${price} SOL`);
-    }
-  } catch (error) {
-    console.error(`❌ Error updating token ${tokenMint}:`, error);
-  }
-}
+//       console.log(`✅ Updated token ${tokenMint} with price: ${price} SOL`);
+//     }
+//   } catch (error) {
+//     console.error(`❌ Error updating token ${tokenMint}:`, error);
+//   }
+// }
 
 export async function startTokenListener() {
   const connection = getConnection();
   console.log("🚀 Bot initialized - Waiting for mode selection...");
 
   // Check if database is empty
-  const existingTokens = await WalletToken.countDocuments();
+  // const existingTokens = await WalletToken.countDocuments();
 
-  if (existingTokens === 0) {
-    console.log("📝 First run detected - Initializing wallet tokens...");
-    await updateWalletTokens(connection, userKeypair.publicKey);
-  } else {
-    console.log("✅ Existing tokens found, skipping initial update");
-  }
+  // if (existingTokens === 0) {
+  //   console.log("📝 First run detected - Initializing wallet tokens...");
+  //   await updateWalletTokens(connection, userKeypair.publicKey);
+  // } else {
+  //   console.log("✅ Existing tokens found, skipping initial update");
+  // }
 
   // Function to start listening
   const startListening = () => {
@@ -623,6 +623,10 @@ export async function startTokenListener() {
           }
 
           try {
+            console.log(
+              `💸 Attempting to buy token ${mintAddress} with amount: ${BUY_AMOUNT_ADJUSTED / 1e9
+              } SOL`
+            );
             const signature = await buyToken({
               connection,
               userKeypair,
@@ -655,10 +659,133 @@ export async function startTokenListener() {
               confirmationStrategy
             );
 
-            if (confirmation.value.err) {
+            const txDetails = await connection.getTransaction(signature, {
+              commitment: "confirmed",
+              maxSupportedTransactionVersion: 0,
+            });
+
+            // if (confirmation.value.err) {
+            //   throw new Error(
+            //     `Buy transaction failed: ${confirmation.value.err.toString()}`
+            //   );
+            // }
+
+            if (!txDetails || !txDetails.meta) {
               throw new Error(
-                `Buy transaction failed: ${confirmation.value.err.toString()}`
+                "Failed to fetch transaction details or metadata"
               );
+            }
+
+            const accountKeys = txDetails.transaction.message.getAccountKeys();
+            const accountKeysArray: PublicKey[] = [];
+            for (let i = 0; i < accountKeys.length; i++) {
+              const key = accountKeys.get(i);
+              if (key) accountKeysArray.push(key);
+            }
+
+            const buyerIndex = accountKeysArray.findIndex(
+              (key) => key?.toBase58() === buyer.toBase58()
+            );
+
+            const solSpentLamports =
+              txDetails.meta.preBalances[buyerIndex] -
+              txDetails.meta.postBalances[buyerIndex];
+            const solSpent = solSpentLamports / 1e9;
+
+            // After getting transaction details
+            console.log("🔍 Debug Info:");
+            console.log("Mint Address:", mintAddress);
+            console.log("User Token Account:", swapAccounts.userTokenAccount.toBase58());
+            console.log("All Account Keys:", accountKeysArray.map(key => key.toBase58()));
+
+            // Use the correct token account address from swapAccounts
+            const tokenAccount = swapAccounts.userTokenAccount.toBase58();
+            const tokenAccountIndex = accountKeysArray.findIndex(
+              (key) => key.toBase58() === tokenAccount
+            );
+
+            console.log("Token Account Index:", tokenAccountIndex);
+            console.log("Pre Token Balances:", txDetails.meta.preTokenBalances);
+            console.log("Post Token Balances:", txDetails.meta.postTokenBalances);
+
+            const preTokenBalance = txDetails.meta.preTokenBalances?.find(
+              (b) => b.accountIndex === tokenAccountIndex
+            )?.uiTokenAmount.uiAmount || 0;
+            const postTokenBalance = txDetails.meta.postTokenBalances?.find(
+              (b) => b.accountIndex === tokenAccountIndex
+            )?.uiTokenAmount.uiAmount || 0;
+
+            console.log("Pre Token Balance:", preTokenBalance);
+            console.log("Post Token Balance:", postTokenBalance);
+
+            // Calculate tokens received (exactly like manual buy)
+            const tokensReceived = postTokenBalance - preTokenBalance;
+
+            // Calculate price per token using user input SOL
+            const pricePerToken = BUY_AMOUNT_SOL / tokensReceived;
+            console.log("SOL SPENT:", BUY_AMOUNT_SOL);
+            console.log("TOKENS RECEIVED:", tokensReceived);
+            console.log("PRICE PER TOKEN:", pricePerToken, "SOL");
+            // Convert to regular number with 10 decimal places
+            const formattedPrice = pricePerToken.toFixed(10);
+
+            console.log("\n=== TOKEN RECEIPT DETAILS ===");
+            console.log("User Input (SOL):", BUY_AMOUNT_SOL);
+            console.log("Pre Token Balance:", preTokenBalance);
+            console.log("Post Token Balance:", postTokenBalance);
+            console.log("Tokens Received:", tokensReceived);
+            console.log("SOL Spent:", solSpent);
+            console.log("Price per Token:", formattedPrice, "SOL");
+            console.log("===========================\n");
+
+            // Get token metadata
+            const tokenMetadata = await connection.getParsedAccountInfo(new PublicKey(mintAddress));
+            let tokenName = "Unknown";
+            let tokenSymbol = "Unknown";
+
+            if (tokenMetadata.value && 
+                typeof tokenMetadata.value.data === "object" && 
+                "parsed" in tokenMetadata.value.data) {
+              const parsedData = tokenMetadata.value.data.parsed;
+              if (parsedData.type === "mint") {
+                tokenName = parsedData.info.name || "Unknown";
+                tokenSymbol = parsedData.info.symbol || "Unknown";
+              }
+            }
+
+            // Store in database
+            try {
+              interface UpdateData {
+                mint: string;
+                buyPrice: string;
+                decimals: number;
+                name: string;
+                symbol: string;
+                amount?: string;
+              }
+
+              const updateData: UpdateData = {
+                mint: mintAddress,
+                buyPrice: formattedPrice,
+                decimals: 6,
+                name: tokenName,
+                symbol: tokenSymbol
+              };
+
+              const existingDoc = await WalletToken.findOne({ mint: mintAddress });
+              if (!existingDoc) {
+                updateData.amount = tokensReceived.toString();
+              }
+
+              await WalletToken.findOneAndUpdate(
+                { mint: mintAddress },
+                { $set: updateData },
+                { upsert: true, new: true }
+              );
+
+              console.log(`✅ Token data updated in database for ${mintAddress}`);
+            } catch (error) {
+              console.error('❌ Error updating token data:', error);
             }
 
             // Add this after successful buy confirmation
@@ -666,8 +793,8 @@ export async function startTokenListener() {
               console.log("✅ Buy transaction confirmed!");
 
               // Only update the newly bought token
-              await updateWalletToken(connection, tokenData.mint);
-              console.log("✅ New token data updated");
+              // await updateWalletToken(connection, tokenData.mint);
+              // console.log("✅ New token data updated");
 
               // Store buy in AutoTokenBuy collection
               await AutoTokenBuy.create({
@@ -683,6 +810,28 @@ export async function startTokenListener() {
                 transactionSignature: signature,
                 status: "bought",
               });
+
+              await WalletToken.findOneAndUpdate(
+                { mint: tokenData.mint },
+                {
+                  $set: {
+                    mint: tokenData.mint,
+                    buyPrice: formattedPrice,
+                    amount: tokensReceived.toString(),
+                    decimals: 6,
+                    name: tokenName,
+                    symbol: tokenSymbol
+                  },
+                  $setOnInsert: {
+                    amount: "0",
+                    name: "Unknown",
+                    symbol: "Unknown",
+                    decimals: 9,
+                    description: ""
+                  }
+                },
+                { upsert: true, new: true }
+              );
 
               // Get transaction details
               const txDetails = await connection.getTransaction(signature, {
@@ -714,29 +863,29 @@ export async function startTokenListener() {
                   mint: mintAddress,
                   stats: {
                     mint: mintAddress,
-                    buyPrice: BUY_AMOUNT / 1e9, // Convert lamports to SOL
+                    buyPrice: BUY_AMOUNT / 1e9,
                     currentPrice: BUY_AMOUNT / 1e9,
                     profitLoss: 0,
                     profitPercentage: 0,
                     holdingTime: "0m",
-                    status: "holding",
-                  },
-                },
+                    status: "holding"
+                  }
+                }
               });
-              await TokenStats.findOneAndUpdate(
-                { mint: mintAddress },
-                {
-                  mint: mintAddress,
-                  buyPrice: BUY_AMOUNT / 1e9,
-                  currentPrice: BUY_AMOUNT / 1e9,
-                  profitLoss: 0,
-                  profitPercentage: 0,
-                  holdingTime: "0m",
-                  status: "holding",
-                  lastUpdated: Date.now(),
-                },
-                { upsert: true, new: true }
-              );
+              //await TokenStats.findOneAndUpdate(
+              //  { mint: mintAddress },
+              //  {
+              //    mint: mintAddress,
+              //    buyPrice: BUY_AMOUNT / 1e9,
+              //    currentPrice: BUY_AMOUNT / 1e9,
+              //    profitLoss: 0,
+              //    profitPercentage: 0,
+              //    holdingTime: "0m",
+              //    status: "holding",
+              //    lastUpdated: Date.now(),
+              //  },
+              //  { upsert: true, new: true }
+              //);
             } catch (error) {
               console.error("❌ Error updating token data:", error);
             }
@@ -789,8 +938,8 @@ export async function startTokenListener() {
       ws.on("message", async (message: string) => {
         try {
           const data = JSON.parse(message);
-          console.log("📨 Received message:", data);
-
+          console.log("📨 Received raw message data:", data);
+          console.log("📨 Received message type:", data.type);
           switch (data.type) {
             case "SET_MODE":
               if (data.mode === "automatic") {
@@ -816,19 +965,13 @@ export async function startTokenListener() {
               console.log("🛒 Manual buy request received");
               try {
                 const { mintAddress, amount, privateKey } = data.data;
+                console.log("User Input Amount (SOL):", amount);
 
                 // Convert SOL to lamports and adjust amount
                 const amountInLamports = Math.floor(amount * 1e9);
                 const adjustedAmount = Math.floor(amountInLamports / 1000);
-
-                console.log(
-                  `💰 Original amount: ${amountInLamports} lamports (${amount} SOL)`
-                );
-                console.log(
-                  `💵 Adjusted amount: ${adjustedAmount} lamports (${
-                    adjustedAmount / 1e9
-                  } SOL)`
-                );
+                console.log("Amount in Lamports:", amountInLamports);
+                console.log("Adjusted Amount:", adjustedAmount);
 
                 let secretKeyArray: number[];
                 try {
@@ -839,10 +982,7 @@ export async function startTokenListener() {
                   );
 
                   // Parse private key
-                  if (
-                    typeof privateKey === "string" &&
-                    !privateKey.startsWith("[")
-                  ) {
+                  if (typeof privateKey === "string" && !privateKey.startsWith("[")) {
                     secretKeyArray = Array.from(bs58.decode(privateKey));
                   } else {
                     secretKeyArray = Array.isArray(privateKey)
@@ -850,10 +990,7 @@ export async function startTokenListener() {
                       : JSON.parse(privateKey);
                   }
 
-                  if (
-                    !Array.isArray(secretKeyArray) ||
-                    secretKeyArray.length !== 64
-                  ) {
+                  if (!Array.isArray(secretKeyArray) || secretKeyArray.length !== 64) {
                     throw new Error("Invalid private key format");
                   }
 
@@ -888,23 +1025,126 @@ export async function startTokenListener() {
                   );
 
                   // Handle success
-                  if (result.success) {
+                  if (result.success && result.signature && result.details) {
                     console.log("✅ Manual buy successful");
-                    await updateWalletToken(connection, mintAddress);
 
+                    // Get transaction details for price calculation
+                    const txDetails = await connection.getTransaction(result.signature, {
+                      commitment: "confirmed",
+                      maxSupportedTransactionVersion: 0,
+                    });
+
+                    if (!txDetails || !txDetails.meta) {
+                      throw new Error("Failed to fetch transaction details");
+                    }
+
+                    // Calculate SOL spent
+                    const accountKeys = txDetails.transaction.message.getAccountKeys();
+                    const accountKeysArray: PublicKey[] = [];
+                    for (let i = 0; i < accountKeys.length; i++) {
+                      const key = accountKeys.get(i);
+                      if (key) accountKeysArray.push(key);
+                    }
+
+                    const buyerIndex = accountKeysArray.findIndex(
+                      (key) => key.toBase58() === userKeypair.publicKey.toBase58()
+                    );
+                    const solSpentLamports = txDetails.meta.preBalances[buyerIndex] - txDetails.meta.postBalances[buyerIndex];
+                    const solSpent = solSpentLamports / 1e9;
+
+                    // Get swap accounts for token account info
+                    const swapAccounts = await getSwapAccounts({
+                      mintAddress,
+                      buyer: userKeypair.publicKey,
+                      connection,
+                      programId: MEMEHOME_PROGRAM_ID,
+                    });
+
+                    // Get the user's token account
+                    const userTokenAccount = swapAccounts.userTokenAccount;
+                    console.log("User Token Account:", userTokenAccount.toBase58());
+
+                    // Find user's token account index
+                    const userTokenAccountIndex = accountKeysArray.findIndex(
+                      (key) => key.toBase58() === userTokenAccount.toBase58()
+                    );
+
+                    // Get pre and post token balances
+                    const preTokenBalance = txDetails.meta.preTokenBalances?.find(
+                      (balance) => balance.accountIndex === userTokenAccountIndex
+                    )?.uiTokenAmount.uiAmount || 0;
+
+                    const postTokenBalance = txDetails.meta.postTokenBalances?.find(
+                      (balance) => balance.accountIndex === userTokenAccountIndex
+                    )?.uiTokenAmount.uiAmount || 0;
+
+                    // Calculate tokens received
+                    const tokensReceived = postTokenBalance - preTokenBalance;
+
+                    // Calculate price per token using user input SOL
+                    const pricePerToken = amount / tokensReceived; // amount is user input SOL
+                    console.log("SOL SPENT:", amount);
+                    console.log("TOKENS RECEIVED:", tokensReceived);
+                    console.log("PRICE PER TOKEN:", pricePerToken, "SOL");
+                    // Convert to regular number with 10 decimal places
+                    const formattedPrice = pricePerToken.toFixed(10);
+
+                    console.log("\n=== TOKEN RECEIPT DETAILS ===");
+                    console.log("User Input (SOL):", amount);
+                    console.log("Pre Token Balance:", preTokenBalance);
+                    console.log("Post Token Balance:", postTokenBalance);
+                    console.log("Tokens Received:", tokensReceived);
+                    console.log("SOL Spent:", solSpent);
+                    console.log("Price per Token:", formattedPrice, "SOL"); // Will show as 0.0000000281
+                    console.log("===========================\n");
+
+                    // Get token metadata
+                    const tokenMetadata = await connection.getParsedAccountInfo(new PublicKey(mintAddress));
+                    let tokenName = "Unknown";
+                    let tokenSymbol = "Unknown";
+
+                    if (tokenMetadata.value && 
+                        typeof tokenMetadata.value.data === "object" && 
+                        "parsed" in tokenMetadata.value.data) {
+                      const parsedData = tokenMetadata.value.data.parsed;
+                      if (parsedData.type === "mint") {
+                        tokenName = parsedData.info.name || "Unknown";
+                        tokenSymbol = parsedData.info.symbol || "Unknown";
+                      }
+                    }
+
+                    // Store in database with token metadata
+                    await WalletToken.findOneAndUpdate(
+                      { mint: mintAddress },
+                      {
+                        $set: {
+                          mint: mintAddress,
+                          buyPrice: formattedPrice,
+                          amount: tokensReceived.toString(),
+                          decimals: 6,
+                          name: tokenName,
+                          symbol: tokenSymbol
+                        }
+                      },
+                      { upsert: true, new: true }
+                    );
+
+                    // Send success response with regular number format
                     ws.send(
                       JSON.stringify({
                         type: "MANUAL_BUY_SUCCESS",
                         signature: result.signature,
-                        details: result.details,
+                        details: {
+                          ...result.details,
+                          buyPrice: formattedPrice,
+                          tokenAmount: tokensReceived
+                        }
                       })
                     );
                   }
                 } catch (err: unknown) {
                   const processError = err as Error;
-                  throw new Error(
-                    `Failed to process buy: ${processError.message}`
-                  );
+                  throw new Error(`Failed to process buy: ${processError.message}`);
                 }
               } catch (err: unknown) {
                 const buyError = err as Error;
@@ -918,41 +1158,42 @@ export async function startTokenListener() {
               }
               break;
             case "SELL_TOKEN":
-              const parsed = JSON.parse(message);
-              console.log("🛒 Sell token request received:", parsed.data);
+              console.log("🛒 Sell token request received:", data.data);
 
               try {
-                const { mint, percent } = parsed.data; // ✅ FIXED
-
+                const { mint, percent } = data.data;
                 const token = await WalletToken.findOne({ mint });
+                
                 if (!token) {
-                  ws.send(
-                    JSON.stringify({
-                      type: "SELL_RESULT",
-                      success: false,
-                      error: "Token not found in wallet",
-                    })
-                  );
+                  ws.send(JSON.stringify({
+                    type: "SELL_RESULT",
+                    success: false,
+                    error: "Token not found in wallet"
+                  }));
+                  break;
+                }
+
+                // Convert amount to smallest unit (considering decimals)
+                const decimals = token.decimals || 6;
+                const amountInSmallestUnit = parseFloat(token.amount) * Math.pow(10, decimals);
+                const userAmount = BigInt(Math.round(amountInSmallestUnit));
+                const sellAmount = (userAmount * BigInt(percent)) / 100n;
+
+                console.log("Token Amount:", token.amount);
+                console.log("Decimals:", decimals);
+                console.log("Amount in smallest unit:", amountInSmallestUnit);
+                console.log("Sell Amount:", sellAmount.toString());
+
+                if (sellAmount <= 0n) {
+                  ws.send(JSON.stringify({
+                    type: "SELL_RESULT",
+                    success: false,
+                    error: "Sell amount too low"
+                  }));
                   break;
                 }
 
                 // === STEP 1: Calculate token amount to sell ===
-                const userAmount = BigInt(token.amount); // amount in smallest units
-                const decimals = token.decimals;
-                const sellAmount = (userAmount * BigInt(percent)) / 100n;
-
-                if (sellAmount <= 0n) {
-                  ws.send(
-                    JSON.stringify({
-                      type: "SELL_RESULT",
-                      success: false,
-                      error: "Sell amount too low",
-                    })
-                  );
-                  break;
-                }
-
-                // === STEP 2: Setup Solana connection and keys ===
                 const connection = new Connection(RPC_ENDPOINT);
                 const userKeypair = Keypair.fromSecretKey(secretKey);
                 const programId = MEMEHOME_PROGRAM_ID;
@@ -967,6 +1208,7 @@ export async function startTokenListener() {
                   programId,
                 });
 
+                // Add this before getting tokenVaultInfo
                 const tokenVaultInfo = await connection.getTokenAccountBalance(
                   swapAccounts.curveTokenAccount
                 );
@@ -975,9 +1217,9 @@ export async function startTokenListener() {
                 const bondingCurveInfo = await connection.getAccountInfo(
                   swapAccounts.bondingCurve
                 );
-                if (!bondingCurveInfo)
-                  throw new Error("bondingCurve account info missing");
-
+                if (!bondingCurveInfo) {
+                  throw new Error("Bonding curve account not found");
+                }
                 const solReserve = BigInt(bondingCurveInfo.lamports);
 
                 // === STEP 4: Estimate output and slippage ===
@@ -1032,31 +1274,129 @@ export async function startTokenListener() {
             case "MANUAL_SELL":
               console.log("🛒 Manual sell request received");
               try {
-                const [autoTokenBuys, tokenStats, walletTokens] =
-                  await Promise.all([
-                    AutoTokenBuy.find().sort({ buyTimestamp: -1 }),
-                    TokenStats.find().sort({ lastUpdated: -1 }),
-                    WalletToken.find().sort({ lastUpdated: -1 }),
-                  ]);
+                const { mint, percent, privateKey } = data;
+                
+                if (!mint || !percent) {
+                  throw new Error("Missing required fields: mint and percent");
+                }
+                
+                console.log("\n=== SELL REQUEST DETAILS ===");
+                console.log("Token Mint:", mint);
+                console.log("Sell Percentage:", percent + "%");
+                
+                const token = await WalletToken.findOne({ mint });
+                if (!token) {
+                  console.log("❌ Token not found in database");
+                  ws.send(JSON.stringify({
+                    type: "MANUAL_SELL_ERROR",
+                    error: "Token not found in wallet"
+                  }));
+                  return;
+                }
 
-                ws.send(
-                  JSON.stringify({
-                    type: "STATS_DATA",
-                    data: {
-                      autoTokenBuys,
-                      tokenStats,
-                      walletTokens,
-                    },
-                  })
+                // Calculate amounts
+                const tokenAmount = parseFloat(token.amount);
+                const decimals = token.decimals || 6;
+                const sellAmount = (tokenAmount * percent) / 100;
+                const remainingAmount = tokenAmount - sellAmount;
+                
+                console.log("\n=== TOKEN AMOUNTS ===");
+                console.log("Total Token Amount:", tokenAmount);
+                console.log("Sell Percentage:", percent + "%");
+                console.log("Amount to Sell:", sellAmount);
+                console.log("Amount After Sell:", remainingAmount);
+                console.log("Token Decimals:", decimals);
+
+                // Convert to smallest unit
+                const sellAmountInSmallestUnit = Math.round(sellAmount * Math.pow(10, decimals));
+                console.log("\n=== TRANSACTION DETAILS ===");
+                console.log("Sell Amount (in smallest unit):", sellAmountInSmallestUnit);
+
+                // Get reserves
+                const connection = new Connection(RPC_ENDPOINT);
+                const userKeypair = Keypair.fromSecretKey(secretKey);
+                const programId = MEMEHOME_PROGRAM_ID;
+                const mintAddress = mint;
+                const mintPubkey = new PublicKey(mint);
+
+                // Add this before getting tokenVaultInfo
+                const swapAccounts = await getSwapAccounts({
+                  mintAddress: mint,
+                  buyer: userKeypair.publicKey,
+                  connection,
+                  programId: MEMEHOME_PROGRAM_ID,
+                });
+
+                // Then continue with existing code
+                const tokenVaultInfo = await connection.getTokenAccountBalance(swapAccounts.curveTokenAccount);
+                const tokenReserve = BigInt(tokenVaultInfo.value.amount);
+                const bondingCurveInfo = await connection.getAccountInfo(swapAccounts.bondingCurve);
+                if (!bondingCurveInfo) {
+                  throw new Error("Bonding curve account not found");
+                }
+                const solReserve = BigInt(bondingCurveInfo.lamports);
+
+                console.log("\n=== RESERVES ===");
+                console.log("Token Reserve:", tokenReserve.toString());
+                console.log("SOL Reserve:", solReserve.toString());
+
+                // Calculate expected output
+                const expectedSolOut = calculateAmountOut(
+                  BigInt(sellAmountInSmallestUnit),
+                  tokenReserve,
+                  solReserve
                 );
-              } catch (error) {
-                console.error("Error fetching stats:", error);
-                ws.send(
-                  JSON.stringify({
-                    type: "ERROR",
-                    error: "Failed to fetch statistics",
-                  })
+
+                console.log("\n=== EXPECTED OUTPUT ===");
+                console.log("Expected SOL Output:", expectedSolOut.toString());
+                console.log("Expected SOL Output (in SOL):", Number(expectedSolOut) / 1e9);
+
+                // Execute sell
+                const txSignature = await sellToken({
+                  connection,
+                  userKeypair,
+                  programId: MEMEHOME_PROGRAM_ID,
+                  amount: BigInt(sellAmountInSmallestUnit),
+                  minOut: expectedSolOut / 100n, // 1% slippage
+                  swapAccounts,
+                });
+
+                console.log("\n=== TRANSACTION RESULT ===");
+                console.log("Transaction Signature:", txSignature);
+
+                // Update database
+                await WalletToken.findOneAndUpdate(
+                  { mint: mint },
+                  { 
+                    $set: { 
+                      amount: remainingAmount.toString(),
+                      lastUpdated: Date.now()
+                    } 
+                  }
                 );
+
+                console.log("\n=== DATABASE UPDATE ===");
+                console.log("Updated Remaining Amount:", remainingAmount);
+                console.log("========================\n");
+
+                // Send success response
+                ws.send(JSON.stringify({
+                  type: "MANUAL_SELL_SUCCESS",
+                  signature: txSignature,
+                  details: {
+                    mint,
+                    soldAmount: sellAmount.toString(),
+                    remainingAmount: remainingAmount.toString(),
+                    expectedSolOut: expectedSolOut.toString()
+                  }
+                }));
+
+              } catch (err) {
+                console.error("❌ Manual sell error:", err);
+                ws.send(JSON.stringify({
+                  type: "MANUAL_SELL_ERROR",
+                  error: err instanceof Error ? err.message : "Failed to complete manual sell"
+                }));
               }
               break;
             case "RESET_STATE":
