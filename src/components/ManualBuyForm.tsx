@@ -8,63 +8,37 @@ import {
   Alert,
   CircularProgress
 } from '@mui/material';
+import { useWebSocket } from '../context/webSocketContext';
 
 export const ManualBuyForm: React.FC = () => {
+  const { ws, status, error: wsError, sendMessage } = useWebSocket();
   const [mintAddress, setMintAddress] = useState('');
   const [amount, setAmount] = useState('');
   const [privateKey, setPrivateKey] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [ws, setWs] = useState<WebSocket | null>(null);
+  const [walletAddress, setWalletAddress] = useState<string>('');
 
   useEffect(() => {
-    // Set manual mode when component mounts
-    const ws = new WebSocket('ws://localhost:3001');
-    
-    ws.onopen = () => {
-      ws.send(JSON.stringify({
+    const storedWalletAddress = import.meta.env.VITE_BUYER_PUBLIC_KEY || '';
+    if (!storedWalletAddress) {
+      setError('Wallet address not found in environment variables. Cannot perform buy.');
+      return;
+    }
+    setWalletAddress(storedWalletAddress);
+
+    if (ws && status === 'connected') {
+      sendMessage({
         type: 'SET_MODE',
         mode: 'manual'
-      }));
-    };
+      });
 
-    return () => {
-      if (ws) {
-        ws.close();
-      }
-    };
-  }, []); // Empty dependency array means this runs once when component mounts
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      const websocket = new WebSocket('ws://localhost:3001');
-      setWs(websocket);
-
-      websocket.onerror = () => {
-        setError('WebSocket connection failed');
-        setLoading(false);
-      };
-
-      websocket.onopen = () => {
-        websocket.send(JSON.stringify({
-          type: 'MANUAL_BUY',
-          data: {
-            mintAddress,
-            amount: parseFloat(amount),
-            privateKey
-          }
-        }));
-      };
-
-      websocket.onmessage = (event) => {
+      const handleMessage = (event: MessageEvent) => {
         try {
           const response = JSON.parse(event.data);
+          console.log('ManualBuyForm received message:', response);
+
           if (response.type === 'MANUAL_BUY_SUCCESS') {
             setSuccess(`Token bought successfully! Transaction: ${response.signature}`);
             setMintAddress('');
@@ -77,30 +51,66 @@ export const ManualBuyForm: React.FC = () => {
           setError('Failed to process server response');
         } finally {
           setLoading(false);
-          websocket.close();
         }
       };
 
-      websocket.onclose = () => {
-        if (!success && !error) {
-          setError('Connection closed unexpectedly');
-          setLoading(false);
+      ws.addEventListener('message', handleMessage);
+
+      return () => {
+        ws.removeEventListener('message', handleMessage);
+      };
+    } else if (status === 'error' || status === 'disconnected') {
+      setLoading(false);
+      setError(wsError || 'WebSocket is not connected. Please check the backend.');
+    }
+  }, [ws, status, wsError, sendMessage, walletAddress]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      setError('WebSocket is not connected. Please wait or check server.');
+      setLoading(false);
+      return;
+    }
+
+    if (!mintAddress || !amount || !privateKey || !walletAddress) {
+      setError('All fields are required, including the wallet address from environment.');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const messageToSend = {
+        type: 'MANUAL_BUY',
+        data: {
+          mintAddress,
+          amount: parseFloat(amount),
+          privateKey,
+          walletAddress: walletAddress
         }
       };
+
+      console.log('ManualBuyForm: Sending MANUAL_BUY message:', messageToSend);
+
+      sendMessage(messageToSend);
 
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred');
+      setError(err instanceof Error ? err.message : 'An unknown error occurred during buy request.');
       setLoading(false);
     }
   };
 
   return (
-    <Paper 
+    <Paper
       elevation={3}
-      sx={{ 
-        p: 3, 
-        mt: 3, 
-        bgcolor: '#6A5ACD', 
+      sx={{
+        p: 3,
+        mt: 3,
+        bgcolor: '#6A5ACD',
         color: 'white',
         borderRadius: 2
       }}
@@ -108,7 +118,7 @@ export const ManualBuyForm: React.FC = () => {
       <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold' }}>
         Manual Token Buy
       </Typography>
-      
+
       <form onSubmit={handleSubmit}>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <TextField
@@ -128,7 +138,7 @@ export const ManualBuyForm: React.FC = () => {
               }
             }}
           />
-          
+
           <TextField
             label="Amount (SOL)"
             type="number"
@@ -137,7 +147,7 @@ export const ManualBuyForm: React.FC = () => {
             required
             fullWidth
             variant="outlined"
-            inputProps={{ 
+            inputProps={{
               min: "0.1",
               step: "0.1",
               pattern: "^[0-9]*[.]?[0-9]*$"
@@ -152,7 +162,7 @@ export const ManualBuyForm: React.FC = () => {
               }
             }}
           />
-          
+
           <TextField
             label="Wallet Private Key"
             type="password"
@@ -171,13 +181,13 @@ export const ManualBuyForm: React.FC = () => {
               }
             }}
           />
-          
+
           <Button
             type="submit"
             variant="contained"
-            disabled={loading}
+            disabled={loading || status !== 'connected'}
             fullWidth
-            sx={{ 
+            sx={{
               bgcolor: '#483D8B',
               '&:hover': { bgcolor: '#372B7A' },
               height: '48px',
@@ -191,9 +201,9 @@ export const ManualBuyForm: React.FC = () => {
       </form>
 
       {error && (
-        <Alert 
-          severity="error" 
-          sx={{ 
+        <Alert
+          severity="error"
+          sx={{
             mt: 2,
             '& .MuiAlert-message': { color: '#d32f2f' }
           }}
@@ -201,16 +211,22 @@ export const ManualBuyForm: React.FC = () => {
           {error}
         </Alert>
       )}
-      
+
       {success && (
-        <Alert 
-          severity="success" 
-          sx={{ 
+        <Alert
+          severity="success"
+          sx={{
             mt: 2,
             '& .MuiAlert-message': { color: '#2e7d32' }
           }}
         >
           {success}
+        </Alert>
+      )}
+
+      {wsError && (
+        <Alert severity="warning" sx={{ mt: 2 }}>
+          {wsError}
         </Alert>
       )}
     </Paper>

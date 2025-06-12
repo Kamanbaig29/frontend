@@ -7,13 +7,13 @@ interface IWalletToken {
   name: string;
   symbol: string;
   decimals: number;
+  userPublicKey: string;  // Added this field
 }
 
 const walletTokenSchema = new mongoose.Schema<IWalletToken>({
   mint: { 
     type: String, 
     // required: true, 
-    unique: true 
   },
   amount: { 
     type: String, 
@@ -34,7 +34,13 @@ const walletTokenSchema = new mongoose.Schema<IWalletToken>({
   decimals: { 
     type: Number, 
     default: 6 
+  },
+  userPublicKey: {  // Added this field
+    type: String,
+    required: true
   }
 });
+
+walletTokenSchema.index({ mint: 1, userPublicKey: 1 }, { unique: true });
 
 export const WalletToken = mongoose.model('WalletToken', walletTokenSchema);

@@ -3,11 +3,16 @@ import { Metaplex } from "@metaplex-foundation/js";
 import { WalletToken } from "../models/WalletToken";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
-const POLL_INTERVAL_MS = 10000; // 10 seconds
+const POLL_INTERVAL_MS = 5000; // 10 seconds
 
-// Function to check and remove only duplicates
-async function checkForDuplicates() {
+// Function to check and remove only duplicates for current wallet
+async function checkForDuplicates(currentWallet: string) {
     const duplicates = await WalletToken.aggregate([
+        {
+            $match: {
+                userPublicKey: currentWallet
+            }
+        },
         {
             $group: {
                 _id: "$mint",
@@ -23,12 +28,14 @@ async function checkForDuplicates() {
     ]);
 
     if (duplicates.length > 0) {
-        console.log("🔍 Found duplicate entries:");
+        console.log("🔍 Found duplicate entries for current wallet:");
         for (const dup of duplicates) {
             console.log(`Mint: ${dup._id}, Count: ${dup.count}`);
-            // Keep the most recent entry, delete others
             const [keep, ...remove] = dup.docs;
-            await WalletToken.deleteMany({ _id: { $in: remove } });
+            await WalletToken.deleteMany({ 
+                _id: { $in: remove },
+                userPublicKey: currentWallet
+            });
             console.log(`✅ Removed ${remove.length} duplicate entries for ${dup._id}`);
         }
     }
@@ -44,11 +51,12 @@ export async function watchWalletTokens(
     async function poll() {
         if (!isPolling) return;
 
-        console.log(`🔄 Polling wallet tokens for: ${walletPublicKey.toBase58()}`);
+        const currentWallet = walletPublicKey.toBase58();
+        console.log(`🔄 Polling wallet tokens for: ${currentWallet}`);
 
         try {
-            // First check for duplicates
-            await checkForDuplicates();
+            // Check for duplicates for current wallet
+            await checkForDuplicates(currentWallet);
 
             const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
                 walletPublicKey,
@@ -56,8 +64,8 @@ export async function watchWalletTokens(
             );
 
             // Log counts for comparison
-            const dbCount = await WalletToken.countDocuments();
-            console.log(`📊 Database entries: ${dbCount}`);
+            const dbCount = await WalletToken.countDocuments({ userPublicKey: currentWallet });
+            console.log(`📊 Database entries for current wallet: ${dbCount}`);
             console.log(`📦 Wallet tokens: ${tokenAccounts.value.length}`);
 
             for (const account of tokenAccounts.value) {
@@ -65,11 +73,14 @@ export async function watchWalletTokens(
                 const tokenAmount = account.account.data.parsed.info.tokenAmount.amount;
                 const decimals = account.account.data.parsed.info.tokenAmount.decimals;
 
-                // Convert token amount to human readable format
                 const humanReadableAmount = (parseInt(tokenAmount) / Math.pow(10, decimals)).toString();
 
                 try {
-                    const existingToken = await WalletToken.findOne({ mint: tokenMint });
+                    // Only look for tokens with current wallet
+                    const existingToken = await WalletToken.findOne({ 
+                        mint: tokenMint,
+                        userPublicKey: currentWallet
+                    });
 
                     if (!existingToken) {
                         console.log(`📡 Fetching metadata for new token ${tokenMint}...`);
@@ -80,11 +91,12 @@ export async function watchWalletTokens(
 
                         await WalletToken.create({
                             mint: tokenMint,
-                            amount: humanReadableAmount, // Store human readable amount
+                            amount: humanReadableAmount,
                             name: nft?.name || "Unknown",
                             symbol: nft?.symbol || "Unknown",
                             decimals: decimals,
                             description: nft?.json?.description || "",
+                            userPublicKey: currentWallet
                         });
 
                         console.log(`🆕 Added new token ${tokenMint} with amount ${humanReadableAmount}`);
@@ -95,8 +107,11 @@ export async function watchWalletTokens(
                             );
 
                             await WalletToken.updateOne(
-                                { mint: tokenMint },
-                                { amount: humanReadableAmount } // Update with human readable amount
+                                { 
+                                    mint: tokenMint,
+                                    userPublicKey: currentWallet
+                                },
+                                { amount: humanReadableAmount }
                             );
 
                             console.log(`♻️ Updated amount for token ${tokenMint}`);
@@ -110,13 +125,16 @@ export async function watchWalletTokens(
                                 .findByMint({ mintAddress: new PublicKey(tokenMint) });
 
                             await WalletToken.updateOne(
-                                { mint: tokenMint },
+                                { 
+                                    mint: tokenMint,
+                                    userPublicKey: currentWallet
+                                },
                                 {
                                     $set: {
                                         name: nft?.name || "Unknown",
                                         symbol: nft?.symbol || "Unknown",
                                         decimals: decimals,
-                                        description: nft?.json?.description || "",
+                                        description: nft?.json?.description || ""
                                     },
                                 }
                             );
@@ -151,6 +169,5 @@ export async function watchWalletTokens(
     };
 
     poll();
-
     return cleanup;
 }

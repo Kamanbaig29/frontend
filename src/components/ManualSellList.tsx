@@ -2,8 +2,9 @@ import React, { useEffect, useState } from 'react';
 import {
   Box, Button, Paper, Typography, CircularProgress, Alert,
   Dialog, DialogTitle, DialogContent, DialogActions,
-  RadioGroup, FormControlLabel, Radio
+  RadioGroup, FormControlLabel, Radio, TextField
 } from '@mui/material';
+import { useWebSocket } from '../context/webSocketContext';
 
 interface WalletToken {
   _id: string;
@@ -13,16 +14,16 @@ interface WalletToken {
   name: string;
   symbol: string;
   decimals: number;
+  walletAddress: string;
 }
 
 export const ManualSellList: React.FC = () => {
   const [tokens, setTokens] = useState<WalletToken[]>([]);
+  const { ws, status, error, sendMessage } = useWebSocket();
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
-
-  // WebSocket ref for reuse in sell
-  const [ws, setWs] = useState<WebSocket | null>(null);
+  const [walletAddress, setWalletAddress] = useState<string>('');
+  const [privateKey, setPrivateKey] = useState<string>('');
 
   // Modal state
   const [openDialog, setOpenDialog] = useState(false);
@@ -30,58 +31,70 @@ export const ManualSellList: React.FC = () => {
   const [sellPercent, setSellPercent] = useState('10');
 
   useEffect(() => {
-    const socket = new WebSocket('ws://localhost:3001');
-    setWs(socket);
+    if (status === 'connected') {
+      sendMessage({ 
+        type: 'GET_STATS',
+        walletAddress: import.meta.env.VITE_BUYER_PUBLIC_KEY
+      });
+    }
+  }, [status, sendMessage]);
 
-    socket.onopen = () => {
-      socket.send(JSON.stringify({ type: 'GET_STATS' }));
-    };
+  useEffect(() => {
+    if (!ws) return;
 
-    socket.onmessage = (event) => {
+    const handleMessage = (event: MessageEvent) => {
       try {
-        const message = JSON.parse(event.data);
-        if (message.type === 'STATS_DATA') {
-          setTokens(message.data.walletTokens || []);
+        const data = JSON.parse(event.data);
+        if (data.type === 'STATS_DATA') {
+          setTokens(data.data.walletTokens || []);
           setLoading(false);
-          setError(null);
-        } else if (message.type === 'SELL_RESULT') {
-          setStatusMessage(message.success ? 'Sell successful!' : `Sell failed: ${message.error}`);
+        } else if (data.type === 'SELL_RESULT') {
+          setStatusMessage(data.success ? 'Sell successful!' : `Sell failed: ${data.error}`);
           setTimeout(() => setStatusMessage(null), 4000);
-          if (message.success) {
-            ws?.send(JSON.stringify({ type: 'GET_STATS' }));
+          if (data.success) {
+            sendMessage({
+              type: 'GET_STATS',
+              walletAddress: import.meta.env.VITE_BUYER_PUBLIC_KEY
+            });
           }
+        } else if (data.type === 'MANUAL_SELL_ERROR') {
+          setStatusMessage(`Sell failed: ${data.error}`);
+          setTimeout(() => setStatusMessage(null), 4000);
         }
       } catch (e) {
-        setError('Failed to parse WebSocket message');
+        console.error('Error parsing message:', e);
+        setStatusMessage('Failed to parse WebSocket message');
         setLoading(false);
       }
     };
 
-    socket.onerror = () => {
-      setError('WebSocket error occurred');
-      setLoading(false);
-    };
+    ws.addEventListener('message', handleMessage);
 
     return () => {
-      socket.close();
+      ws.removeEventListener('message', handleMessage);
     };
-  }, []);
+  }, [ws, sendMessage]);
 
   const openSellDialog = (token: WalletToken) => {
     setSelectedToken(token);
     setSellPercent('10');
+    setPrivateKey('');
     setOpenDialog(true);
   };
 
   const handleConfirmSell = () => {
-    if (!ws || !selectedToken) return;
-    ws.send(JSON.stringify({
-      type: 'SELL_TOKEN',
-      data: {
-        mint: selectedToken.mint,
-        percent: Number(sellPercent),
-      }
-    }));
+    if (!ws || !selectedToken || !privateKey) {
+      setStatusMessage('Missing WebSocket connection, selected token, or private key.');
+      return;
+    }
+
+    sendMessage({
+      type: 'MANUAL_SELL',
+      mint: selectedToken.mint,
+      percent: Number(sellPercent),
+      privateKey: privateKey,
+      walletAddress: import.meta.env.VITE_BUYER_PUBLIC_KEY
+    });
     setStatusMessage(`Sell request sent for ${sellPercent}% of ${selectedToken.symbol}`);
     setOpenDialog(false);
   };
@@ -93,16 +106,15 @@ export const ManualSellList: React.FC = () => {
       </Typography>
 
       {loading && <CircularProgress />}
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {statusMessage && <Alert severity="info" sx={{ mb: 2 }}>{statusMessage}</Alert>}
 
-      {!loading && !error && tokens.length === 0 && (
+      {!loading && !statusMessage && tokens.length === 0 && (
         <Typography color="white" sx={{ mt: 2 }}>
           No tokens found.
         </Typography>
       )}
 
-      {!loading && !error && tokens.map((token) => (
+      {!loading && !statusMessage && tokens.map((token) => (
         <Paper key={token._id} sx={{ p: 2, mb: 2, bgcolor: '#2a2a2a' }}>
           <Typography color="white">Name: {token.name || 'Unknown'}</Typography>
           <Typography color="white">Symbol: {token.symbol || '?'}</Typography>
@@ -135,6 +147,15 @@ export const ManualSellList: React.FC = () => {
             <FormControlLabel value="25" control={<Radio />} label="25%" />
             <FormControlLabel value="100" control={<Radio />} label="100%" />
           </RadioGroup>
+          <TextField
+            margin="dense"
+            label="Your Private Key (bs58 or array)"
+            type="password"
+            fullWidth
+            value={privateKey}
+            onChange={(e) => setPrivateKey(e.target.value)}
+            sx={{ mt: 2 }}
+          />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenDialog(false)}>Cancel</Button>

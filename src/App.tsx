@@ -6,12 +6,16 @@ import { Dashboard } from './components/Dashboard';
 import { ManualBuyForm } from './components/ManualBuyForm';
 import { Stats } from './components/Stats';
 import { ManualSellList } from './components/ManualSellList';
+import { WebSocketProvider, useWebSocket } from './context/webSocketContext';
 // import { AutomaticSellDashboard } from './components/AutomaticSellDashboard'; // Uncomment if needed
 
-export const App = () => {
+// Create a new component that uses useWebSocket
+const AppContent = () => {
   const [currentView, setCurrentView] = useState<
     'landing' | 'automatic' | 'manual' | 'manualSell' | 'automaticSell' | 'stats'
   >('landing');
+
+  const { sendMessage } = useWebSocket();
 
   const handleModeSelect = (mode: 'manual' | 'automatic') => {
     setCurrentView(mode);
@@ -30,11 +34,7 @@ export const App = () => {
   };
 
   const handleBackHome = () => {
-    const ws = new WebSocket('ws://localhost:3001');
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ type: 'RESET_STATE' }));
-      ws.close();
-    };
+    sendMessage({ type: 'RESET_STATE' });
     setCurrentView('landing');
   };
 
@@ -130,5 +130,14 @@ export const App = () => {
         {currentView === 'stats' && <Stats onBackHome={handleBackHome} />}
       </div>
     </BotProvider>
+  );
+};
+
+// Main App component that provides the WebSocket context
+export const App = () => {
+  return (
+    <WebSocketProvider>
+      <AppContent />
+    </WebSocketProvider>
   );
 };
