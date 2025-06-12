@@ -13,7 +13,7 @@ interface TokenStats {
 
 interface Token {
   mint: string;
-  status: "bought" | "buying" | "failed";
+  status: "bought" | "buying" | "failed" | "detected";
   timestamp: number;
   creator: string;
   supply?: string;
@@ -23,6 +23,8 @@ interface Token {
   metadata: string;
   decimals: number;
   stats?: TokenStats;
+  transactionSignature?: string;
+  executionTimeMs?: number;
 }
 
 interface State {
@@ -33,7 +35,16 @@ interface State {
 
 type Action =
   | { type: "ADD_TOKEN"; payload: Token }
-  | { type: "UPDATE_TOKEN_STATS"; payload: { mint: string; stats: TokenStats } }
+  | {
+      type: "UPDATE_TOKEN_STATS";
+      payload: {
+        mint: string;
+        status?: "bought" | "buying" | "failed" | "detected";
+        transactionSignature?: string;
+        executionTimeMs?: number;
+        stats?: TokenStats;
+      };
+    }
   | { type: "ADD_LOG"; payload: { type: string; message: string } }
   | { type: "SET_BOT_STATUS"; payload: boolean };
 
@@ -46,13 +57,25 @@ const initialState: State = {
 const reducer = (state: State, action: Action): State => {
   switch (action.type) {
     case "ADD_TOKEN":
-      return { ...state, tokens: [...state.tokens, action.payload] };
+      if (!state.tokens.some(token => token.mint === action.payload.mint)) {
+        return {
+          ...state,
+          tokens: [...state.tokens, action.payload],
+        };
+      }
+      return state;
     case "UPDATE_TOKEN_STATS":
       return {
         ...state,
         tokens: state.tokens.map((token) =>
           token.mint === action.payload.mint
-            ? { ...token, stats: action.payload.stats }
+            ? {
+                ...token,
+                ...(action.payload.status && { status: action.payload.status }),
+                ...(action.payload.transactionSignature && { transactionSignature: action.payload.transactionSignature }),
+                ...(action.payload.executionTimeMs && { executionTimeMs: action.payload.executionTimeMs }),
+                ...(action.payload.stats && { stats: action.payload.stats }),
+              }
             : token
         ),
       };

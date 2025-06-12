@@ -49,7 +49,10 @@ export const ManualSellList: React.FC = () => {
           setTokens(data.data.walletTokens || []);
           setLoading(false);
         } else if (data.type === 'SELL_RESULT') {
-          setStatusMessage(data.success ? 'Sell successful!' : `Sell failed: ${data.error}`);
+          const message = data.success ? 
+            `Sell successful! Transaction: ${data.txSignature}. Time: ${data.executionTimeMs}ms` : 
+            `Sell failed: ${data.error}`;
+          setStatusMessage(message);
           setTimeout(() => setStatusMessage(null), 4000);
           if (data.success) {
             sendMessage({
@@ -60,6 +63,14 @@ export const ManualSellList: React.FC = () => {
         } else if (data.type === 'MANUAL_SELL_ERROR') {
           setStatusMessage(`Sell failed: ${data.error}`);
           setTimeout(() => setStatusMessage(null), 4000);
+        } else if (data.type === 'MANUAL_SELL_SUCCESS') {
+            const message = `Manual sell successful! Transaction: ${data.signature}. Time: ${data.details.executionTimeMs}ms`;
+            setStatusMessage(message);
+            setTimeout(() => setStatusMessage(null), 4000);
+            sendMessage({
+                type: 'GET_STATS',
+                walletAddress: import.meta.env.VITE_BUYER_PUBLIC_KEY
+            });
         }
       } catch (e) {
         console.error('Error parsing message:', e);

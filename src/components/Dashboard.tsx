@@ -1,5 +1,7 @@
+// src/components/Dashboard.tsx
 import React, { useEffect, useState } from 'react';
 import { useBot } from '../context/BotContext';
+import { useWebSocket } from '../context/webSocketContext';
 import {
   Table,
   TableBody,
@@ -12,15 +14,12 @@ import {
   Button,
 } from '@mui/material';
 
-// Add props type for Dashboard
 interface DashboardProps {
   onBackHome: () => void;
 }
 
-// Add this type for status colors
 type StatusColor = 'success' | 'warning' | 'error' | 'default';
 
-// Add this function before the Dashboard component
 const getStatusColor = (status: string): StatusColor => {
   switch (status) {
     case 'bought':
@@ -36,35 +35,56 @@ const getStatusColor = (status: string): StatusColor => {
 
 export const Dashboard: React.FC<DashboardProps> = ({ onBackHome }) => {
   const { state, dispatch } = useBot();
+  const { ws, status: wsStatus, sendMessage } = useWebSocket();
   const [status, setStatus] = useState('Initializing...');
 
   useEffect(() => {
-    // Send mode selection when dashboard mounts
-    const ws = new WebSocket('ws://localhost:3001');
-    
-    ws.onopen = () => {
-      ws.send(JSON.stringify({
+    if (ws && wsStatus === 'connected') {
+      sendMessage({
         type: 'SET_MODE',
         mode: 'automatic'
-      }));
-    };
+      });
 
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === 'BOT_STATUS') {
-        setStatus(data.status);
-      }
-      if (data.type === 'NEW_TOKEN') {
-        dispatch({ type: 'ADD_TOKEN', payload: { ...data.tokenData } });
-      }
-    };
+      const handleMessage = (event: MessageEvent) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'BOT_STATUS') {
+          setStatus(data.status);
+        }
+        if (data.type === 'NEW_TOKEN') {
+          dispatch({
+            type: 'ADD_TOKEN',
+            payload: {
+              ...data.tokenData,
+              timestamp: Date.now(),
+            }
+          });
+        }
+        if (data.type === 'BUY_SUCCESS') {
+          dispatch({
+            type: 'UPDATE_TOKEN_STATS',
+            payload: {
+              mint: data.tokenData.mint,
+              status: 'bought',
+              transactionSignature: data.tokenData.transactionSignature,
+              executionTimeMs: data.tokenData.executionTimeMs
+            }
+          });
+          setStatus(`Bot bought ${data.tokenData.mint.slice(0, 8)}... in ${data.tokenData.executionTimeMs}ms`);
+        }
+      };
 
-    return () => ws.close();
-  }, [dispatch]);
+      ws.addEventListener('message', handleMessage);
+
+      return () => {
+        if (ws) {
+          ws.removeEventListener('message', handleMessage);
+        }
+      };
+    }
+  }, [ws, wsStatus, dispatch, sendMessage]);
 
   return (
     <div className="container mx-auto p-4">
-      {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-white">Automatic Trading Dashboard</h1>
@@ -85,7 +105,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBackHome }) => {
         </Button>
       </div>
 
-      {/* Tokens Table */}
       <TableContainer
         component={Paper}
         sx={{
@@ -97,16 +116,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBackHome }) => {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>Status</TableCell>
-              <TableCell>Time</TableCell>
-              <TableCell>Mint Address</TableCell>
-              <TableCell>Creator</TableCell>
-              <TableCell>Supply</TableCell>
-              <TableCell>Bonding Curve</TableCell>
-              <TableCell>Curve Token</TableCell>
-              <TableCell>User Token</TableCell>
-              <TableCell>Metadata</TableCell>
-              <TableCell>Decimals</TableCell>
+              <TableCell key="status">Status</TableCell>
+              <TableCell key="time">Time</TableCell>
+              <TableCell key="buy-time">Buy Time (ms)</TableCell>
+              <TableCell key="mint">Mint Address</TableCell>
+              <TableCell key="creator">Creator</TableCell>
+              <TableCell key="supply">Supply</TableCell>
+              <TableCell key="bonding-curve">Bonding Curve</TableCell>
+              <TableCell key="curve-token">Curve Token</TableCell>
+              <TableCell key="metadata">Metadata</TableCell>
+              <TableCell key="decimals">Decimals</TableCell>
+              <TableCell key="tx">Tx Signature</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -118,50 +138,51 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBackHome }) => {
                   '&:hover': { backgroundColor: '#7B68EE' },
                 }}
               >
-                <TableCell>
+                <TableCell key="status">
                   <Chip
                     label={token.status}
                     color={getStatusColor(token.status)}
                     size="small"
                   />
                 </TableCell>
-                <TableCell>
+                <TableCell key="time">
                   {new Date(token.timestamp).toLocaleTimeString()}
                 </TableCell>
-                <TableCell>
+                <TableCell key="buy-time">
+                  {token.executionTimeMs ? `${token.executionTimeMs}ms` : '-'}
+                </TableCell>
+                <TableCell key="mint">
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-white">{token.mint.slice(0, 8)}...</span>
                   </div>
                 </TableCell>
-                <TableCell>
+                <TableCell key="creator">
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-white">{token.creator.slice(0, 8)}...</span>
                   </div>
                 </TableCell>
-                <TableCell>
+                <TableCell key="supply">
                   <span className="text-white">{token.supply || 'Unknown'}</span>
                 </TableCell>
-                <TableCell>
+                <TableCell key="bonding-curve">
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-white">{token.bondingCurve.slice(0, 8)}...</span>
                   </div>
                 </TableCell>
-                <TableCell>
+                <TableCell key="curve-token">
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-white">{token.curveTokenAccount.slice(0, 8)}...</span>
                   </div>
                 </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-white">{token.userTokenAccount.slice(0, 8)}...</span>
-                  </div>
-                </TableCell>
-                <TableCell>
+                <TableCell key="metadata">
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-white">{token.metadata.slice(0, 8)}...</span>
                   </div>
                 </TableCell>
-                <TableCell>{token.decimals}</TableCell>
+                <TableCell key="decimals">{token.decimals}</TableCell>
+                <TableCell key="tx">
+                  {token.transactionSignature ? `${token.transactionSignature.slice(0, 8)}...` : '-'}
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

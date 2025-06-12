@@ -170,7 +170,7 @@ const botState = {
 };
 
 // Add these variables at the top with other state
-let logListener: any = null;
+let logListener: number | null = null;
 let isListening = false;
 
 // Add reset function
@@ -261,12 +261,14 @@ export async function startTokenListener() {
   console.log("🚀 Bot initialized - Waiting for mode selection...");
 
   const startListening = () => {
-    if (isListening) {
-      console.log("👂 Already listening for tokens");
+    // Check if a listener is ALREADY active or being set up
+    if (isListening || logListener !== null) {
+      console.log("👂 Already listening for tokens or listener is active.");
       return;
     }
 
     console.log("👂 Starting token listener...");
+    // Store the listener ID returned by onLogs
     logListener = connection.onLogs(
       MEMEHOME_PROGRAM_ID,
       async (logInfo) => {
@@ -521,6 +523,7 @@ export async function startTokenListener() {
               `💸 Attempting to buy token ${mintAddress} with amount: ${BUY_AMOUNT_ADJUSTED / 1e9
               } SOL`
             );
+            const autoBuyStartTime = Date.now(); // Start time for auto buy
             const signature = await buyToken({
               connection,
               userKeypair,
@@ -729,14 +732,6 @@ export async function startTokenListener() {
                     symbol: tokenSymbol,
                     userPublicKey: currentBuyerPublicKey,
                   },
-                  $setOnInsert: {
-                    amount: "0",
-                    name: "Unknown",
-                    symbol: "Unknown",
-                    decimals: 9,
-                    description: "",
-                    userPublicKey: currentBuyerPublicKey,
-                  }
                 },
                 { upsert: true, new: true }
               );
@@ -764,11 +759,15 @@ export async function startTokenListener() {
                 console.log(`✅ Successfully processed mint: ${mintAddress}`);
               }
 
+              const autoBuyEndTime = Date.now(); // End time for auto buy
+              const autoBuyDuration = autoBuyEndTime - autoBuyStartTime; // Duration in milliseconds
+
               // Broadcast successful buy
               broadcastUpdate({
                 type: "BUY_SUCCESS",
                 tokenData: {
                   mint: mintAddress,
+                  transactionSignature: signature,
                   stats: {
                     mint: mintAddress,
                     buyPrice: BUY_AMOUNT / 1e9,
@@ -777,9 +776,14 @@ export async function startTokenListener() {
                     profitPercentage: 0,
                     holdingTime: "0m",
                     status: "holding"
-                  }
+                  },
+                  executionTimeMs: autoBuyDuration // Add execution time
                 }
               });
+
+              console.log(`\n=== AUTO BUY EXECUTION TIME ===`);
+              console.log(`Total execution time: ${autoBuyDuration}ms`);
+              console.log(`===============================\n`);
             } catch (error) {
               console.error("❌ Error updating token data:", error);
             }
@@ -815,7 +819,8 @@ export async function startTokenListener() {
       return;
     }
 
-    if (logListener) {
+    if (logListener !== null) {
+      const connection = getConnection();
       connection.removeOnLogsListener(logListener);
       logListener = null;
     }
@@ -857,6 +862,8 @@ export async function startTokenListener() {
 
             case "MANUAL_BUY":
               console.log("🛒 Manual buy request received");
+              const manualBuyStartTime = Date.now(); // Start time for manual buy
+
               try {
                 // Destructure walletAddress from data.data as well
                 const { mintAddress, amount, privateKey, walletAddress: manualBuyWalletAddress } = data.data; // Added walletAddress here
@@ -1029,6 +1036,9 @@ export async function startTokenListener() {
                     );
 
                     // Send success response with regular number format
+                    const manualBuyEndTime = Date.now(); // End time for manual buy
+                    const manualBuyDuration = manualBuyEndTime - manualBuyStartTime; // Duration in milliseconds
+
                     ws.send(
                       JSON.stringify({
                         type: "MANUAL_BUY_SUCCESS",
@@ -1036,7 +1046,8 @@ export async function startTokenListener() {
                         details: {
                           ...result.details,
                           buyPrice: formattedPrice,
-                          tokenAmount: tokensReceived
+                          tokenAmount: tokensReceived,
+                          executionTimeMs: manualBuyDuration // Add execution time
                         }
                       })
                     );
@@ -1058,6 +1069,7 @@ export async function startTokenListener() {
               break;
             case "SELL_TOKEN":
               console.log("🛒 Sell token request received:", data.data);
+              const sellTokenStartTime = Date.now(); // Start time for sell token
 
               try {
                 const { mint, percent, walletAddress } = data.data; // Destructure walletAddress from data.data
@@ -1160,11 +1172,28 @@ export async function startTokenListener() {
                 token.amount = (userAmount - sellAmount).toString();
                 await token.save();
 
+                // ट्रांजैक्शन कन्फर्मेशन का इंतज़ार करें
+                if (!txSignature) {
+                  throw new Error("Transaction signature is undefined");
+                }
+
+                const confirmation = await connection.confirmTransaction(txSignature);
+
+                // कन्फर्मेशन के बाद टाइम एंड करें
+                const sellTokenEndTime = Date.now();
+                const sellTokenDuration = sellTokenEndTime - sellTokenStartTime;
+
+                console.log(`\n=== SELL TOKEN EXECUTION TIME ===`);
+                console.log(`Total execution time: ${sellTokenDuration}ms`);
+                console.log(`================================\n`);
+
+                // रिस्पांस में executionTimeMs भेजें
                 ws.send(
                   JSON.stringify({
                     type: "SELL_RESULT",
                     success: true,
                     txSignature,
+                    executionTimeMs: sellTokenDuration
                   })
                 );
               } catch (err) {
@@ -1184,6 +1213,8 @@ export async function startTokenListener() {
               break;
             case "MANUAL_SELL":
               console.log("🛒 Manual sell request received");
+              const manualSellStartTime = Date.now(); // Start time for manual sell
+
               try {
                 const { mint, percent, privateKey, walletAddress: manualSellWalletAddress } = data; // Destructure privateKey and walletAddress
                 
@@ -1312,6 +1343,9 @@ export async function startTokenListener() {
                 console.log("========================\n");
 
                 // Send success response
+                const manualSellEndTime = Date.now(); // End time for manual sell
+                const manualSellDuration = manualSellEndTime - manualSellStartTime; // Duration in milliseconds
+
                 ws.send(JSON.stringify({
                   type: "MANUAL_SELL_SUCCESS",
                   signature: txSignature,
@@ -1319,7 +1353,8 @@ export async function startTokenListener() {
                     mint,
                     soldAmount: sellAmount.toString(),
                     remainingAmount: remainingAmount.toString(),
-                    expectedSolOut: expectedSolOut.toString()
+                    expectedSolOut: expectedSolOut.toString(),
+                    executionTimeMs: manualSellDuration // Add execution time
                   }
                 }));
 

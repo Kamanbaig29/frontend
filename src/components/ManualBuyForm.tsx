@@ -28,19 +28,13 @@ export const ManualBuyForm: React.FC = () => {
     }
     setWalletAddress(storedWalletAddress);
 
-    if (ws && status === 'connected') {
-      sendMessage({
-        type: 'SET_MODE',
-        mode: 'manual'
-      });
-
       const handleMessage = (event: MessageEvent) => {
         try {
           const response = JSON.parse(event.data);
           console.log('ManualBuyForm received message:', response);
 
           if (response.type === 'MANUAL_BUY_SUCCESS') {
-            setSuccess(`Token bought successfully! Transaction: ${response.signature}`);
+            setSuccess(`Token bought successfully! Transaction: ${response.signature}. Time: ${response.details.executionTimeMs}ms`);
             setMintAddress('');
             setAmount('');
             setPrivateKey('');
@@ -54,15 +48,15 @@ export const ManualBuyForm: React.FC = () => {
         }
       };
 
-      ws.addEventListener('message', handleMessage);
-
+      if (ws && status === 'connected') {
+        ws.addEventListener('message', handleMessage);
+      }
+      
       return () => {
-        ws.removeEventListener('message', handleMessage);
+        if (ws) {
+          ws.removeEventListener('message', handleMessage);
+        }
       };
-    } else if (status === 'error' || status === 'disconnected') {
-      setLoading(false);
-      setError(wsError || 'WebSocket is not connected. Please check the backend.');
-    }
   }, [ws, status, wsError, sendMessage, walletAddress]);
 
   const handleSubmit = async (e: React.FormEvent) => {
