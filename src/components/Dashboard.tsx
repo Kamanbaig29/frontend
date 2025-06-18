@@ -12,10 +12,24 @@ import {
   Paper,
   Chip,
   Button,
+  TextField,
+  Switch,
+  FormControlLabel,
+  Grid,
+  Typography,
+  Box,
 } from '@mui/material';
 
 interface DashboardProps {
   onBackHome: () => void;
+}
+
+interface AutoSnipeSettings {
+  buyAmount: number;
+  slippage: number;
+  priorityFee: number;
+  bribeAmount: number;
+  autoBuyEnabled: boolean;
 }
 
 type StatusColor = 'success' | 'warning' | 'error' | 'default';
@@ -38,6 +52,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBackHome }) => {
   const { ws, status: wsStatus, sendMessage } = useWebSocket();
   const [status, setStatus] = useState('Initializing...');
 
+  const [settings, setSettings] = useState<AutoSnipeSettings>({
+    buyAmount: 0.1,    // Default 0.1 SOL
+    slippage: 1,       // Default 1%
+    priorityFee: 0,    // Default 0 SOL
+    bribeAmount: 0,    // Default 0 SOL
+    autoBuyEnabled: false
+  });
+
   useEffect(() => {
     if (ws && wsStatus === 'connected') {
       sendMessage({
@@ -47,34 +69,44 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBackHome }) => {
 
       const handleMessage = (event: MessageEvent) => {
         const data = JSON.parse(event.data);
-        if (data.type === 'BOT_STATUS') {
-          setStatus(data.status);
-        }
+        
         if (data.type === 'NEW_TOKEN') {
           dispatch({
             type: 'ADD_TOKEN',
             payload: {
               ...data.tokenData,
               timestamp: Date.now(),
+              status: 'Detected',
+              executionTimeMs: null,
+              transactionSignature: null
             }
           });
         }
-        if (data.type === 'BUY_SUCCESS') {
+        
+        if (data.type === 'AUTO_BUY_SUCCESS') {
           dispatch({
-            type: 'UPDATE_TOKEN_STATS',
+            type: 'UPDATE_TOKEN',
             payload: {
-              mint: data.tokenData.mint,
-              status: 'bought',
-              transactionSignature: data.tokenData.transactionSignature,
-              executionTimeMs: data.tokenData.executionTimeMs
+              mint: data.details.mint,
+              status: 'Bought',
+              executionTimeMs: data.details.executionTimeMs,
+              transactionSignature: data.details.txSignature,
+              buyTime: data.details.buyTime,
+              buyPrice: data.details.buyPrice,
+              tokenAmount: data.details.tokenAmount,
+              // Include all other token details
+              creator: data.details.creator,
+              bondingCurve: data.details.bondingCurve,
+              curveTokenAccount: data.details.curveTokenAccount,
+              metadata: data.details.metadata,
+              decimals: data.details.decimals,
+              supply: data.details.supply
             }
           });
-          setStatus(`Bot bought ${data.tokenData.mint.slice(0, 8)}... in ${data.tokenData.executionTimeMs}ms`);
         }
       };
 
       ws.addEventListener('message', handleMessage);
-
       return () => {
         if (ws) {
           ws.removeEventListener('message', handleMessage);
@@ -82,6 +114,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBackHome }) => {
       };
     }
   }, [ws, wsStatus, dispatch, sendMessage]);
+
+  const handleSettingsChange = (field: keyof AutoSnipeSettings, value: number | boolean) => {
+    const newSettings = { ...settings, [field]: value };
+    setSettings(newSettings);
+    
+    if (ws && wsStatus === 'connected') {
+      sendMessage({
+        type: 'UPDATE_AUTO_SNIPE_SETTINGS',
+        settings: newSettings
+      });
+    }
+  };
 
   return (
     <div className="container mx-auto p-4">
@@ -105,6 +149,88 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBackHome }) => {
         </Button>
       </div>
 
+      {/* Settings Section */}
+      <Paper sx={{ p: 3, mb: 4, backgroundColor: '#6A5ACD' }}>
+        <Typography variant="h6" sx={{ color: 'white', mb: 2 }}>
+          Auto-Snipe Settings
+        </Typography>
+        <Grid container spacing={3}>
+          <Grid item xs={12} sm={6} md={3}>
+            <TextField
+              label="Buy Amount (SOL)"
+              type="number"
+              value={settings.buyAmount}
+              onChange={(e) => handleSettingsChange('buyAmount', parseFloat(e.target.value))}
+              fullWidth
+              InputProps={{ inputProps: { min: 0.01, step: 0.01 } }}
+              sx={{ 
+                '& .MuiOutlinedInput-root': { color: 'white' },
+                '& .MuiInputLabel-root': { color: 'white' }
+              }}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <TextField
+              label="Slippage (%)"
+              type="number"
+              value={settings.slippage}
+              onChange={(e) => handleSettingsChange('slippage', parseFloat(e.target.value))}
+              fullWidth
+              InputProps={{ inputProps: { min: 0.1, max: 5, step: 0.1 } }}
+              sx={{ 
+                '& .MuiOutlinedInput-root': { color: 'white' },
+                '& .MuiInputLabel-root': { color: 'white' }
+              }}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <TextField
+              label="Priority Fee (SOL)"
+              type="number"
+              value={settings.priorityFee}
+              onChange={(e) => handleSettingsChange('priorityFee', parseFloat(e.target.value))}
+              fullWidth
+              InputProps={{ inputProps: { min: 0, step: 0.001 } }}
+              sx={{ 
+                '& .MuiOutlinedInput-root': { color: 'white' },
+                '& .MuiInputLabel-root': { color: 'white' }
+              }}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <TextField
+              label="Bribe Amount (SOL)"
+              type="number"
+              value={settings.bribeAmount}
+              onChange={(e) => handleSettingsChange('bribeAmount', parseFloat(e.target.value))}
+              fullWidth
+              InputProps={{ inputProps: { min: 0, step: 0.001 } }}
+              sx={{ 
+                '& .MuiOutlinedInput-root': { color: 'white' },
+                '& .MuiInputLabel-root': { color: 'white' }
+              }}
+            />
+          </Grid>
+          <Grid item xs={12}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={settings.autoBuyEnabled}
+                  onChange={(e) => handleSettingsChange('autoBuyEnabled', e.target.checked)}
+                  color="primary"
+                />
+              }
+              label={
+                <Typography sx={{ color: 'white' }}>
+                  Enable Auto-Buy
+                </Typography>
+              }
+            />
+          </Grid>
+        </Grid>
+      </Paper>
+
+      {/* Tokens Table */}
       <TableContainer
         component={Paper}
         sx={{

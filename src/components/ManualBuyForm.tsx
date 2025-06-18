@@ -19,6 +19,9 @@ export const ManualBuyForm: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [walletAddress, setWalletAddress] = useState<string>('');
+  const [slippage, setSlippage] = useState('1'); // Default 1%
+  const [priorityFee, setPriorityFee] = useState('0.001'); // Default 0.001 SOL
+  const [bribeAmount, setBribeAmount] = useState('0'); // Default 0 SOL
 
   useEffect(() => {
     const storedWalletAddress = import.meta.env.VITE_BUYER_PUBLIC_KEY || '';
@@ -59,6 +62,16 @@ export const ManualBuyForm: React.FC = () => {
       };
   }, [ws, status, wsError, sendMessage, walletAddress]);
 
+  useEffect(() => {
+    // Send mode change message when component mounts
+    if (ws && status === 'connected') {
+      sendMessage({
+        type: 'SET_MODE',
+        mode: 'manual'
+      });
+    }
+  }, [ws, status, sendMessage]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -84,12 +97,14 @@ export const ManualBuyForm: React.FC = () => {
           mintAddress,
           amount: parseFloat(amount),
           privateKey,
-          walletAddress: walletAddress
+          walletAddress: walletAddress,
+          slippage: parseFloat(slippage),
+          priorityFee: parseFloat(priorityFee),
+          bribeAmount: parseFloat(bribeAmount)
         }
       };
 
       console.log('ManualBuyForm: Sending MANUAL_BUY message:', messageToSend);
-
       sendMessage(messageToSend);
 
     } catch (err) {
@@ -165,6 +180,76 @@ export const ManualBuyForm: React.FC = () => {
             required
             fullWidth
             variant="outlined"
+            sx={{
+              '& .MuiInputBase-input': { color: 'white' },
+              '& .MuiInputLabel-root': { color: 'white' },
+              '& .MuiOutlinedInput-root': {
+                '& fieldset': { borderColor: 'white' },
+                '&:hover fieldset': { borderColor: 'white' },
+                '&.Mui-focused fieldset': { borderColor: 'white' }
+              }
+            }}
+          />
+
+          <TextField
+            label="Slippage (%)"
+            type="number"
+            value={slippage}
+            onChange={(e) => setSlippage(e.target.value)}
+            required
+            fullWidth
+            variant="outlined"
+            inputProps={{
+              min: "0.1",
+              max: "100",
+              step: "0.1"
+            }}
+            sx={{
+              '& .MuiInputBase-input': { color: 'white' },
+              '& .MuiInputLabel-root': { color: 'white' },
+              '& .MuiOutlinedInput-root': {
+                '& fieldset': { borderColor: 'white' },
+                '&:hover fieldset': { borderColor: 'white' },
+                '&.Mui-focused fieldset': { borderColor: 'white' }
+              }
+            }}
+          />
+
+          <TextField
+            label="Priority Fee (SOL)"
+            type="number"
+            value={priorityFee}
+            onChange={(e) => setPriorityFee(e.target.value)}
+            required
+            fullWidth
+            variant="outlined"
+            inputProps={{
+              min: "0",
+              step: "0.001"
+            }}
+            sx={{
+              '& .MuiInputBase-input': { color: 'white' },
+              '& .MuiInputLabel-root': { color: 'white' },
+              '& .MuiOutlinedInput-root': {
+                '& fieldset': { borderColor: 'white' },
+                '&:hover fieldset': { borderColor: 'white' },
+                '&.Mui-focused fieldset': { borderColor: 'white' }
+              }
+            }}
+          />
+
+          <TextField
+            label="Bribe Amount (SOL)"
+            type="number"
+            value={bribeAmount}
+            onChange={(e) => setBribeAmount(e.target.value)}
+            required
+            fullWidth
+            variant="outlined"
+            inputProps={{
+              min: "0",
+              step: "0.001"
+            }}
             sx={{
               '& .MuiInputBase-input': { color: 'white' },
               '& .MuiInputLabel-root': { color: 'white' },

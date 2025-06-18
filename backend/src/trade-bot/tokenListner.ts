@@ -1,6 +1,13 @@
 // Add this declaration before your imports
 declare global {
   var trackedTokens: TokenData[];
+  var autoSnipeSettings: {
+    buyAmount: bigint;
+    slippage: number;
+    priorityFee: bigint;
+    bribeAmount: bigint;
+    autoBuyEnabled: boolean;
+  };
 }
 
 import {
@@ -256,453 +263,125 @@ async function fetchWalletTokens(
   return tokenAccounts.value;
 }
 
+// Add this near the top of the file, after the global declarations
+if (!global.autoSnipeSettings) {
+  global.autoSnipeSettings = {
+    buyAmount: BigInt(0),
+    slippage: 1,
+    priorityFee: BigInt(0),
+    bribeAmount: BigInt(0),
+    autoBuyEnabled: false
+  };
+}
+
+// Add type for swapAccounts
+let swapAccounts: Awaited<ReturnType<typeof getSwapAccounts>>;
+
 export async function startTokenListener() {
   const connection = getConnection();
   console.log("🚀 Bot initialized - Waiting for mode selection...");
 
   const startListening = () => {
-    // Check if a listener is ALREADY active or being set up
     if (isListening || logListener !== null) {
       console.log("👂 Already listening for tokens or listener is active.");
       return;
     }
 
     console.log("👂 Starting token listener...");
-    // Store the listener ID returned by onLogs
     logListener = connection.onLogs(
       MEMEHOME_PROGRAM_ID,
       async (logInfo) => {
-        // Only process if in auto mode
-        if (!botState.isAutoMode) {
-          return;
-        }
-
-        const { logs, signature } = logInfo;
-        let mintAddress: string | undefined;
-
         try {
-          // More specific token creation detection
-          const isCreateMint = logs.some((log) =>
-            log.includes("Program log: Instruction: InitializeMint2")
-          );
-
-          const isLaunchInstruction = logs.some((log) =>
-            log.includes("Program log: Instruction: Launch")
-          );
-
-          // Only proceed if both conditions are met
-          if (!isCreateMint || !isLaunchInstruction) {
+          if (!global.autoSnipeSettings.autoBuyEnabled) {
+            console.log("❌ Auto-buy is disabled, skipping buy attempt");
             return;
           }
 
-          console.log("🎯 New token creation detected!");
-
-          await sleep(2000);
-
-          const tx = await connection.getTransaction(signature, {
-            commitment: "confirmed",
-            maxSupportedTransactionVersion: 0,
-          });
-
-          if (!tx?.transaction?.message) {
-            console.log("❌ Invalid transaction data");
-            return;
-          }
-
-          const accountKeys = tx.transaction.message.staticAccountKeys;
-
-          // Collect all relevant addresses
-          const tokenData: TokenData = {
-            mint: accountKeys[1].toBase58(),
-            creator: accountKeys[0].toBase58(),
-            bondingCurve: accountKeys[3].toBase58(), // Bonding curve PDA
-            curveTokenAccount: accountKeys[2].toBase58(), // Curve token account
-            userTokenAccount: accountKeys[4].toBase58(), // Your token account
-            metadata: accountKeys[9].toBase58(), // Metadata account
-            decimals: 9,
-          };
-
-          // Log detailed token info
-          console.log("\n📋 Token Details:");
-          console.log("----------------------------------------");
-          console.log(`🎯 Mint Address:        ${tokenData.mint}`);
-          console.log(`👤 Creator:            ${tokenData.creator}`);
-          console.log(`📈 Bonding Curve:      ${tokenData.bondingCurve}`);
-          console.log(`💰 Curve Token Account: ${tokenData.curveTokenAccount}`);
-          console.log(` User Token Account:  ${tokenData.userTokenAccount}`);
-          console.log(`📄 Metadata Account:    ${tokenData.metadata}`);
-          console.log(`🔢 Decimals:           ${tokenData.decimals}`);
-          console.log("----------------------------------------\n");
-
-          // Try to fetch token supply
-          try {
-            const mintInfo = await connection.getTokenSupply(
-              new PublicKey(tokenData.mint)
-            );
-            if (mintInfo.value) {
-              tokenData.supply = mintInfo.value.amount;
-              console.log(`💎 Token Supply: ${tokenData.supply}`);
-            }
-          } catch (error) {
-            console.log("⚠️ Could not fetch token supply");
-          }
-
-          // Add to global tracking with type safety
-          if (!global.trackedTokens) {
-            global.trackedTokens = [] as TokenData[];
-          }
-          global.trackedTokens.push(tokenData);
-
-          // Broadcast new token detection
-          broadcastUpdate({
-            type: "NEW_TOKEN",
-            tokenData: {
-              mint: tokenData.mint,
-              creator: tokenData.creator,
-              bondingCurve: tokenData.bondingCurve,
-              curveTokenAccount: tokenData.curveTokenAccount,
-              userTokenAccount: tokenData.userTokenAccount,
-              metadata: tokenData.metadata,
-              decimals: tokenData.decimals,
-              supply: tokenData.supply,
-            },
-          });
-
-          // Continue with existing buy logic...
-          mintAddress = tokenData.mint;
-
-          // Skip if already processed
-          if (processedMints.has(mintAddress)) {
-            console.log(`⏭️ Skipping: Already processed ${mintAddress}`);
-            return;
-          }
-
-          // Add debug logs
-          console.log("📝 Transaction logs:", logs);
-          console.log(
-            "🔑 Account keys:",
-            accountKeys.map((key) => key.toBase58())
-          );
-
-          const owner = accountKeys[0].toBase58();
-          const decimals = 9;
-
-          console.log(`Mint Address: ${mintAddress}`);
-          console.log(`Owner: ${owner}`);
-          console.log(`Decimals: ${decimals}`);
-
-          // Validate mint address before proceeding
-          const mintInfo = await connection.getParsedAccountInfo(
-            new PublicKey(mintAddress)
-          );
-          let mintType: string | undefined = undefined;
-          if (
-            mintInfo.value &&
-            typeof mintInfo.value.data === "object" &&
-            "parsed" in mintInfo.value.data
-          ) {
-            // @ts-ignore
-            mintType = mintInfo.value.data.parsed.type;
-          }
-          if (mintType !== "mint") {
-            console.error(
-              "❌ Skipping: accountKeys[1] is not a valid SPL Token Mint."
-            );
-            return;
-          }
-
-          // Use the currentBuyerPublicKey already defined and validated at the top of the file
-          const buyer = new PublicKey(currentBuyerPublicKey);
-
-          // Fetch swap accounts needed for your buy instruction
-          const swapAccounts = await getSwapAccounts({
-            mintAddress,
-            buyer,
-            connection,
-            programId: MEMEHOME_PROGRAM_ID,
-          });
-
-          console.log("📦 Swap Accounts:", swapAccounts);
-
-          // Calculate the correct ATA address for curveTokenAccount (bondingCurve PDA + tokenMint)
-          const curveTokenATA = await getAssociatedTokenAddress(
-            swapAccounts.tokenMint,
-            swapAccounts.bondingCurve,
-            true // allowOwnerOffCurve for PDA
-          );
-
-          console.log("curveTokenATA:", curveTokenATA.toBase58());
-          console.log("tokenMint:", swapAccounts.tokenMint.toBase58());
-          console.log("bondingCurve:", swapAccounts.bondingCurve.toBase58());
-
-          const ataInfo = await connection.getAccountInfo(curveTokenATA);
-          if (ataInfo) {
-            // Check if it's a valid SPL Token Account
-            const parsed = await connection.getParsedAccountInfo(curveTokenATA);
-            if (
-              parsed.value &&
-              typeof parsed.value.data === "object" &&
-              "parsed" in parsed.value.data &&
-              parsed.value.data.parsed.type === "account"
-            ) {
-              console.log(
-                "curveTokenAccount already exists and is a valid token account, skipping creation."
-              );
-            } else {
-              console.error(
-                "❌ curveTokenAccount exists but is NOT a valid SPL Token Account. Skipping creation to avoid error."
-              );
-              // Don't try to create or use this account, just skip this token
-              return;
-            }
-          } else {
-            try {
-              console.log("⚡ Creating curveTokenAccount before buy...");
-              const createAtaIx = createAssociatedTokenAccountInstruction(
-                userKeypair.publicKey, // payer
-                curveTokenATA, // associated token account address
-                swapAccounts.bondingCurve, // owner (PDA)
-                swapAccounts.tokenMint // mint
-              );
-
-              // Create and send transaction
-              const createAtaTx = new Transaction().add(createAtaIx);
-
-              createAtaTx.feePayer = userKeypair.publicKey;
-              createAtaTx.recentBlockhash = (
-                await connection.getLatestBlockhash()
-              ).blockhash;
-
-              // Sign transaction (fixed method)
-              createAtaTx.sign(userKeypair);
-
-              // Send raw transaction
-              const signature = await connection.sendRawTransaction(
-                createAtaTx.serialize()
-              );
-
-              // Wait for confirmation
-              const confirmation = await connection.confirmTransaction(
-                signature,
-                "confirmed"
-              );
-
-              if (confirmation.value.err) {
-                throw new Error(
-                  `Transaction failed: ${confirmation.value.err.toString()}`
-                );
-              }
-
-              console.log("✅ curveTokenAccount created successfully!");
-
-              // Verify ATA was created
-              const newAtaInfo = await connection.getAccountInfo(curveTokenATA);
-              if (!newAtaInfo) {
-                throw new Error("ATA creation failed - account not found");
-              }
-            } catch (ataError) {
-              console.error("❌ Failed to create ATA:", ataError);
-              return; // Exit if ATA creation fails
-            }
-          }
-
-          // Ab buyToken call karo (swapAccounts.curveTokenAccount = curveTokenATA hona chahiye)
-          swapAccounts.curveTokenAccount = curveTokenATA;
-
-          // Add validation before buy
-          if (
-            !swapAccounts.userTokenAccount ||
-            !swapAccounts.curveTokenAccount
-          ) {
-            console.error("❌ Missing required token accounts");
-            return;
-          }
+          const { logs, signature } = logInfo;
+          let mintAddress: string | undefined;
 
           try {
-            console.log(
-              `💸 Attempting to buy token ${mintAddress} with amount: ${BUY_AMOUNT_ADJUSTED / 1e9
-              } SOL`
+            // More specific token creation detection
+            const isCreateMint = logs.some((log) =>
+              log.includes("Program log: Instruction: InitializeMint2")
             );
-            const autoBuyStartTime = Date.now(); // Start time for auto buy
-            const signature = await buyToken({
-              connection,
-              userKeypair,
-              programId: MEMEHOME_PROGRAM_ID,
-              amount: BUY_AMOUNT_ADJUSTED,
-              minOut: MIN_OUT_AMOUNT,
-              direction: DIRECTION,
-              swapAccounts,
-            });
 
-            if (!signature) {
-              console.error(
-                "❌ Buy transaction failed - no signature returned"
-              );
+            const isLaunchInstruction = logs.some((log) =>
+              log.includes("Program log: Instruction: Launch")
+            );
+
+            // Only proceed if both conditions are met
+            if (!isCreateMint || !isLaunchInstruction) {
               return;
             }
 
-            console.log(`📝 Buy transaction signature: ${signature}`);
+            console.log("🎯 New token creation detected!");
 
-            // Create the confirmation strategy object
-            const confirmationStrategy: TransactionConfirmationStrategy = {
-              signature,
-              blockhash: (await connection.getLatestBlockhash()).blockhash,
-              lastValidBlockHeight: (await connection.getLatestBlockhash())
-                .lastValidBlockHeight,
-            };
+            await sleep(2000);
 
-            // Wait for confirmation with proper error handling
-            const confirmation = await connection.confirmTransaction(
-              confirmationStrategy
-            );
-
-            const txDetails = await connection.getTransaction(signature, {
+            const tx = await connection.getTransaction(signature, {
               commitment: "confirmed",
               maxSupportedTransactionVersion: 0,
             });
 
-            // if (confirmation.value.err) {
-            //   throw new Error(
-            //     `Buy transaction failed: ${confirmation.value.err.toString()}`
-            //   );
-            // }
-
-            if (!txDetails || !txDetails.meta) {
-              throw new Error(
-                "Failed to fetch transaction details or metadata"
-              );
+            if (!tx?.transaction?.message) {
+              console.log("❌ Invalid transaction data");
+              return;
             }
 
-            const accountKeys = txDetails.transaction.message.getAccountKeys();
+            const accountKeys = tx.transaction.message.getAccountKeys();
             const accountKeysArray: PublicKey[] = [];
             for (let i = 0; i < accountKeys.length; i++) {
               const key = accountKeys.get(i);
               if (key) accountKeysArray.push(key);
             }
 
-            const buyerIndex = accountKeysArray.findIndex(
-              (key) => key?.toBase58() === buyer.toBase58()
-            );
+            // Collect all relevant addresses
+            const tokenData: TokenData = {
+              mint: accountKeysArray[1].toBase58(),
+              creator: accountKeysArray[0].toBase58(),
+              bondingCurve: accountKeysArray[3].toBase58(), // Bonding curve PDA
+              curveTokenAccount: accountKeysArray[2].toBase58(), // Curve token account
+              userTokenAccount: accountKeysArray[4].toBase58(), // Your token account
+              metadata: accountKeysArray[9].toBase58(), // Metadata account
+              decimals: 9,
+            };
 
-            const solSpentLamports =
-              txDetails.meta.preBalances[buyerIndex] -
-              txDetails.meta.postBalances[buyerIndex];
-            const solSpent = solSpentLamports / 1e9;
+            // Log detailed token info
+            console.log("\n📋 Token Details:");
+            console.log("----------------------------------------");
+            console.log(`🎯 Mint Address:        ${tokenData.mint}`);
+            console.log(`👤 Creator:            ${tokenData.creator}`);
+            console.log(`📈 Bonding Curve:      ${tokenData.bondingCurve}`);
+            console.log(`💰 Curve Token Account: ${tokenData.curveTokenAccount}`);
+            console.log(` User Token Account:  ${tokenData.userTokenAccount}`);
+            console.log(`📄 Metadata Account:    ${tokenData.metadata}`);
+            console.log(`🔢 Decimals:           ${tokenData.decimals}`);
+            console.log("----------------------------------------\n");
 
-            // After getting transaction details
-            console.log("🔍 Debug Info:");
-            console.log("Mint Address:", mintAddress);
-            console.log("User Token Account:", swapAccounts.userTokenAccount.toBase58());
-            console.log("All Account Keys:", accountKeysArray.map(key => key.toBase58()));
-
-            // Use the correct token account address from swapAccounts
-            const tokenAccount = swapAccounts.userTokenAccount.toBase58();
-            const tokenAccountIndex = accountKeysArray.findIndex(
-              (key) => key.toBase58() === tokenAccount
-            );
-
-            console.log("Token Account Index:", tokenAccountIndex);
-            console.log("Pre Token Balances:", txDetails.meta.preTokenBalances);
-            console.log("Post Token Balances:", txDetails.meta.postTokenBalances);
-
-            const preTokenBalance = txDetails.meta.preTokenBalances?.find(
-              (b) => b.accountIndex === tokenAccountIndex
-            )?.uiTokenAmount.uiAmount || 0;
-            const postTokenBalance = txDetails.meta.postTokenBalances?.find(
-              (b) => b.accountIndex === tokenAccountIndex
-            )?.uiTokenAmount.uiAmount || 0;
-
-            console.log("Pre Token Balance:", preTokenBalance);
-            console.log("Post Token Balance:", postTokenBalance);
-
-            // Calculate tokens received (exactly like manual buy)
-            const tokensReceived = postTokenBalance - preTokenBalance;
-
-            // Calculate price per token using user input SOL
-            const pricePerToken = BUY_AMOUNT_SOL / tokensReceived;
-            console.log("SOL SPENT:", BUY_AMOUNT_SOL);
-            console.log("TOKENS RECEIVED:", tokensReceived);
-            console.log("PRICE PER TOKEN:", pricePerToken, "SOL");
-            // Convert to regular number with 10 decimal places
-            const formattedPrice = pricePerToken.toFixed(10);
-
-            console.log("\n=== TOKEN RECEIPT DETAILS ===");
-            console.log("User Input (SOL):", BUY_AMOUNT_SOL);
-            console.log("Pre Token Balance:", preTokenBalance);
-            console.log("Post Token Balance:", postTokenBalance);
-            console.log("Tokens Received:", tokensReceived);
-            console.log("SOL Spent:", solSpent);
-            console.log("Price per Token:", formattedPrice, "SOL");
-            console.log("===========================\n");
-
-            // Get token metadata
-            const tokenMetadata = await connection.getParsedAccountInfo(new PublicKey(mintAddress));
-            let tokenName = "Unknown";
-            let tokenSymbol = "Unknown";
-
-            if (tokenMetadata.value && 
-                typeof tokenMetadata.value.data === "object" && 
-                "parsed" in tokenMetadata.value.data) {
-              const parsedData = tokenMetadata.value.data.parsed;
-              if (parsedData.type === "mint") {
-                tokenName = parsedData.info.name || "Unknown";
-                tokenSymbol = parsedData.info.symbol || "Unknown";
-              }
-            }
-
-            // Store in database
+            // Try to fetch token supply
             try {
-              interface UpdateData {
-                mint: string;
-                buyPrice: string;
-                decimals: number;
-                name: string;
-                symbol: string;
-                amount?: string;
-                userPublicKey: string;
-              }
-
-              const updateData: UpdateData = {
-                mint: mintAddress,
-                buyPrice: formattedPrice,
-                decimals: 6,
-                name: tokenName,
-                symbol: tokenSymbol,
-                userPublicKey: currentBuyerPublicKey,
-              };
-
-              const existingDoc = await WalletToken.findOne({
-                mint: mintAddress,
-                userPublicKey: currentBuyerPublicKey,
-              });
-              if (!existingDoc) {
-                updateData.amount = tokensReceived.toString();
-              }
-
-              await WalletToken.findOneAndUpdate(
-                {
-                  mint: mintAddress,
-                  userPublicKey: currentBuyerPublicKey,
-                },
-                { $set: updateData },
-                { upsert: true, new: true }
+              const mintInfo = await connection.getTokenSupply(
+                new PublicKey(tokenData.mint)
               );
-
-              console.log(`✅ Token data updated in database for ${mintAddress}`);
+              if (mintInfo.value) {
+                tokenData.supply = mintInfo.value.amount;
+                console.log(`💎 Token Supply: ${tokenData.supply}`);
+              }
             } catch (error) {
-              console.error('❌ Error updating token data:', error);
+              console.log("⚠️ Could not fetch token supply");
             }
 
-            // Add this after successful buy confirmation
-            try {
-              console.log("✅ Buy transaction confirmed!");
+            // Add to global tracking with type safety
+            if (!global.trackedTokens) {
+              global.trackedTokens = [] as TokenData[];
+            }
+            global.trackedTokens.push(tokenData);
 
-              // Only update the newly bought token
-              // await updateWalletToken(connection, tokenData.mint);
-              // console.log("✅ New token data updated");
-
-              // Store buy in AutoTokenBuy collection
-              await AutoTokenBuy.create({
+            // Broadcast new token detection
+            broadcastUpdate({
+              type: "NEW_TOKEN",
+              tokenData: {
                 mint: tokenData.mint,
                 creator: tokenData.creator,
                 bondingCurve: tokenData.bondingCurve,
@@ -711,95 +390,355 @@ export async function startTokenListener() {
                 metadata: tokenData.metadata,
                 decimals: tokenData.decimals,
                 supply: tokenData.supply,
-                buyTimestamp: Date.now(),
-                transactionSignature: signature,
-                status: "bought",
-                userPublicKey: currentBuyerPublicKey,
-              });
+                status: "Detected",
+                detectionTime: new Date().toISOString(),
+                buyTime: null,
+                txSignature: null
+              },
+            });
 
-              await WalletToken.findOneAndUpdate(
-                {
-                  mint: tokenData.mint,
-                  userPublicKey: currentBuyerPublicKey,
-                },
-                {
-                  $set: {
-                    mint: tokenData.mint,
-                    buyPrice: formattedPrice,
-                    amount: tokensReceived.toString(),
-                    decimals: 6,
-                    name: tokenName,
-                    symbol: tokenSymbol,
-                    userPublicKey: currentBuyerPublicKey,
-                  },
-                },
-                { upsert: true, new: true }
+            // Continue with existing buy logic...
+            mintAddress = tokenData.mint;
+
+            // Skip if already processed
+            if (processedMints.has(mintAddress)) {
+              console.log(`⏭️ Skipping: Already processed ${mintAddress}`);
+              return;
+            }
+
+            // Add debug logs
+            console.log("📝 Transaction logs:", logs);
+            console.log(
+              "🔑 Account keys:",
+              accountKeysArray.map((key) => key.toBase58())
+            );
+
+            const owner = accountKeysArray[0].toBase58();
+            const decimals = 9;
+
+            console.log(`Mint Address: ${mintAddress}`);
+            console.log(`Owner: ${owner}`);
+            console.log(`Decimals: ${decimals}`);
+
+            // Validate mint address before proceeding
+            const mintInfo = await connection.getParsedAccountInfo(
+              new PublicKey(mintAddress)
+            );
+            let mintType: string | undefined = undefined;
+            if (
+              mintInfo.value &&
+              typeof mintInfo.value.data === "object" &&
+              "parsed" in mintInfo.value.data
+            ) {
+              // @ts-ignore
+              mintType = mintInfo.value.data.parsed.type;
+            }
+            if (mintType !== "mint") {
+              console.error(
+                "❌ Skipping: accountKeys[1] is not a valid SPL Token Mint."
               );
+              return;
+            }
 
-              // Get transaction details
-              const txDetails = await connection.getTransaction(signature, {
-                commitment: "confirmed",
-                maxSupportedTransactionVersion: 0,
-              });
+            // Use the currentBuyerPublicKey already defined and validated at the top of the file
+            const buyer = new PublicKey(currentBuyerPublicKey);
 
-              if (!txDetails) {
-                throw new Error("Failed to fetch transaction details");
+            // Get swap accounts before using them
+            swapAccounts = await getSwapAccounts({
+              mintAddress,
+              buyer: userKeypair.publicKey,
+              connection,
+              programId: MEMEHOME_PROGRAM_ID,
+            });
+
+            console.log("📦 Swap Accounts:", swapAccounts);
+
+            // Calculate the correct ATA address for curveTokenAccount (bondingCurve PDA + tokenMint)
+            const curveTokenATA = await getAssociatedTokenAddress(
+              swapAccounts.tokenMint,
+              swapAccounts.bondingCurve,
+              true // allowOwnerOffCurve for PDA
+            );
+
+            console.log("curveTokenATA:", curveTokenATA.toBase58());
+            console.log("tokenMint:", swapAccounts.tokenMint.toBase58());
+            console.log("bondingCurve:", swapAccounts.bondingCurve.toBase58());
+
+            const ataInfo = await connection.getAccountInfo(curveTokenATA);
+            if (ataInfo) {
+              // Check if it's a valid SPL Token Account
+              const parsed = await connection.getParsedAccountInfo(curveTokenATA);
+              if (
+                parsed.value &&
+                typeof parsed.value.data === "object" &&
+                "parsed" in parsed.value.data &&
+                parsed.value.data.parsed.type === "account"
+              ) {
+                console.log(
+                  "curveTokenAccount already exists and is a valid token account, skipping creation."
+                );
+              } else {
+                console.error(
+                  "❌ curveTokenAccount exists but is NOT a valid SPL Token Account. Skipping creation to avoid error."
+                );
+                // Don't try to create or use this account, just skip this token
+                return;
               }
+            } else {
+              try {
+                console.log("⚡ Creating curveTokenAccount before buy...");
+                const createAtaIx = createAssociatedTokenAccountInstruction(
+                  userKeypair.publicKey, // payer
+                  curveTokenATA, // associated token account address
+                  swapAccounts.bondingCurve, // owner (PDA)
+                  swapAccounts.tokenMint // mint
+                );
 
-              console.log(`✨ Transaction successful!`);
-              console.log(`📊 Transaction details:
-                Signature: ${signature}
-                Block: ${txDetails.slot}
-                Fee: ${txDetails.meta?.fee} lamports
-              `);
+                // Create and send transaction
+                const createAtaTx = new Transaction().add(createAtaIx);
 
-              // Only add to processed set after successful buy
-              if (mintAddress) {
-                processedMints.add(mintAddress);
-                console.log(`✅ Successfully processed mint: ${mintAddress}`);
-              }
+                createAtaTx.feePayer = userKeypair.publicKey;
+                createAtaTx.recentBlockhash = (
+                  await connection.getLatestBlockhash()
+                ).blockhash;
 
-              const autoBuyEndTime = Date.now(); // End time for auto buy
-              const autoBuyDuration = autoBuyEndTime - autoBuyStartTime; // Duration in milliseconds
+                // Sign transaction (fixed method)
+                createAtaTx.sign(userKeypair);
 
-              // Broadcast successful buy
-              broadcastUpdate({
-                type: "BUY_SUCCESS",
-                tokenData: {
-                  mint: mintAddress,
-                  transactionSignature: signature,
-                  stats: {
-                    mint: mintAddress,
-                    buyPrice: BUY_AMOUNT / 1e9,
-                    currentPrice: BUY_AMOUNT / 1e9,
-                    profitLoss: 0,
-                    profitPercentage: 0,
-                    holdingTime: "0m",
-                    status: "holding"
-                  },
-                  executionTimeMs: autoBuyDuration // Add execution time
+                // Send raw transaction
+                const signature = await connection.sendRawTransaction(
+                  createAtaTx.serialize()
+                );
+
+                // Wait for confirmation
+                const confirmation = await connection.confirmTransaction(
+                  signature,
+                  "confirmed"
+                );
+
+                if (confirmation.value.err) {
+                  throw new Error(
+                    `Transaction failed: ${confirmation.value.err.toString()}`
+                  );
                 }
+
+                console.log("✅ curveTokenAccount created successfully!");
+
+                // Verify ATA was created
+                const newAtaInfo = await connection.getAccountInfo(curveTokenATA);
+                if (!newAtaInfo) {
+                  throw new Error("ATA creation failed - account not found");
+                }
+              } catch (ataError) {
+                console.error("❌ Failed to create ATA:", ataError);
+                return; // Exit if ATA creation fails
+              }
+            }
+
+            // Ab buyToken call karo (swapAccounts.curveTokenAccount = curveTokenATA hona chahiye)
+            swapAccounts.curveTokenAccount = curveTokenATA;
+
+            // Add validation before buy
+            if (
+              !swapAccounts.userTokenAccount ||
+              !swapAccounts.curveTokenAccount
+            ) {
+              console.error("❌ Missing required token accounts");
+              return;
+            }
+
+            try {
+              const buyAmount = Number(global.autoSnipeSettings.buyAmount);
+              const priorityFee = Number(global.autoSnipeSettings.priorityFee);
+              const bribeAmount = Number(global.autoSnipeSettings.bribeAmount);
+              
+              // Total required amount calculate karenge (sab fees ke sath)
+              const totalRequired = buyAmount + priorityFee + bribeAmount + 10_000_000; // 0.01 SOL buffer
+
+              // Balance check karenge
+              const balance = await connection.getBalance(userKeypair.publicKey);
+              if (balance < totalRequired) {
+                  console.error(`❌ Insufficient balance. Need ${totalRequired / 1e9} SOL (including fees)`);
+                  return;
+              }
+
+              console.log("\n=== 💰 TRANSACTION BREAKDOWN ===");
+              console.log(`Buy Amount: ${buyAmount / 1e9} SOL`);
+              console.log(`Priority Fee: ${priorityFee / 1e9} SOL`);
+              console.log(`Bribe Amount: ${bribeAmount / 1e9} SOL`);
+              console.log(`Network Fee Buffer: 0.01 SOL`);
+              console.log(`Total Required: ${totalRequired / 1e9} SOL`);
+              console.log(`Current Balance: ${balance / 1e9} SOL`);
+              console.log(`Slippage: ${global.autoSnipeSettings.slippage}%`);
+              console.log(`Max Price with Slippage: ${(buyAmount * (1 + global.autoSnipeSettings.slippage/100)) / 1e9} SOL`);
+              console.log("==============================\n");
+              
+              const autoBuyStartTime = Date.now();
+              const signature = await buyToken({
+                  connection,
+                  userKeypair,
+                  programId: MEMEHOME_PROGRAM_ID,
+                  amount: buyAmount,
+                  minOut: MIN_OUT_AMOUNT,
+                  direction: DIRECTION,
+                  swapAccounts,
+                  slippage: global.autoSnipeSettings.slippage,
+                  priorityFee: priorityFee,
+                  bribeAmount: bribeAmount
               });
 
-              console.log(`\n=== AUTO BUY EXECUTION TIME ===`);
-              console.log(`Total execution time: ${autoBuyDuration}ms`);
-              console.log(`===============================\n`);
+              // Agar signature nahi mila to transaction reject ho gaya hai
+              if (!signature) {
+                  console.error("❌ Buy transaction rejected due to validation failure");
+                  return; // IMPORTANT: Return here to stop further processing
+              }
+
+              // Get transaction details only if we have a valid signature
+              const txDetails = await connection.getTransaction(signature, {
+                  commitment: "confirmed",
+                  maxSupportedTransactionVersion: 0,
+              });
+
+              // Move totalSpent calculation outside the if block
+              const totalSpent: number = txDetails?.meta ? (txDetails.meta.preBalances[0] - txDetails.meta.postBalances[0]) / 1e9 : 0;
+
+              if (txDetails?.meta) {
+                  console.log("\n=== 💸 TRANSACTION RECEIPT ===");
+                  console.log(`Transaction Signature: ${signature}`);
+                  console.log(`Status: ✅ Confirmed`);
+                  
+                  console.log("\n=== 💰 FINAL AMOUNTS ===");
+                  console.log(`Total SOL Spent: ${totalSpent.toFixed(9)} SOL`);
+                  console.log(`Network Fee: ${(txDetails.meta.fee / 1e9).toFixed(9)} SOL`);
+                  console.log(`Priority Fee: ${priorityFee / 1e9} SOL`);
+                  console.log(`Bribe Amount: ${bribeAmount / 1e9} SOL`);
+                  console.log(`Actual Buy Amount: ${(totalSpent - (txDetails.meta.fee / 1e9) - (priorityFee / 1e9) - (bribeAmount / 1e9)).toFixed(9)} SOL`);
+
+                  // Get token amounts using the correct account index
+                  const accountKeys = txDetails.transaction.message.getAccountKeys();
+                  const accountKeysArray: PublicKey[] = [];
+                  for (let i = 0; i < accountKeys.length; i++) {
+                    const key = accountKeys.get(i);
+                    if (key) accountKeysArray.push(key);
+                  }
+
+                  const userTokenAccount = swapAccounts.userTokenAccount;
+                  const userTokenAccountIndex = accountKeysArray.findIndex(
+                    (key) => key.toBase58() === userTokenAccount.toBase58()
+                  );
+
+                  const preTokenBalance = txDetails.meta.preTokenBalances?.find(
+                    (balance) => balance.accountIndex === userTokenAccountIndex
+                  )?.uiTokenAmount.uiAmount || 0;
+
+                  const postTokenBalance = txDetails.meta.postTokenBalances?.find(
+                    (balance) => balance.accountIndex === userTokenAccountIndex
+                  )?.uiTokenAmount.uiAmount || 0;
+
+                  const tokensReceived = postTokenBalance - preTokenBalance;
+
+                  // Calculate price per token with full precision
+                  const pricePerToken = tokensReceived > 0 ? totalSpent / tokensReceived : 0;
+
+                  // Format price to 9 decimal places without scientific notation
+                  const formattedPrice = pricePerToken.toFixed(9);
+
+                  // Get token metadata
+                  const tokenMetadata = await connection.getParsedAccountInfo(new PublicKey(mintAddress));
+                  let tokenName = "Unknown";
+                  let tokenSymbol = "Unknown";
+
+                  if (tokenMetadata.value &&
+                      typeof tokenMetadata.value.data === "object" &&
+                      "parsed" in tokenMetadata.value.data) {
+                    const parsedData = tokenMetadata.value.data.parsed;
+                    if (parsedData.type === "mint") {
+                      tokenName = parsedData.info.name || "Unknown";
+                      tokenSymbol = parsedData.info.symbol || "Unknown";
+                    }
+                  }
+
+                  console.log("\n=== 💸 TRANSACTION DETAILS ===");
+                  console.log(`Transaction Signature: ${signature}`);
+                  console.log(`Status: ✅ Confirmed`);
+                  console.log(`Block: ${txDetails.slot}`);
+
+                  console.log("\n=== 💰 FINAL AMOUNTS ===");
+                  console.log(`Total SOL Spent: ${totalSpent.toFixed(9)} SOL`);
+                  console.log(`Network Fee: ${(txDetails.meta.fee / 1e9).toFixed(9)} SOL`);
+                  console.log(`Priority Fee: ${priorityFee / 1e9} SOL`);
+                  console.log(`Bribe Amount: ${bribeAmount / 1e9} SOL`);
+                  console.log(`Actual Buy Amount: ${(totalSpent - (txDetails.meta.fee / 1e9) - (priorityFee / 1e9) - (bribeAmount / 1e9)).toFixed(9)} SOL`);
+
+                  // Calculate and log token amounts
+                  console.log("\n=== 🪙 TOKEN DETAILS ===");
+                  console.log(`Pre Token Balance: ${preTokenBalance}`);
+                  console.log(`Post Token Balance: ${postTokenBalance}`);
+                  console.log(`Tokens Received: ${tokensReceived}`);
+                  console.log(`Price per Token: ${formattedPrice}`);
+
+                  console.log("\n=== ⚙️ TRANSACTION SETTINGS ===");
+                  console.log(`Slippage: ${global.autoSnipeSettings.slippage}%`);
+                  console.log(`Priority Fee: ${priorityFee / 1e9} SOL`);
+
+                  // Then use it in the database update:
+                  await WalletToken.findOneAndUpdate(
+                    {
+                      mint: mintAddress,
+                      userPublicKey: currentBuyerPublicKey,
+                    },
+                    {
+                      $set: {
+                        mint: mintAddress,
+                        buyPrice: formattedPrice,
+                        amount: tokensReceived.toString(),
+                        decimals: 6,
+                        name: tokenName,
+                        symbol: tokenSymbol,
+                        userPublicKey: currentBuyerPublicKey,
+                      }
+                    },
+                    { upsert: true, new: true }
+                  );
+
+                  // Send success response with regular number format
+                  const autoBuyEndTime = Date.now();
+                  const autoBuyDuration = autoBuyEndTime - autoBuyStartTime;
+
+                  broadcastUpdate({
+                    type: "AUTO_BUY_SUCCESS",
+                    signature: signature,
+                    details: {
+                      mint: mintAddress,
+                      buyPrice: formattedPrice,
+                      tokenAmount: tokensReceived,
+                      executionTimeMs: autoBuyDuration,
+                      status: "Bought",
+                      buyTime: autoBuyDuration,
+                      txSignature: signature,
+                      creator: tokenData.creator,
+                      bondingCurve: tokenData.bondingCurve,
+                      curveTokenAccount: tokenData.curveTokenAccount,
+                      metadata: tokenData.metadata,
+                      decimals: tokenData.decimals,
+                      supply: tokenData.supply
+                    }
+                  });
+              }
             } catch (error) {
-              console.error("❌ Error updating token data:", error);
+              console.error("❌ Buy transaction failed:", error);
+              if (error instanceof Error) {
+                console.error("Error details:", {
+                  message: error.message,
+                  stack: error.stack,
+                  logs: (error as SolanaError).logs || [],
+                  code: (error as SolanaError).code,
+                  details: (error as SolanaError).details || {},
+                });
+              }
             }
           } catch (error) {
-            console.error("❌ Buy transaction failed:", error);
-            if (error instanceof Error) {
-              // Enhanced error logging
-              console.error("Error details:", {
-                message: error.message,
-                stack: error.stack,
-                // Cast error to SolanaError type to access additional properties
-                logs: (error as SolanaError).logs || [],
-                code: (error as SolanaError).code,
-                details: (error as SolanaError).details || {},
-              });
-            }
+            console.error("❌ Error processing log:", error);
           }
         } catch (error) {
           console.error("❌ Error processing log:", error);
@@ -862,19 +801,15 @@ export async function startTokenListener() {
 
             case "MANUAL_BUY":
               console.log("🛒 Manual buy request received");
-              const manualBuyStartTime = Date.now(); // Start time for manual buy
+              const manualBuyStartTime = Date.now();
 
               try {
-                // Destructure walletAddress from data.data as well
-                const { mintAddress, amount, privateKey, walletAddress: manualBuyWalletAddress } = data.data; // Added walletAddress here
+                const { mintAddress, amount, privateKey, walletAddress, slippage, priorityFee, bribeAmount } = data.data;
                 console.log("User Input Amount (SOL):", amount);
 
-                // Convert SOL to lamports and adjust amount
+                // Convert SOL to lamports
                 const amountInLamports = Math.floor(amount * 1e9);
-                const adjustedAmount = Math.floor(amountInLamports / 1000);
-                console.log("Amount in Lamports:", amountInLamports);
-                console.log("Adjusted Amount:", adjustedAmount);
-
+                
                 let secretKeyArray: number[];
                 try {
                   // Create a new connection for this specific transaction
@@ -917,13 +852,18 @@ export async function startTokenListener() {
                     return;
                   }
 
-                  // Proceed with buy
+                  // Update the handleManualBuy call to include new parameters
                   const result = await handleManualBuy(
                     mintAddress,
-                    adjustedAmount,
+                    amountInLamports,
                     JSON.stringify(secretKeyArray),
                     connection,
-                    MEMEHOME_PROGRAM_ID
+                    MEMEHOME_PROGRAM_ID,
+                    {
+                      slippage: slippage || 1,
+                      priorityFee: priorityFee || 0.001,
+                      bribeAmount: bribeAmount || 0
+                    }
                   );
 
                   // Handle success
@@ -935,12 +875,12 @@ export async function startTokenListener() {
                       commitment: "confirmed",
                       maxSupportedTransactionVersion: 0,
                     });
-
+                    2.9e-8
                     if (!txDetails || !txDetails.meta) {
                       throw new Error("Failed to fetch transaction details");
                     }
 
-                    // Calculate SOL spent
+                    // Calculate buyer index from transaction
                     const accountKeys = txDetails.transaction.message.getAccountKeys();
                     const accountKeysArray: PublicKey[] = [];
                     for (let i = 0; i < accountKeys.length; i++) {
@@ -949,29 +889,29 @@ export async function startTokenListener() {
                     }
 
                     const buyerIndex = accountKeysArray.findIndex(
-                      (key) => key.toBase58() === userKeypairForManualBuy.publicKey.toBase58() // Use new keypair
+                      (key) => key.toBase58() === userKeypairForManualBuy.publicKey.toBase58()
                     );
-                    const solSpentLamports = txDetails.meta.preBalances[buyerIndex] - txDetails.meta.postBalances[buyerIndex];
-                    const solSpent = solSpentLamports / 1e9;
 
-                    // Get swap accounts for token account info
-                    const swapAccounts = await getSwapAccounts({
-                      mintAddress,
-                      buyer: userKeypairForManualBuy.publicKey, // Use new keypair
-                      connection,
-                      programId: MEMEHOME_PROGRAM_ID,
-                    });
+                    // Calculate total spent for manual buy
+                    const totalSpent = (txDetails.meta.preBalances[buyerIndex] - txDetails.meta.postBalances[buyerIndex]) / 1e9;
+                    
+                    // Convert fees to proper decimal format
+                    const priorityFeeInSol = Number(priorityFee) / 1e9;
+                    const bribeAmountInSol = Number(bribeAmount) / 1e9;
+                    
+                    console.log("\n=== 💰 FINAL AMOUNTS ===");
+                    console.log(`Total SOL Spent: ${totalSpent.toFixed(9)} SOL`);
+                    console.log(`Network Fee: ${(txDetails.meta.fee / 1e9).toFixed(9)} SOL`);
+                    console.log(`Priority Fee: ${priorityFeeInSol.toFixed(9)} SOL`);
+                    console.log(`Bribe Amount: ${bribeAmountInSol.toFixed(9)} SOL`);
+                    console.log(`Actual Buy Amount: ${(totalSpent - (txDetails.meta.fee / 1e9) - priorityFeeInSol - bribeAmountInSol).toFixed(9)} SOL`);
 
-                    // Get the user's token account
+                    // Get token amounts using the correct account index
                     const userTokenAccount = swapAccounts.userTokenAccount;
-                    console.log("User Token Account:", userTokenAccount.toBase58());
-
-                    // Find user's token account index
                     const userTokenAccountIndex = accountKeysArray.findIndex(
                       (key) => key.toBase58() === userTokenAccount.toBase58()
                     );
 
-                    // Get pre and post token balances
                     const preTokenBalance = txDetails.meta.preTokenBalances?.find(
                       (balance) => balance.accountIndex === userTokenAccountIndex
                     )?.uiTokenAmount.uiAmount || 0;
@@ -980,25 +920,13 @@ export async function startTokenListener() {
                       (balance) => balance.accountIndex === userTokenAccountIndex
                     )?.uiTokenAmount.uiAmount || 0;
 
-                    // Calculate tokens received
                     const tokensReceived = postTokenBalance - preTokenBalance;
 
-                    // Calculate price per token using user input SOL
-                    const pricePerToken = amount / tokensReceived; // amount is user input SOL
-                    console.log("SOL SPENT:", amount);
-                    console.log("TOKENS RECEIVED:", tokensReceived);
-                    console.log("PRICE PER TOKEN:", pricePerToken, "SOL");
-                    // Convert to regular number with 10 decimal places
-                    const formattedPrice = pricePerToken.toFixed(10);
+                    // Calculate price per token with full precision
+                    const pricePerToken = tokensReceived > 0 ? totalSpent / tokensReceived : 0;
 
-                    console.log("\n=== TOKEN RECEIPT DETAILS ===");
-                    console.log("User Input (SOL):", amount);
-                    console.log("Pre Token Balance:", preTokenBalance);
-                    console.log("Post Token Balance:", postTokenBalance);
-                    console.log("Tokens Received:", tokensReceived);
-                    console.log("SOL Spent:", solSpent);
-                    console.log("Price per Token:", formattedPrice, "SOL"); // Will show as 0.0000000281
-                    console.log("===========================\n");
+                    // Format price to 9 decimal places without scientific notation
+                    const formattedPrice = pricePerToken.toFixed(9);
 
                     // Get token metadata
                     const tokenMetadata = await connection.getParsedAccountInfo(new PublicKey(mintAddress));
@@ -1015,11 +943,34 @@ export async function startTokenListener() {
                       }
                     }
 
-                    // Store in database with token metadata - MANUAL BUY SECTION
+                    console.log("\n=== 💸 MANUAL BUY TRANSACTION DETAILS ===");
+                    console.log(`Transaction Signature: ${result.signature}`);
+                    console.log(`Status: ✅ Confirmed`);
+                    console.log(`Block: ${txDetails.slot}`);
+
+                    console.log("\n=== 💰 FINAL AMOUNTS ===");
+                    console.log(`Total SOL Spent: ${totalSpent.toFixed(9)} SOL`);
+                    console.log(`Network Fee: ${(txDetails.meta.fee / 1e9).toFixed(9)} SOL`);
+                    console.log(`Priority Fee: ${priorityFeeInSol.toFixed(9)} SOL`);
+                    console.log(`Bribe Amount: ${bribeAmountInSol.toFixed(9)} SOL`);
+                    console.log(`Actual Buy Amount: ${(totalSpent - (txDetails.meta.fee / 1e9) - priorityFeeInSol - bribeAmountInSol).toFixed(9)} SOL`);
+
+                    // Calculate and log token amounts
+                    console.log("\n=== 🪙 TOKEN DETAILS ===");
+                    console.log(`Pre Token Balance: ${preTokenBalance}`);
+                    console.log(`Post Token Balance: ${postTokenBalance}`);
+                    console.log(`Tokens Received: ${tokensReceived}`);
+                    console.log(`Price per Token: ${formattedPrice}`);
+
+                    console.log("\n=== ⚙️ TRANSACTION SETTINGS ===");
+                    console.log(`Slippage: ${slippage}%`);
+                    console.log(`Priority Fee: ${priorityFeeInSol.toFixed(9)} SOL`);
+
+                    // Then use it in the database update:
                     await WalletToken.findOneAndUpdate(
                       {
                         mint: mintAddress,
-                        userPublicKey: manualBuyWalletAddress, // Use the wallet address received in the message
+                        userPublicKey: walletAddress,
                       },
                       {
                         $set: {
@@ -1029,7 +980,7 @@ export async function startTokenListener() {
                           decimals: 6,
                           name: tokenName,
                           symbol: tokenSymbol,
-                          userPublicKey: manualBuyWalletAddress, // Ensure userPublicKey is set here too
+                          userPublicKey: walletAddress,
                         }
                       },
                       { upsert: true, new: true }
@@ -1404,6 +1355,63 @@ export async function startTokenListener() {
               }
               break;
 
+            case "UPDATE_AUTO_SNIPE_SETTINGS":
+              console.log("⚙️ Updating auto-snipe settings:", data.settings);
+              
+              if (!data.settings) {
+                console.error("❌ No settings data provided");
+                ws.send(JSON.stringify({
+                  type: "AUTO_SNIPE_SETTINGS_ERROR",
+                  error: "No settings data provided"
+                }));
+                return;
+              }
+
+              // Validate buy amount
+              const buyAmount = parseFloat(data.settings.buyAmount);
+              if (isNaN(buyAmount) || buyAmount <= 0) {
+                console.error("❌ Invalid buy amount:", data.settings.buyAmount);
+                ws.send(JSON.stringify({
+                  type: "AUTO_SNIPE_SETTINGS_ERROR",
+                  error: "Invalid buy amount"
+                }));
+                return;
+              }
+
+              // Convert amounts to lamports
+              const buyAmountInLamports = Math.floor(buyAmount * 1e9);
+              const priorityFeeInLamports = Math.floor(parseFloat(data.settings.priorityFee || "0") * 1e9);
+              const bribeAmountInLamports = Math.floor(parseFloat(data.settings.bribeAmount || "0") * 1e9);
+              
+              // Update global settings - IMPORTANT: Use the exact slippage value from settings
+              global.autoSnipeSettings = {
+                buyAmount: BigInt(buyAmountInLamports),
+                slippage: parseFloat(data.settings.slippage) || 0, // Changed default to 0
+                priorityFee: BigInt(priorityFeeInLamports),
+                bribeAmount: BigInt(bribeAmountInLamports),
+                autoBuyEnabled: data.settings.autoBuyEnabled === true
+              };
+
+              console.log("✅ Auto-snipe settings updated:", {
+                buyAmount: buyAmountInLamports / 1e9 + " SOL",
+                slippage: global.autoSnipeSettings.slippage + "%", // Log actual slippage value
+                priorityFee: priorityFeeInLamports / 1e9 + " SOL",
+                bribeAmount: bribeAmountInLamports / 1e9 + " SOL",
+                autoBuyEnabled: global.autoSnipeSettings.autoBuyEnabled
+              });
+
+              ws.send(JSON.stringify({
+                type: "AUTO_SNIPE_SETTINGS_UPDATED",
+                settings: {
+                  buyAmount: global.autoSnipeSettings.buyAmount.toString(),
+                  slippage: global.autoSnipeSettings.slippage,
+                  priorityFee: global.autoSnipeSettings.priorityFee.toString(),
+                  bribeAmount: global.autoSnipeSettings.bribeAmount.toString(),
+                  autoBuyEnabled: global.autoSnipeSettings.autoBuyEnabled
+                }
+              }));
+              break;
+
             default:
               console.log("⚠️ Unknown message type:", data.type);
           }
@@ -1499,4 +1507,42 @@ interface WebSocketError {
 interface BuyError extends Error {
   code?: string;
   message: string;
+}
+
+// Add at the top with other interfaces
+interface AutoSnipeSettings {
+  buyAmount: bigint;
+  slippage: number;
+  priorityFee: bigint;
+  bribeAmount: bigint;
+  autoBuyEnabled: boolean;
+}
+
+// Add with other global variables
+let globalSettings: AutoSnipeSettings = {
+  buyAmount: BigInt(0),
+  slippage: 0,
+  priorityFee: BigInt(0),
+  bribeAmount: BigInt(0),
+  autoBuyEnabled: false
+};
+
+// Update function
+function updateGlobalSettings(settings: AutoSnipeSettings) {
+  // Update only global.autoSnipeSettings
+  global.autoSnipeSettings = {
+    ...global.autoSnipeSettings,
+    ...settings
+  };
+  console.log("⚙️ Global settings updated:", global.autoSnipeSettings);
+}
+
+// Token handler function
+async function handleNewToken(tokenData: TokenData) {
+  // Check only global.autoSnipeSettings
+  if (!global.autoSnipeSettings.autoBuyEnabled) {
+    console.log("❌ Auto-buy is disabled, skipping buy attempt");
+    return;
+  }
+  // ...
 }

@@ -23,6 +23,9 @@ interface ManualBuyResult {
     price: number;
     timestamp: number;
     transactionFee?: number;
+    slippage?: number;
+    priorityFee?: number;
+    bribeAmount?: number;
   };
 }
 
@@ -31,12 +34,20 @@ export async function handleManualBuy(
   amount: number,
   privateKeyOrKeypair: string | Keypair,
   connection: Connection,
-  programId: PublicKey
+  programId: PublicKey,
+  options?: {
+    slippage?: number;
+    priorityFee?: number;
+    bribeAmount?: number;
+  }
 ): Promise<ManualBuyResult> {
   console.log("\n🛒 Starting manual buy process...");
   console.log("----------------------------------------");
   console.log(`🎯 Mint Address: ${mintAddress}`);
   console.log(`💰 Amount: ${amount} lamports (${amount / 1e9} SOL)`);
+  console.log(`📊 Slippage: ${options?.slippage || 1}%`);
+  console.log(`⚡ Priority Fee: ${options?.priorityFee || 0.001} SOL`);
+  console.log(`💰 Bribe Amount: ${options?.bribeAmount || 0} SOL`);
   console.log("----------------------------------------\n");
 
   try {
@@ -134,25 +145,38 @@ export async function handleManualBuy(
       console.log("✅ ATA already exists");
     }
 
-    // 7. Prepare buy transaction
+    // 7. Prepare buy transaction with new parameters
     console.log("\n7️⃣ Preparing buy transaction...");
-    // amount is already in lamports, no need to convert again
-    console.log(`💰 Amount in lamports: ${amount} (${amount / 1e9} SOL)`);
+    const slippage = options?.slippage || 1;
+    const priorityFee = options?.priorityFee ? Math.floor(options.priorityFee * 1e9) : 1_000_000; // Convert to lamports
+    const bribeAmount = options?.bribeAmount ? Math.floor(options.bribeAmount * 1e9) : 0; // Convert to lamports
 
-    // 8. Execute buy transaction
+    // Calculate total required amount including fees
+    const totalRequired = amount + priorityFee + bribeAmount + 10_000_000; // Add 0.01 SOL buffer
+
+    // Check wallet balance
+    const balance = await connection.getBalance(userKeypair.publicKey);
+    if (balance < totalRequired) {
+      throw new Error(`Insufficient balance. Need ${totalRequired / 1e9} SOL (including fees)`);
+    }
+
+    // 8. Execute buy transaction with new parameters
     console.log("\n8️⃣ Executing buy transaction...");
     try {
       const signature = await buyToken({
         connection,
         userKeypair,
         programId,
-        amount: amount, // Use amount directly, it's already in lamports
+        amount: amount,
         minOut: 1,
         direction: 0,
         swapAccounts: {
           ...swapAccounts,
           curveTokenAccount: curveTokenATA,
         },
+        slippage: slippage,
+        priorityFee: priorityFee,
+        bribeAmount: bribeAmount
       });
 
       if (!signature) {
@@ -197,10 +221,13 @@ export async function handleManualBuy(
         message: "Token bought successfully",
         details: {
           mintAddress,
-          amount: amount / 1e9, // Convert back to SOL for the response
+          amount: amount / 1e9,
           price: amount / 1e9,
           timestamp: Date.now(),
           transactionFee: txDetails.meta?.fee,
+          slippage: slippage,
+          priorityFee: priorityFee / 1e9,
+          bribeAmount: bribeAmount / 1e9
         },
       };
     } catch (error) {

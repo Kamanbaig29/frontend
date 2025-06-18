@@ -46,7 +46,8 @@ type Action =
       };
     }
   | { type: "ADD_LOG"; payload: { type: string; message: string } }
-  | { type: "SET_BOT_STATUS"; payload: boolean };
+  | { type: "SET_BOT_STATUS"; payload: boolean }
+  | { type: "UPDATE_TOKEN"; payload: Token };
 
 const initialState: State = {
   tokens: [],
@@ -86,6 +87,15 @@ const reducer = (state: State, action: Action): State => {
       };
     case "SET_BOT_STATUS":
       return { ...state, isRunning: action.payload };
+    case "UPDATE_TOKEN":
+      return {
+        ...state,
+        tokens: state.tokens.map(token => 
+          token.mint === action.payload.mint
+            ? { ...token, ...action.payload }
+            : token
+        )
+      };
     default:
       return state;
   }
