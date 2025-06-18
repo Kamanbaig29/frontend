@@ -3,7 +3,6 @@ import {
   PublicKey,
   Keypair,
   Transaction,
-  TransactionConfirmationStrategy,
 } from "@solana/web3.js";
 import {
   createAssociatedTokenAccountInstruction,
@@ -26,6 +25,7 @@ interface ManualBuyResult {
     slippage?: number;
     priorityFee?: number;
     bribeAmount?: number;
+    userTokenAccount: string; // Added this field
   };
 }
 
@@ -62,11 +62,9 @@ export async function handleManualBuy(
     let userKeypair: Keypair;
     
     if (privateKeyOrKeypair instanceof Keypair) {
-      // If it's already a Keypair, use it directly
       userKeypair = privateKeyOrKeypair;
       console.log(`✅ Using provided keypair`);
     } else {
-      // If it's a string (private key), convert it to Keypair
       try {
         const secretKey = Uint8Array.from(JSON.parse(privateKeyOrKeypair));
         userKeypair = Keypair.fromSecretKey(secretKey);
@@ -148,11 +146,11 @@ export async function handleManualBuy(
     // 7. Prepare buy transaction with new parameters
     console.log("\n7️⃣ Preparing buy transaction...");
     const slippage = options?.slippage || 1;
-    const priorityFee = options?.priorityFee ? Math.floor(options.priorityFee * 1e9) : 1_000_000; // Convert to lamports
-    const bribeAmount = options?.bribeAmount ? Math.floor(options.bribeAmount * 1e9) : 0; // Convert to lamports
+    const priorityFeeLamports = options?.priorityFee ? Math.floor(options.priorityFee * 1e9) : 1_000_000;
+    const bribeAmountLamports = options?.bribeAmount ? Math.floor(options.bribeAmount * 1e9) : 0;
 
     // Calculate total required amount including fees
-    const totalRequired = amount + priorityFee + bribeAmount + 10_000_000; // Add 0.01 SOL buffer
+    const totalRequired = amount + priorityFeeLamports + bribeAmountLamports + 10_000_000;
 
     // Check wallet balance
     const balance = await connection.getBalance(userKeypair.publicKey);
@@ -175,8 +173,8 @@ export async function handleManualBuy(
           curveTokenAccount: curveTokenATA,
         },
         slippage: slippage,
-        priorityFee: priorityFee,
-        bribeAmount: bribeAmount
+        priorityFee: priorityFeeLamports,
+        bribeAmount: bribeAmountLamports
       });
 
       if (!signature) {
@@ -215,6 +213,7 @@ export async function handleManualBuy(
       console.log(`💰 Fee: ${txDetails.meta?.fee} lamports`);
       console.log("----------------------------------------\n");
 
+      // FIX: Added userTokenAccount to details
       return {
         success: true,
         signature,
@@ -226,8 +225,9 @@ export async function handleManualBuy(
           timestamp: Date.now(),
           transactionFee: txDetails.meta?.fee,
           slippage: slippage,
-          priorityFee: priorityFee / 1e9,
-          bribeAmount: bribeAmount / 1e9
+          priorityFee: priorityFeeLamports / 1e9,
+          bribeAmount: bribeAmountLamports / 1e9,
+          userTokenAccount: swapAccounts.userTokenAccount.toBase58() // Added this line
         },
       };
     } catch (error) {

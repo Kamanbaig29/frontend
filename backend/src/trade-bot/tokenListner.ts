@@ -799,225 +799,250 @@ export async function startTokenListener() {
               }
               break;
 
-            case "MANUAL_BUY":
-              console.log("🛒 Manual buy request received");
-              const manualBuyStartTime = Date.now();
-
-              try {
-                const { mintAddress, amount, privateKey, walletAddress, slippage, priorityFee, bribeAmount } = data.data;
-                console.log("User Input Amount (SOL):", amount);
-
-                // Convert SOL to lamports
-                const amountInLamports = Math.floor(amount * 1e9);
-                
-                let secretKeyArray: number[];
+              case "MANUAL_BUY":
+                console.log("🛒 Manual buy request received");
+                const manualBuyStartTime = Date.now();
+            
                 try {
-                  // Create a new connection for this specific transaction
-                  const connection = new Connection(
-                    process.env.RPC_ENDPOINT || "https://api.devnet.solana.com",
-                    "confirmed"
-                  );
-
-                  // Parse private key
-                  if (typeof privateKey === "string" && !privateKey.startsWith("[")) {
-                    secretKeyArray = Array.from(bs58.decode(privateKey));
-                  } else {
-                    secretKeyArray = Array.isArray(privateKey)
-                      ? privateKey
-                      : JSON.parse(privateKey);
-                  }
-
-                  if (!Array.isArray(secretKeyArray) || secretKeyArray.length !== 64) {
-                    throw new Error("Invalid private key format");
-                  }
-
-                  const userKeypairForManualBuy = Keypair.fromSecretKey( // Renamed for clarity
-                    Uint8Array.from(secretKeyArray)
-                  );
-
-                  // Check balance with retry logic
-                  const hasEnoughBalance = await checkWalletBalance(
-                    connection,
-                    userKeypairForManualBuy.publicKey,
-                    amountInLamports
-                  );
-
-                  if (!hasEnoughBalance) {
-                    ws.send(
-                      JSON.stringify({
-                        type: "MANUAL_BUY_ERROR",
-                        error: "Insufficient wallet balance",
-                      })
-                    );
-                    return;
-                  }
-
-                  // Update the handleManualBuy call to include new parameters
-                  const result = await handleManualBuy(
-                    mintAddress,
-                    amountInLamports,
-                    JSON.stringify(secretKeyArray),
-                    connection,
-                    MEMEHOME_PROGRAM_ID,
-                    {
-                      slippage: slippage || 1,
-                      priorityFee: priorityFee || 0.001,
-                      bribeAmount: bribeAmount || 0
-                    }
-                  );
-
-                  // Handle success
-                  if (result.success && result.signature && result.details) {
-                    console.log("✅ Manual buy successful");
-
-                    // Get transaction details for price calculation
-                    const txDetails = await connection.getTransaction(result.signature, {
-                      commitment: "confirmed",
-                      maxSupportedTransactionVersion: 0,
-                    });
-                    2.9e-8
-                    if (!txDetails || !txDetails.meta) {
-                      throw new Error("Failed to fetch transaction details");
-                    }
-
-                    // Calculate buyer index from transaction
-                    const accountKeys = txDetails.transaction.message.getAccountKeys();
-                    const accountKeysArray: PublicKey[] = [];
-                    for (let i = 0; i < accountKeys.length; i++) {
-                      const key = accountKeys.get(i);
-                      if (key) accountKeysArray.push(key);
-                    }
-
-                    const buyerIndex = accountKeysArray.findIndex(
-                      (key) => key.toBase58() === userKeypairForManualBuy.publicKey.toBase58()
-                    );
-
-                    // Calculate total spent for manual buy
-                    const totalSpent = (txDetails.meta.preBalances[buyerIndex] - txDetails.meta.postBalances[buyerIndex]) / 1e9;
+                    const { mintAddress, amount, privateKey, walletAddress, slippage, priorityFee, bribeAmount } = data.data;
+                    console.log("User Input Amount (SOL):", amount);
+            
+                    // Convert SOL to lamports
+                    const amountInLamports = Math.floor(amount * 1e9);
                     
-                    // Convert fees to proper decimal format
-                    const priorityFeeInSol = Number(priorityFee) / 1e9;
-                    const bribeAmountInSol = Number(bribeAmount) / 1e9;
-                    
-                    console.log("\n=== 💰 FINAL AMOUNTS ===");
-                    console.log(`Total SOL Spent: ${totalSpent.toFixed(9)} SOL`);
-                    console.log(`Network Fee: ${(txDetails.meta.fee / 1e9).toFixed(9)} SOL`);
-                    console.log(`Priority Fee: ${priorityFeeInSol.toFixed(9)} SOL`);
-                    console.log(`Bribe Amount: ${bribeAmountInSol.toFixed(9)} SOL`);
-                    console.log(`Actual Buy Amount: ${(totalSpent - (txDetails.meta.fee / 1e9) - priorityFeeInSol - bribeAmountInSol).toFixed(9)} SOL`);
-
-                    // Get token amounts using the correct account index
-                    const userTokenAccount = swapAccounts.userTokenAccount;
-                    const userTokenAccountIndex = accountKeysArray.findIndex(
-                      (key) => key.toBase58() === userTokenAccount.toBase58()
-                    );
-
-                    const preTokenBalance = txDetails.meta.preTokenBalances?.find(
-                      (balance) => balance.accountIndex === userTokenAccountIndex
-                    )?.uiTokenAmount.uiAmount || 0;
-
-                    const postTokenBalance = txDetails.meta.postTokenBalances?.find(
-                      (balance) => balance.accountIndex === userTokenAccountIndex
-                    )?.uiTokenAmount.uiAmount || 0;
-
-                    const tokensReceived = postTokenBalance - preTokenBalance;
-
-                    // Calculate price per token with full precision
-                    const pricePerToken = tokensReceived > 0 ? totalSpent / tokensReceived : 0;
-
-                    // Format price to 9 decimal places without scientific notation
-                    const formattedPrice = pricePerToken.toFixed(9);
-
-                    // Get token metadata
-                    const tokenMetadata = await connection.getParsedAccountInfo(new PublicKey(mintAddress));
-                    let tokenName = "Unknown";
-                    let tokenSymbol = "Unknown";
-
-                    if (tokenMetadata.value &&
-                        typeof tokenMetadata.value.data === "object" &&
-                        "parsed" in tokenMetadata.value.data) {
-                      const parsedData = tokenMetadata.value.data.parsed;
-                      if (parsedData.type === "mint") {
-                        tokenName = parsedData.info.name || "Unknown";
-                        tokenSymbol = parsedData.info.symbol || "Unknown";
-                      }
+                    let secretKeyArray: number[];
+                    try {
+                        // Create a new connection for this specific transaction
+                        const connection = new Connection(
+                            process.env.RPC_ENDPOINT || "https://api.devnet.solana.com",
+                            "confirmed"
+                        );
+            
+                        // Parse private key
+                        if (typeof privateKey === "string" && !privateKey.startsWith("[")) {
+                            secretKeyArray = Array.from(bs58.decode(privateKey));
+                        } else {
+                            secretKeyArray = Array.isArray(privateKey)
+                                ? privateKey
+                                : JSON.parse(privateKey);
+                        }
+            
+                        if (!Array.isArray(secretKeyArray) || secretKeyArray.length !== 64) {
+                            throw new Error("Invalid private key format");
+                        }
+            
+                        const userKeypairForManualBuy = Keypair.fromSecretKey(
+                            Uint8Array.from(secretKeyArray)
+                        );
+            
+                        // Check balance with retry logic
+                        const hasEnoughBalance = await checkWalletBalance(
+                            connection,
+                            userKeypairForManualBuy.publicKey,
+                            amountInLamports
+                        );
+            
+                        if (!hasEnoughBalance) {
+                            ws.send(
+                                JSON.stringify({
+                                    type: "MANUAL_BUY_ERROR",
+                                    error: "Insufficient wallet balance",
+                                })
+                            );
+                            return;
+                        }
+            
+                        // Update the handleManualBuy call to include new parameters
+                        const result = await handleManualBuy(
+                            mintAddress,
+                            amountInLamports,
+                            JSON.stringify(secretKeyArray),
+                            connection,
+                            MEMEHOME_PROGRAM_ID,
+                            {
+                                slippage: slippage || 1,
+                                priorityFee: priorityFee || 0.001,
+                                bribeAmount: bribeAmount || 0
+                            }
+                        );
+            
+                        // Handle success
+                        if (result.success && result.signature && result.details) {
+                            console.log("✅ Manual buy successful");
+            
+                            // Get transaction details for price calculation
+                            const txDetails = await connection.getTransaction(result.signature, {
+                                commitment: "confirmed",
+                                maxSupportedTransactionVersion: 0,
+                            });
+            
+                            if (!txDetails || !txDetails.meta) {
+                                throw new Error("Failed to fetch transaction details");
+                            }
+            
+                            // Calculate buyer index from transaction
+                            const accountKeys = txDetails.transaction.message.getAccountKeys();
+                            const accountKeysArray: PublicKey[] = [];
+                            for (let i = 0; i < accountKeys.length; i++) {
+                                const key = accountKeys.get(i);
+                                if (key) accountKeysArray.push(key);
+                            }
+            
+                            const buyerIndex = accountKeysArray.findIndex(
+                                (key) => key.toBase58() === userKeypairForManualBuy.publicKey.toBase58()
+                            );
+            
+                            // Calculate total spent for manual buy
+                            const totalSpent = (txDetails.meta.preBalances[buyerIndex] - txDetails.meta.postBalances[buyerIndex]) / 1e9;
+                            
+                            // FIX 1: Properly convert fees to SOL
+                            const priorityFeeInSol = Number(priorityFee) || 0;
+                            const bribeAmountInSol = Number(bribeAmount) || 0;
+                            
+                            console.log("\n=== 💰 FINAL AMOUNTS ===");
+                            console.log(`Total SOL Spent: ${totalSpent.toFixed(9)} SOL`);
+                            console.log(`Network Fee: ${(txDetails.meta.fee / 1e9).toFixed(9)} SOL`);
+                            console.log(`Priority Fee: ${priorityFeeInSol.toFixed(9)} SOL`);
+                            console.log(`Bribe Amount: ${bribeAmountInSol.toFixed(9)} SOL`);
+                            console.log(`Actual Buy Amount: ${(totalSpent - (txDetails.meta.fee / 1e9) - priorityFeeInSol - bribeAmountInSol).toFixed(9)} SOL`);
+            
+                            // FIX 2: Get userTokenAccount from result instead of swapAccounts
+                            const userTokenAccount = result.details.userTokenAccount;
+                            if (!userTokenAccount) {
+                                throw new Error("User token account not found in result");
+                            }
+            
+                            const userTokenAccountIndex = accountKeysArray.findIndex(
+                                (key) => key.toBase58() === userTokenAccount
+                            );
+            
+                            const preTokenBalance = txDetails.meta.preTokenBalances?.find(
+                                (balance) => balance.accountIndex === userTokenAccountIndex
+                            )?.uiTokenAmount.uiAmount || 0;
+            
+                            const postTokenBalance = txDetails.meta.postTokenBalances?.find(
+                                (balance) => balance.accountIndex === userTokenAccountIndex
+                            )?.uiTokenAmount.uiAmount || 0;
+            
+                            const tokensReceived = postTokenBalance - preTokenBalance;
+            
+                            // Calculate price per token with full precision
+                            const pricePerToken = tokensReceived > 0 ? totalSpent / tokensReceived : 0;
+            
+                            // Format price to 9 decimal places without scientific notation
+                            const formattedPrice = pricePerToken.toFixed(9);
+            
+                            // Get token metadata
+                            const tokenMetadata = await connection.getParsedAccountInfo(new PublicKey(mintAddress));
+                            let tokenName = "Unknown";
+                            let tokenSymbol = "Unknown";
+            
+                            if (tokenMetadata.value &&
+                                typeof tokenMetadata.value.data === "object" &&
+                                "parsed" in tokenMetadata.value.data) {
+                                const parsedData = tokenMetadata.value.data.parsed;
+                                if (parsedData.type === "mint") {
+                                    tokenName = parsedData.info.name || "Unknown";
+                                    tokenSymbol = parsedData.info.symbol || "Unknown";
+                                }
+                            }
+            
+                            console.log("\n=== 💸 MANUAL BUY TRANSACTION DETAILS ===");
+                            console.log(`Transaction Signature: ${result.signature}`);
+                            console.log(`Status: ✅ Confirmed`);
+                            console.log(`Block: ${txDetails.slot}`);
+            
+                            console.log("\n=== 💰 FINAL AMOUNTS ===");
+                            console.log(`Total SOL Spent: ${totalSpent.toFixed(9)} SOL`);
+                            console.log(`Network Fee: ${(txDetails.meta.fee / 1e9).toFixed(9)} SOL`);
+                            console.log(`Priority Fee: ${priorityFeeInSol.toFixed(9)} SOL`);
+                            console.log(`Bribe Amount: ${bribeAmountInSol.toFixed(9)} SOL`);
+                            console.log(`Actual Buy Amount: ${(totalSpent - (txDetails.meta.fee / 1e9) - priorityFeeInSol - bribeAmountInSol).toFixed(9)} SOL`);
+            
+                            // Calculate and log token amounts
+                            console.log("\n=== 🪙 TOKEN DETAILS ===");
+                            console.log(`Pre Token Balance: ${preTokenBalance}`);
+                            console.log(`Post Token Balance: ${postTokenBalance}`);
+                            console.log(`Tokens Received: ${tokensReceived}`);
+                            console.log(`Price per Token: ${formattedPrice}`);
+            
+                            console.log("\n=== ⚙️ TRANSACTION SETTINGS ===");
+                            console.log(`Slippage: ${slippage}%`);
+                            console.log(`Priority Fee: ${priorityFeeInSol.toFixed(9)} SOL`);
+            
+                            // Then use it in the database update:
+                            await WalletToken.findOneAndUpdate(
+                                {
+                                    mint: mintAddress,
+                                    userPublicKey: walletAddress,
+                                },
+                                {
+                                    $set: {
+                                        mint: mintAddress,
+                                        buyPrice: formattedPrice,
+                                        amount: tokensReceived.toString(),
+                                        decimals: 6,
+                                        name: tokenName,
+                                        symbol: tokenSymbol,
+                                        userPublicKey: walletAddress,
+                                    }
+                                },
+                                { upsert: true, new: true }
+                            );
+            
+                            // Send success response with regular number format
+                            const manualBuyEndTime = Date.now(); // End time for manual buy
+                            const manualBuyDuration = manualBuyEndTime - manualBuyStartTime; // Duration in milliseconds
+            
+                            ws.send(
+                                JSON.stringify({
+                                    type: "MANUAL_BUY_SUCCESS",
+                                    signature: result.signature,
+                                    details: {
+                                        // Basic transaction info
+                                        mint: mintAddress,
+                                        status: "Bought",
+                                        txSignature: result.signature,
+                                        executionTimeMs: manualBuyDuration,
+                                        buyTime: manualBuyDuration,
+            
+                                        // Token amounts and balances
+                                        preTokenBalance: preTokenBalance,
+                                        postTokenBalance: postTokenBalance,
+                                        tokensReceived: tokensReceived,
+                                        pricePerToken: formattedPrice,
+            
+                                        // Transaction costs
+                                        totalSpent: totalSpent.toFixed(9),
+                                        networkFee: (txDetails.meta.fee / 1e9).toFixed(9),
+                                        priorityFee: priorityFeeInSol.toFixed(9),
+                                        bribeAmount: bribeAmountInSol.toFixed(9),
+                                        actualBuyAmount: (totalSpent - (txDetails.meta.fee / 1e9) - priorityFeeInSol - bribeAmountInSol).toFixed(9),
+            
+                                        // Additional info
+                                        buyPrice: formattedPrice,
+                                        tokenAmount: tokensReceived,
+                                        slippage: slippage,
+                                        block: txDetails.slot
+                                    }
+                                })
+                            );
+                        }
+                    } catch (err: unknown) {
+                        const processError = err as Error;
+                        throw new Error(`Failed to process buy: ${processError.message}`);
                     }
-
-                    console.log("\n=== 💸 MANUAL BUY TRANSACTION DETAILS ===");
-                    console.log(`Transaction Signature: ${result.signature}`);
-                    console.log(`Status: ✅ Confirmed`);
-                    console.log(`Block: ${txDetails.slot}`);
-
-                    console.log("\n=== 💰 FINAL AMOUNTS ===");
-                    console.log(`Total SOL Spent: ${totalSpent.toFixed(9)} SOL`);
-                    console.log(`Network Fee: ${(txDetails.meta.fee / 1e9).toFixed(9)} SOL`);
-                    console.log(`Priority Fee: ${priorityFeeInSol.toFixed(9)} SOL`);
-                    console.log(`Bribe Amount: ${bribeAmountInSol.toFixed(9)} SOL`);
-                    console.log(`Actual Buy Amount: ${(totalSpent - (txDetails.meta.fee / 1e9) - priorityFeeInSol - bribeAmountInSol).toFixed(9)} SOL`);
-
-                    // Calculate and log token amounts
-                    console.log("\n=== 🪙 TOKEN DETAILS ===");
-                    console.log(`Pre Token Balance: ${preTokenBalance}`);
-                    console.log(`Post Token Balance: ${postTokenBalance}`);
-                    console.log(`Tokens Received: ${tokensReceived}`);
-                    console.log(`Price per Token: ${formattedPrice}`);
-
-                    console.log("\n=== ⚙️ TRANSACTION SETTINGS ===");
-                    console.log(`Slippage: ${slippage}%`);
-                    console.log(`Priority Fee: ${priorityFeeInSol.toFixed(9)} SOL`);
-
-                    // Then use it in the database update:
-                    await WalletToken.findOneAndUpdate(
-                      {
-                        mint: mintAddress,
-                        userPublicKey: walletAddress,
-                      },
-                      {
-                        $set: {
-                          mint: mintAddress,
-                          buyPrice: formattedPrice,
-                          amount: tokensReceived.toString(),
-                          decimals: 6,
-                          name: tokenName,
-                          symbol: tokenSymbol,
-                          userPublicKey: walletAddress,
-                        }
-                      },
-                      { upsert: true, new: true }
-                    );
-
-                    // Send success response with regular number format
-                    const manualBuyEndTime = Date.now(); // End time for manual buy
-                    const manualBuyDuration = manualBuyEndTime - manualBuyStartTime; // Duration in milliseconds
-
-                    ws.send(
-                      JSON.stringify({
-                        type: "MANUAL_BUY_SUCCESS",
-                        signature: result.signature,
-                        details: {
-                          ...result.details,
-                          buyPrice: formattedPrice,
-                          tokenAmount: tokensReceived,
-                          executionTimeMs: manualBuyDuration // Add execution time
-                        }
-                      })
-                    );
-                  }
                 } catch (err: unknown) {
-                  const processError = err as Error;
-                  throw new Error(`Failed to process buy: ${processError.message}`);
+                    const buyError = err as Error;
+                    console.error("❌ Manual buy error:", buyError);
+                    ws.send(
+                        JSON.stringify({
+                            type: "MANUAL_BUY_ERROR",
+                            error: buyError.message || "Failed to complete manual buy",
+                        })
+                    );
                 }
-              } catch (err: unknown) {
-                const buyError = err as Error;
-                console.error("❌ Manual buy error:", buyError);
-                ws.send(
-                  JSON.stringify({
-                    type: "MANUAL_BUY_ERROR",
-                    error: buyError.message || "Failed to complete manual buy",
-                  })
-                );
-              }
-              break;
+                break;
             case "SELL_TOKEN":
               console.log("🛒 Sell token request received:", data.data);
               const sellTokenStartTime = Date.now(); // Start time for sell token
