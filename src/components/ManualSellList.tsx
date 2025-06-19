@@ -15,6 +15,7 @@ interface WalletToken {
   symbol: string;
   decimals: number;
   walletAddress: string;
+  buyPrice?: string;
 }
 
 export const ManualSellList: React.FC = () => {
@@ -29,6 +30,9 @@ export const ManualSellList: React.FC = () => {
   const [openDialog, setOpenDialog] = useState(false);
   const [selectedToken, setSelectedToken] = useState<WalletToken | null>(null);
   const [sellPercent, setSellPercent] = useState('10');
+  const [slippage, setSlippage] = useState('0.1');
+  const [priorityFee, setPriorityFee] = useState('0.001');
+  const [bribeAmount, setBribeAmount] = useState('0');
 
   useEffect(() => {
     if (status === 'connected') {
@@ -90,6 +94,9 @@ export const ManualSellList: React.FC = () => {
     setSelectedToken(token);
     setSellPercent('10');
     setPrivateKey('');
+    setSlippage('0.1');
+    setPriorityFee('0.001');
+    setBribeAmount('0');
     setOpenDialog(true);
   };
 
@@ -104,7 +111,10 @@ export const ManualSellList: React.FC = () => {
       mint: selectedToken.mint,
       percent: Number(sellPercent),
       privateKey: privateKey,
-      walletAddress: import.meta.env.VITE_BUYER_PUBLIC_KEY
+      walletAddress: import.meta.env.VITE_BUYER_PUBLIC_KEY,
+      slippage: Number(slippage),
+      priorityFee: Number(priorityFee),
+      bribeAmount: Number(bribeAmount)
     });
     setStatusMessage(`Sell request sent for ${sellPercent}% of ${selectedToken.symbol}`);
     setOpenDialog(false);
@@ -133,6 +143,9 @@ export const ManualSellList: React.FC = () => {
           <Typography color="gray">
             Balance: {(Number(token.amount) / Math.pow(10, token.decimals)).toFixed(4)}
           </Typography>
+          <Typography color="gray">
+            Buy Price: {token.buyPrice ? Number(token.buyPrice).toFixed(9) : 'N/A'} SOL
+          </Typography>
           <Button
             variant="contained"
             color="error"
@@ -156,6 +169,7 @@ export const ManualSellList: React.FC = () => {
           >
             <FormControlLabel value="10" control={<Radio />} label="10%" />
             <FormControlLabel value="25" control={<Radio />} label="25%" />
+            <FormControlLabel value="50" control={<Radio />} label="50%" />
             <FormControlLabel value="100" control={<Radio />} label="100%" />
           </RadioGroup>
           <TextField
@@ -165,6 +179,33 @@ export const ManualSellList: React.FC = () => {
             fullWidth
             value={privateKey}
             onChange={(e) => setPrivateKey(e.target.value)}
+            sx={{ mt: 2 }}
+          />
+          <TextField
+            margin="dense"
+            label="Slippage (%)"
+            type="number"
+            fullWidth
+            value={slippage}
+            onChange={(e) => setSlippage(e.target.value)}
+            sx={{ mt: 2 }}
+          />
+          <TextField
+            margin="dense"
+            label="Priority Fee (SOL)"
+            type="number"
+            fullWidth
+            value={priorityFee}
+            onChange={(e) => setPriorityFee(e.target.value)}
+            sx={{ mt: 2 }}
+          />
+          <TextField
+            margin="dense"
+            label="Bribe Amount (SOL)"
+            type="number"
+            fullWidth
+            value={bribeAmount}
+            onChange={(e) => setBribeAmount(e.target.value)}
             sx={{ mt: 2 }}
           />
         </DialogContent>

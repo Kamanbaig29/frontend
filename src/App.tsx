@@ -7,6 +7,7 @@ import { ManualBuyForm } from './components/ManualBuyForm';
 import { Stats } from './components/Stats';
 import { ManualSellList } from './components/ManualSellList';
 import { WebSocketProvider, useWebSocket } from './context/webSocketContext';
+import { AutomaticSellDashboard } from './components/AutomaticSellDashboard';
 // import { AutomaticSellDashboard } from './components/AutomaticSellDashboard'; // Uncomment if needed
 
 // Create a new component that uses useWebSocket
@@ -110,21 +111,7 @@ const AppContent = () => {
         )}
 
         {currentView === 'automaticSell' && (
-          <div className="text-white text-xl font-bold">
-            Automatic Sell Mode (UI to be implemented)
-            <Button
-              onClick={handleBackHome}
-              variant="contained"
-              sx={{
-                bgcolor: '#483D8B',
-                '&:hover': { bgcolor: '#372B7A' },
-                ml: 4,
-              }}
-            >
-              Back to Home
-            </Button>
-          </div>
-          // Replace with <AutomaticSellDashboard /> later if needed
+          <AutomaticSellDashboard onBackHome={handleBackHome} />
         )}
 
         {currentView === 'stats' && <Stats onBackHome={handleBackHome} />}

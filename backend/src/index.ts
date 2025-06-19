@@ -5,6 +5,7 @@ import { connectDatabase } from "./config/database";
 import { startTokenListener } from "./trade-bot/tokenListner";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { watchWalletTokens } from "../src/helper-functions/wallet-token-watcher";
+import { startPriceUpdateService } from '../src/helper-functions/priceUpdateService';
 
 let cleanupWatcher: (() => void) | null = null;
 
@@ -22,21 +23,8 @@ async function main() {
 
   console.log("🚀 Bot started successfully");
 
-  process.on('SIGINT', () => {
-    console.log('Shutting down server...');
-    if (cleanupWatcher) {
-      cleanupWatcher();
-    }
-    process.exit(0);
-  });
-
-  process.on('SIGTERM', () => {
-    console.log('Shutting down server...');
-    if (cleanupWatcher) {
-      cleanupWatcher();
-    }
-    process.exit(0);
-  });
+  // Start price update service
+  
 }
 
 main().catch(console.error);

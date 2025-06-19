@@ -5,6 +5,8 @@ import {
   PublicKey,
   Connection,
   Keypair,
+  ComputeBudgetProgram,
+  SystemProgram,
 } from "@solana/web3.js";
 import { getAccount } from "@solana/spl-token";
 
@@ -33,6 +35,9 @@ interface SellTokenParams {
   amount: bigint; // smallest units
   minOut: bigint; // smallest units
   swapAccounts: SwapAccounts;
+  slippage?: number;
+  priorityFee?: number;
+  bribeAmount?: number;
 }
 
 export async function sellToken({
@@ -42,14 +47,20 @@ export async function sellToken({
   amount,
   minOut,
   swapAccounts,
+  slippage = 0,
+  priorityFee = 0,
+  bribeAmount = 0,
 }: SellTokenParams): Promise<string | undefined> {
   const discriminator = calculateDiscriminator("global:swap");
+
+  // Apply slippage to minOut
+  const minOutWithSlippage = slippage === 0 ? minOut : BigInt(Math.floor(Number(minOut) * (1 - slippage / 100)));
 
   const data = Buffer.alloc(25);
   discriminator.copy(data, 0);
   data.writeBigUInt64LE(amount, 8);
   data.writeUInt8(1, 16); // sell
-  data.writeBigUInt64LE(minOut, 17);
+  data.writeBigUInt64LE(minOutWithSlippage, 17);
 
   const instruction = new TransactionInstruction({
     keys: [
@@ -76,7 +87,30 @@ export async function sellToken({
     return undefined;
   }
 
-  const tx = new Transaction().add(instruction);
+  const tx = new Transaction();
+
+  // Add priority fee if specified
+  if (priorityFee > 0) {
+    tx.add(
+      ComputeBudgetProgram.setComputeUnitPrice({
+        microLamports: Math.floor(priorityFee * 1e6) // priorityFee in SOL to microLamports
+      })
+    );
+  }
+
+  // Add bribe if specified
+  if (bribeAmount > 0) {
+    tx.add(
+      SystemProgram.transfer({
+        fromPubkey: userKeypair.publicKey,
+        toPubkey: swapAccounts.feeRecipient,
+        lamports: Math.floor(bribeAmount * 1e9) // bribeAmount in SOL to lamports
+      })
+    );
+  }
+
+  // Add sell instruction
+  tx.add(instruction);
 
   try {
     const sig = await connection.sendTransaction(tx, [userKeypair]);

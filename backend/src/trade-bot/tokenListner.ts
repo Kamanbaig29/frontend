@@ -34,6 +34,7 @@ import { WalletToken } from "../models/WalletToken";
 import { Metaplex } from "@metaplex-foundation/js";
 import { getTokenPrice } from "../utils/getTokenPrice";
 import { sellToken } from "../action/sell";
+import { TokenPrice } from '../models/TokenPrice';
 
 import {
   RPC_ENDPOINT,
@@ -98,6 +99,46 @@ function calculateAmountOut(
   const numerator = amountInWithFee * solReserve;
   const denominator = tokenReserve * feeDenominator + amountInWithFee;
   return numerator / denominator;
+}
+
+// Add this new function after the existing calculateAmountOut function
+async function getCurrentTokenPrice(
+    connection: Connection,
+    mintAddress: string,
+    swapAccounts: any
+): Promise<number | null> {
+    try {
+        // Get token reserves
+        const tokenVaultInfo = await connection.getTokenAccountBalance(
+            swapAccounts.curveTokenAccount
+        );
+        const tokenReserve = BigInt(tokenVaultInfo.value.amount);
+
+        // Get SOL reserves
+        const bondingCurveInfo = await connection.getAccountInfo(
+            swapAccounts.bondingCurve
+        );
+        if (!bondingCurveInfo) {
+            console.log(`❌ Bonding curve not found for ${mintAddress}`);
+            return null;
+        }
+        const solReserve = BigInt(bondingCurveInfo.lamports);
+
+        // Calculate price for 1 token
+        const oneToken = BigInt(10 ** tokenVaultInfo.value.decimals);
+        const solAmount = calculateAmountOut(oneToken, tokenReserve, solReserve);
+        
+        return Number(solAmount) / 1e9; // Convert to SOL
+    } catch (error) {
+        console.error(`Error calculating price for ${mintAddress}:`, error);
+        return null;
+    }
+}
+
+// Add this helper function for profit/loss calculation
+function calculateProfitLoss(buyPrice: number, currentPrice: number): number | null {
+    if (!buyPrice || !currentPrice) return null;
+    return ((currentPrice - buyPrice) / buyPrice) * 100;
 }
 
 // Add constants at the top
@@ -277,6 +318,169 @@ if (!global.autoSnipeSettings) {
 // Add type for swapAccounts
 let swapAccounts: Awaited<ReturnType<typeof getSwapAccounts>>;
 
+// Add this interface at the top of the file
+interface ParsedTokenAccountData {
+  program: string;
+  parsed: {
+    info: {
+      mint: string;
+      owner: string;
+      state: string;
+      amount: string;
+      delegate?: string;
+      delegatedAmount?: string;
+      isNative?: boolean;
+      name?: string;
+      symbol?: string;
+      decimals?: number;
+    };
+    type: string;
+  };
+  space: number;
+}
+
+interface ParsedTokenMintData {
+  program: string;
+  parsed: {
+    info: {
+      decimals: number;
+      freezeAuthority: string | null;
+      isInitialized: boolean;
+      mintAuthority: string | null;
+      supply: string;
+      name?: string;
+      symbol?: string;
+    };
+    type: string;
+  };
+  space: number;
+}
+
+// NOTE: WalletToken interface should ideally be imported from ../models/WalletToken
+// and should match the Mongoose schema. Assuming you have it there already:
+// import { IWalletToken as WalletTokenInterface } from "../models/WalletToken";
+// interface WalletToken extends WalletTokenInterface {}
+// For clarity in this file, adding a simple version matching what's used.
+interface WalletToken {
+  _id: string; // Add _id if it's used directly for mapping like in frontend
+  mint: string; // Token's mint address
+  amount: string; // Amount of tokens held
+  currentPrice?: number; // Optional, as it might not be stored in DB always
+  buyPrice: number; // Price when bought
+  lastPrice?: number; // Latest price
+  lastUpdated?: number; // Last update timestamp
+  name: string; // Token name
+  symbol: string; // Token symbol
+  decimals: number; // Token decimals
+  userPublicKey: string; // Key change: added userPublicKey to match backend schema
+  description?: string; // Optional field, if present in schema
+}
+
+// First add this interface at the top of your file
+interface WebSocketError {
+  code?: string;
+  message: string;
+}
+
+// First add this interface at the top of your file
+interface BuyError extends Error {
+  code?: string;
+  message: string;
+}
+
+// Add at the top with other interfaces
+interface AutoSnipeSettings {
+  buyAmount: bigint;
+  slippage: number;
+  priorityFee: bigint;
+  bribeAmount: bigint;
+  autoBuyEnabled: boolean;
+}
+
+// Add with other global variables
+let globalSettings: AutoSnipeSettings = {
+  buyAmount: BigInt(0),
+  slippage: 0,
+  priorityFee: BigInt(0),
+  bribeAmount: BigInt(0),
+  autoBuyEnabled: false
+};
+
+// Update function
+function updateGlobalSettings(settings: AutoSnipeSettings) {
+  // Update only global.autoSnipeSettings
+  global.autoSnipeSettings = {
+    ...global.autoSnipeSettings,
+    ...settings
+  };
+  console.log("⚙️ Global settings updated:", global.autoSnipeSettings);
+}
+
+// Token handler function
+async function handleNewToken(tokenData: TokenData) {
+  // Check only global.autoSnipeSettings
+  if (!global.autoSnipeSettings.autoBuyEnabled) {
+    console.log("❌ Auto-buy is disabled, skipping buy attempt");
+    return;
+  }
+  // ...
+}
+
+// Add at the top of file
+const PRICE_UPDATE_INTERVAL = 10000; // 10 seconds
+const priceCache = new Map<string, { price: number, timestamp: number }>();
+
+// Modify calculateTokenPrice to use cache
+async function calculateTokenPrice(
+    connection: Connection,
+    mintAddress: string
+): Promise<number | null> {
+    try {
+        // Check cache first
+        const cached = priceCache.get(mintAddress);
+        if (cached && (Date.now() - cached.timestamp) < PRICE_UPDATE_INTERVAL) {
+            return cached.price;
+        }
+
+        // If not in cache or expired, calculate new price
+        const swapAccounts = await getSwapAccounts({
+            mintAddress,
+            buyer: userKeypair.publicKey,
+            connection,
+            programId: MEMEHOME_PROGRAM_ID
+        });
+        if (!swapAccounts) return null;
+
+        const tokenVaultInfo = await connection.getTokenAccountBalance(swapAccounts.curveTokenAccount);
+        const tokenReserve = BigInt(tokenVaultInfo.value.amount);
+        const solReserve = BigInt((await connection.getAccountInfo(swapAccounts.bondingCurve))?.lamports || 0);
+
+        const oneToken = BigInt(1_000_000_000);
+        const solAmount = calculateAmountOut(oneToken, tokenReserve, solReserve);
+        const price = Number(solAmount) / 1_000_000_000;
+
+        // Update cache
+        priceCache.set(mintAddress, { price, timestamp: Date.now() });
+        return price;
+    } catch (error) {
+        console.error(`Error calculating price for ${mintAddress}:`, error);
+        return null;
+    }
+}
+
+// Add this function
+async function updateAllTokenPrices(tokens: any[], connection: Connection) {
+    const updates = await Promise.all(tokens.map(async (token) => {
+        const price = await calculateTokenPrice(connection, token.mint);
+        return {
+            ...token.toObject(),
+            currentPrice: price || 0,
+            profitLossPercent: price ? ((price - (token.buyPrice || 0)) / (token.buyPrice || 1) * 100) : 0
+        };
+    }));
+    return updates;
+}
+
 export async function startTokenListener() {
   const connection = getConnection();
   console.log("🚀 Bot initialized - Waiting for mode selection...");
@@ -448,7 +652,7 @@ export async function startTokenListener() {
               mintAddress,
               buyer: userKeypair.publicKey,
               connection,
-              programId: MEMEHOME_PROGRAM_ID,
+              programId: MEMEHOME_PROGRAM_ID
             });
 
             console.log("📦 Swap Accounts:", swapAccounts);
@@ -511,15 +715,8 @@ export async function startTokenListener() {
                 );
 
                 // Wait for confirmation
-                const confirmation = await connection.confirmTransaction(
-                  signature,
-                  "confirmed"
-                );
-
-                if (confirmation.value.err) {
-                  throw new Error(
-                    `Transaction failed: ${confirmation.value.err.toString()}`
-                  );
+                if (signature) {
+                  await connection.confirmTransaction(signature);
                 }
 
                 console.log("✅ curveTokenAccount created successfully!");
@@ -1149,11 +1346,9 @@ export async function startTokenListener() {
                 await token.save();
 
                 // ट्रांजैक्शन कन्फर्मेशन का इंतज़ार करें
-                if (!txSignature) {
-                  throw new Error("Transaction signature is undefined");
+                if (txSignature) {
+                  await connection.confirmTransaction(txSignature);
                 }
-
-                const confirmation = await connection.confirmTransaction(txSignature);
 
                 // कन्फर्मेशन के बाद टाइम एंड करें
                 const sellTokenEndTime = Date.now();
@@ -1192,7 +1387,7 @@ export async function startTokenListener() {
               const manualSellStartTime = Date.now(); // Start time for manual sell
 
               try {
-                const { mint, percent, privateKey, walletAddress: manualSellWalletAddress } = data; // Destructure privateKey and walletAddress
+                const { mint, percent, privateKey, walletAddress: manualSellWalletAddress, slippage, priorityFee, bribeAmount } = data; // Destructure privateKey and walletAddress
                 
                 if (!mint || !percent || !privateKey) { // privateKey is now required for manual sell
                   throw new Error("Missing required fields: mint, percent, and privateKey");
@@ -1216,7 +1411,6 @@ export async function startTokenListener() {
                   throw new Error("Invalid private key format for manual sell");
                 }
                 const userKeypairForManualSell = Keypair.fromSecretKey(Uint8Array.from(secretKeyArrayForManualSell));
-
 
                 const token = await WalletToken.findOne({
                   mint,
@@ -1287,29 +1481,59 @@ export async function startTokenListener() {
                 console.log("Expected SOL Output:", expectedSolOut.toString());
                 console.log("Expected SOL Output (in SOL):", Number(expectedSolOut) / 1e9);
 
+                // Use slippage, priorityFee, bribeAmount from request or defaults
+                const slippageValue = typeof slippage === "number" ? slippage : 0;
+                const priorityFeeValue = typeof priorityFee === "number" ? priorityFee : 0;
+                const bribeAmountValue = typeof bribeAmount === "number" ? bribeAmount : 0;
+
                 // Execute sell
+                // Get wallet balance before
+                const preBalance = await connection.getBalance(userKeypairForManualSell.publicKey);
                 const txSignature = await sellToken({
                   connection,
                   userKeypair: userKeypairForManualSell, // Use the specific user's keypair
                   programId: MEMEHOME_PROGRAM_ID,
                   amount: BigInt(sellAmountInSmallestUnit),
-                  minOut: expectedSolOut / 100n, // 1% slippage
+                  minOut: expectedSolOut / 100n, // 1% slippage (will be overridden by slippage param below)
                   swapAccounts,
+                  slippage: slippageValue,
+                  priorityFee: priorityFeeValue,
+                  bribeAmount: bribeAmountValue
                 });
+                if (txSignature) {
+                  await connection.confirmTransaction(txSignature);
+                }
+                // Get wallet balance after
+                const postBalance = await connection.getBalance(userKeypairForManualSell.publicKey);
+                const actualSolReceived = (postBalance - preBalance) / 1e9;
 
-                console.log("\n=== TRANSACTION RESULT ===");
-                console.log("Transaction Signature:", txSignature);
+                // Detailed logs
+                console.log("\n=== MANUAL SELL SUMMARY ===");
+                console.log(`Tokens Sold: ${sellAmount} (${sellAmountInSmallestUnit} in smallest unit)`);
+                console.log(`Tokens Remaining: ${remainingAmount}`);
+                console.log(`Expected SOL Output (before slippage): ${Number(expectedSolOut) / 1e9} SOL`);
+                const expectedSolOutWithSlippage = Number(expectedSolOut) * (1 - slippageValue / 100) / 1e9;
+                console.log(`Expected SOL Output (after slippage): ${expectedSolOutWithSlippage} SOL`);
+                console.log(`Priority Fee: ${priorityFeeValue} SOL`);
+                console.log(`Bribe Amount: ${bribeAmountValue} SOL`);
+                console.log(`Actual SOL Received (wallet diff): ${actualSolReceived} SOL`);
+                console.log("============================\n");
 
                 // Update database
+                const existingToken = await WalletToken.findOne({
+                  mint: mint,
+                  userPublicKey: manualSellWalletAddress,
+                });
                 await WalletToken.findOneAndUpdate(
                   {
                     mint: mint,
-                    userPublicKey: manualSellWalletAddress, // Use the wallet address received in the message
+                    userPublicKey: manualSellWalletAddress,
                   },
                   {
                     $set: {
                       amount: remainingAmount.toString(),
-                      lastUpdated: Date.now()
+                      lastUpdated: Date.now(),
+                      buyPrice: existingToken?.buyPrice ?? 0,
                     }
                   }
                 );
@@ -1348,35 +1572,52 @@ export async function startTokenListener() {
 
             case "GET_STATS":
               try {
-                // If walletAddress is sent with GET_STATS, use it to filter.
-                // Otherwise, fall back to currentBuyerPublicKey from env.
                 const requestWalletAddress = data.walletAddress || currentBuyerPublicKey;
-
-                const [autoTokenBuys, tokenStats, walletTokens] =
-                  await Promise.all([
+                const [autoTokenBuys, tokenStats, walletTokens] = await Promise.all([
                     AutoTokenBuy.find({ userPublicKey: requestWalletAddress }).sort({ buyTimestamp: -1 }),
                     TokenStats.find({ userPublicKey: requestWalletAddress }).sort({ lastUpdated: -1 }),
                     WalletToken.find({ userPublicKey: requestWalletAddress }).sort({ lastUpdated: -1 }),
-                  ]);
+                ]);
 
-                ws.send(
-                  JSON.stringify({
+                // Fetch all prices for the tokens in one go
+                const tokenPrices = await TokenPrice.find({
+                    mint: { $in: walletTokens.map(t => t.mint) }
+                });
+
+                // Create a map for quick lookup
+                const priceMap = new Map(tokenPrices.map(tp => [tp.mint, tp]));
+
+                // Attach currentPrice and profitLossPercent to each wallet token
+                const tokensWithPrices = walletTokens.map(token => {
+                    const priceEntry = priceMap.get(token.mint);
+                    const currentPrice = priceEntry?.currentPrice ?? 0;
+                    const buyPrice = token.buyPrice ?? 0;
+                    const profitLossPercent =
+                        buyPrice > 0
+                            ? Number((((currentPrice - buyPrice) / buyPrice) * 100).toFixed(2))
+                            : 0;
+
+                    return {
+                        ...token.toObject(),
+                        currentPrice,
+                        profitLossPercent,
+                    };
+                });
+
+                ws.send(JSON.stringify({
                     type: "STATS_DATA",
                     data: {
-                      autoTokenBuys,
-                      tokenStats,
-                      walletTokens,
-                    },
-                  })
-                );
+                        autoTokenBuys,
+                        tokenStats,
+                        walletTokens: tokensWithPrices
+                    }
+                }));
               } catch (error) {
                 console.error("Error fetching stats:", error);
-                ws.send(
-                  JSON.stringify({
+                ws.send(JSON.stringify({
                     type: "ERROR",
-                    error: "Failed to fetch statistics",
-                  })
-                );
+                    message: "Failed to fetch stats"
+                }));
               }
               break;
 
@@ -1437,6 +1678,12 @@ export async function startTokenListener() {
               }));
               break;
 
+            case "AUTO_SELL_CONNECT":
+              console.log("✅ Auto-sell WebSocket connected!");
+              ws.send(JSON.stringify({ type: "AUTO_SELL_CONNECTED" }));
+              // Don't send any token data here - let GET_STATS handle that
+              break;
+
             default:
               console.log("⚠️ Unknown message type:", data.type);
           }
@@ -1462,112 +1709,4 @@ export async function startTokenListener() {
   } catch (error) {
     console.error("Error starting bot:", error);
   }
-}
-
-// Add these interfaces at the top with your other interfaces
-interface ParsedTokenAccountData {
-  program: string;
-  parsed: {
-    info: {
-      mint: string;
-      owner: string;
-      state: string;
-      amount: string;
-      delegate?: string;
-      delegatedAmount?: string;
-      isNative?: boolean;
-      name?: string;
-      symbol?: string;
-      decimals?: number;
-    };
-    type: string;
-  };
-  space: number;
-}
-
-interface ParsedTokenMintData {
-  program: string;
-  parsed: {
-    info: {
-      decimals: number;
-      freezeAuthority: string | null;
-      isInitialized: boolean;
-      mintAuthority: string | null;
-      supply: string;
-      name?: string;
-      symbol?: string;
-    };
-    type: string;
-  };
-  space: number;
-}
-
-// NOTE: WalletToken interface should ideally be imported from ../models/WalletToken
-// and should match the Mongoose schema. Assuming you have it there already:
-// import { IWalletToken as WalletTokenInterface } from "../models/WalletToken";
-// interface WalletToken extends WalletTokenInterface {}
-// For clarity in this file, adding a simple version matching what's used.
-interface WalletToken {
-  _id: string; // Add _id if it's used directly for mapping like in frontend
-  mint: string; // Token's mint address
-  amount: string; // Amount of tokens held
-  currentPrice?: number; // Optional, as it might not be stored in DB always
-  buyPrice: number; // Price when bought
-  lastPrice?: number; // Latest price
-  lastUpdated?: number; // Last update timestamp
-  name: string; // Token name
-  symbol: string; // Token symbol
-  decimals: number; // Token decimals
-  userPublicKey: string; // Key change: added userPublicKey to match backend schema
-  description?: string; // Optional field, if present in schema
-}
-
-// First add this interface at the top of your file
-interface WebSocketError {
-  code?: string;
-  message: string;
-}
-
-// First add this interface at the top of your file
-interface BuyError extends Error {
-  code?: string;
-  message: string;
-}
-
-// Add at the top with other interfaces
-interface AutoSnipeSettings {
-  buyAmount: bigint;
-  slippage: number;
-  priorityFee: bigint;
-  bribeAmount: bigint;
-  autoBuyEnabled: boolean;
-}
-
-// Add with other global variables
-let globalSettings: AutoSnipeSettings = {
-  buyAmount: BigInt(0),
-  slippage: 0,
-  priorityFee: BigInt(0),
-  bribeAmount: BigInt(0),
-  autoBuyEnabled: false
-};
-
-// Update function
-function updateGlobalSettings(settings: AutoSnipeSettings) {
-  // Update only global.autoSnipeSettings
-  global.autoSnipeSettings = {
-    ...global.autoSnipeSettings,
-    ...settings
-  };
-  console.log("⚙️ Global settings updated:", global.autoSnipeSettings);
-}
-
-// Token handler function
-async function handleNewToken(tokenData: TokenData) {
-  // Check only global.autoSnipeSettings
-  if (!global.autoSnipeSettings.autoBuyEnabled) {
-    console.log("❌ Auto-buy is disabled, skipping buy attempt");
-    return;
-  }
-  // ...
 }
