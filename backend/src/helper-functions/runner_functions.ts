@@ -16,11 +16,11 @@ export function calculateAmountOut(
 
 
   export function broadcastUpdate(wss: WebSocketServer, data: any) {
-    console.log("📤 Broadcasting update:", data);
+    //console.log("📤 Broadcasting update:", data);
     wss.clients.forEach((client: WebSocket) => {
       if (client.readyState === WebSocket.OPEN) {
         client.send(JSON.stringify(data));
-        console.log("✅ Update sent to client");
+        //console.log("✅ Update sent to client");
       }
     });
   }

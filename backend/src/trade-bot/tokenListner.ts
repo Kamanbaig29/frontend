@@ -32,6 +32,7 @@ import { TokenStats } from "../models/TokenStats";
 import { WalletToken } from "../models/WalletToken";
 import { sellToken } from "../action/sell";
 import { TokenPrice } from '../models/TokenPrice';
+import { getCurrentPrice } from '../helper-functions/getCurrentPrice';
 
 import {
   RPC_ENDPOINT,
@@ -96,6 +97,8 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Replace the current WebSocket server creation
 let wss: WebSocketServer;
+
+export { wss };
 
 const createWebSocketServer = (
   port: number = 3001,
@@ -514,6 +517,7 @@ export async function startTokenListener() {
               console.log("==============================\n");
               
               const autoBuyStartTime = Date.now();
+              const buyPriceAtDetection = await getCurrentPrice(connection, mintAddress);
               const signature = await buyToken({
                   connection,
                   userKeypair,
@@ -577,12 +581,6 @@ export async function startTokenListener() {
 
                   const tokensReceived = postTokenBalance - preTokenBalance;
 
-                  // Calculate price per token with full precision
-                  const pricePerToken = tokensReceived > 0 ? totalSpent / tokensReceived : 0;
-
-                  // Format price to 9 decimal places without scientific notation
-                  const formattedPrice = pricePerToken.toFixed(9);
-
                   // Get token metadata
                   const tokenMetadata = await connection.getParsedAccountInfo(new PublicKey(mintAddress));
                   let tokenName = "Unknown";
@@ -611,11 +609,11 @@ export async function startTokenListener() {
                   console.log(`Actual Buy Amount: ${(totalSpent - (txDetails.meta.fee / 1e9) - (priorityFee / 1e9) - (bribeAmount / 1e9)).toFixed(9)} SOL`);
 
                   // Calculate and log token amounts
-                  console.log("\n=== 🪙 TOKEN DETAILS ===");
-                  console.log(`Pre Token Balance: ${preTokenBalance}`);
-                  console.log(`Post Token Balance: ${postTokenBalance}`);
+                  //console.log("\n=== 🪙 TOKEN DETAILS ===");
+                  //console.log(`Pre Token Balance: ${preTokenBalance}`);
+                  //console.log(`Post Token Balance: ${postTokenBalance}`);
                   console.log(`Tokens Received: ${tokensReceived}`);
-                  console.log(`Price per Token: ${formattedPrice}`);
+                  //console.log(`Price per Token: ${formattedPrice}`);
 
                   console.log("\n=== ⚙️ TRANSACTION SETTINGS ===");
                   console.log(`Slippage: ${global.autoSnipeSettings.slippage}%`);
@@ -630,7 +628,7 @@ export async function startTokenListener() {
                     {
                       $set: {
                         mint: mintAddress,
-                        buyPrice: formattedPrice,
+                        buyPrice: buyPriceAtDetection,
                         amount: tokensReceived.toString(),
                         decimals: 6,
                         name: tokenName,
@@ -650,7 +648,7 @@ export async function startTokenListener() {
                     signature: signature,
                     details: {
                       mint: mintAddress,
-                      buyPrice: formattedPrice,
+                      buyPrice: buyPriceAtDetection,
                       tokenAmount: tokensReceived,
                       executionTimeMs: autoBuyDuration,
                       status: "Bought",
@@ -793,6 +791,7 @@ export async function startTokenListener() {
                         }
             
                         // Update the handleManualBuy call to include new parameters
+                        const currentPrice = await getCurrentPrice(connection, mintAddress);
                         const result = await handleManualBuy(
                             mintAddress,
                             amountInLamports,
@@ -866,12 +865,6 @@ export async function startTokenListener() {
             
                             const tokensReceived = postTokenBalance - preTokenBalance;
             
-                            // Calculate price per token with full precision
-                            const pricePerToken = tokensReceived > 0 ? totalSpent / tokensReceived : 0;
-            
-                            // Format price to 9 decimal places without scientific notation
-                            const formattedPrice = pricePerToken.toFixed(9);
-            
                             // Get token metadata
                             const tokenMetadata = await connection.getParsedAccountInfo(new PublicKey(mintAddress));
                             let tokenName = "Unknown";
@@ -904,7 +897,6 @@ export async function startTokenListener() {
                             console.log(`Pre Token Balance: ${preTokenBalance}`);
                             console.log(`Post Token Balance: ${postTokenBalance}`);
                             console.log(`Tokens Received: ${tokensReceived}`);
-                            console.log(`Price per Token: ${formattedPrice}`);
             
                             console.log("\n=== ⚙️ TRANSACTION SETTINGS ===");
                             console.log(`Slippage: ${slippage}%`);
@@ -919,7 +911,7 @@ export async function startTokenListener() {
                                 {
                                     $set: {
                                         mint: mintAddress,
-                                        buyPrice: formattedPrice,
+                                        buyPrice: currentPrice,
                                         amount: tokensReceived.toString(),
                                         decimals: 6,
                                         name: tokenName,
@@ -950,7 +942,6 @@ export async function startTokenListener() {
                                         preTokenBalance: preTokenBalance,
                                         postTokenBalance: postTokenBalance,
                                         tokensReceived: tokensReceived,
-                                        pricePerToken: formattedPrice,
             
                                         // Transaction costs
                                         totalSpent: totalSpent.toFixed(9),
@@ -960,7 +951,7 @@ export async function startTokenListener() {
                                         actualBuyAmount: (totalSpent - (txDetails.meta.fee / 1e9) - priorityFeeInSol - bribeAmountInSol).toFixed(9),
             
                                         // Additional info
-                                        buyPrice: formattedPrice,
+                                        buyPrice: currentPrice.toFixed(9),
                                         tokenAmount: tokensReceived,
                                         slippage: slippage,
                                         block: txDetails.slot
