@@ -1,33 +1,29 @@
-import mongoose from 'mongoose';
+import mongoose, { Schema, Document } from 'mongoose';
+import { wss } from '../trade-bot/tokenListner';
 
-interface ITokenPrice {
-    mint: string;
-    buyPrice: number;
-    currentPrice: number;
-    lastUpdated: Date;
+export interface ITokenPrice extends Document {
+  mint: string;
+  currentPrice: number;
+  lastUpdated?: Date;
 }
 
-const tokenPriceSchema = new mongoose.Schema<ITokenPrice>({
-    mint: {
-        type: String,
-        required: true,
-        unique: true,
-        index: true
-    },
-    buyPrice: {
-        type: Number,
-        required: true,
-        default: 0
-    },
-    currentPrice: {
-        type: Number,
-        required: true,
-        default: 0
-    },
-    lastUpdated: {
-        type: Date,
-        default: Date.now
-    }
+const TokenPriceSchema: Schema = new Schema({
+  mint: { type: String, required: true, unique: true },
+  currentPrice: { type: Number, required: true },
+  lastUpdated: { type: Date }
 });
 
-export const TokenPrice = mongoose.model<ITokenPrice>('TokenPrice', tokenPriceSchema);
+// Post-update hook for findOneAndUpdate
+TokenPriceSchema.post('findOneAndUpdate', async function (doc: any) {
+  if (doc && wss && wss.clients) {
+    const priceUpdate = {
+      type: 'PRICE_UPDATE',
+      prices: [{ mint: doc.mint, currentPrice: doc.currentPrice }]
+    };
+    wss.clients.forEach((ws: any) => {
+      ws.send(JSON.stringify(priceUpdate));
+    });
+  }
+});
+
+export const TokenPrice = mongoose.model<ITokenPrice>('TokenPrice', TokenPriceSchema);

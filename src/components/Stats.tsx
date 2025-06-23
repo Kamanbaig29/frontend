@@ -34,10 +34,11 @@ export const Stats: React.FC<StatsProps> = ({ onBackHome }) => {
   const [activeTab, setActiveTab] = useState(0);
   const [data, setData] = useState({
     autoTokenBuys: [],
-    tokenStats: [],
-    walletTokens: []
+    walletTokens: [],
+    tokenPrices: []
   });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const ws = new WebSocket('ws://localhost:3001');
@@ -54,6 +55,16 @@ export const Stats: React.FC<StatsProps> = ({ onBackHome }) => {
       }
     };
 
+    ws.onerror = () => {
+      setError('WebSocket connection error. Please check backend.');
+      setLoading(false);
+    };
+
+    ws.onclose = () => {
+      setError('WebSocket connection closed. Please check backend.');
+      setLoading(false);
+    };
+
     return () => ws.close();
   }, []);
 
@@ -65,6 +76,14 @@ export const Stats: React.FC<StatsProps> = ({ onBackHome }) => {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
         <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
+        <Typography color="error">{error}</Typography>
       </Box>
     );
   }
@@ -87,8 +106,8 @@ export const Stats: React.FC<StatsProps> = ({ onBackHome }) => {
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs value={activeTab} onChange={handleTabChange}>
           <Tab label="Auto Buys" />
-          <Tab label="Token Stats" />
           <Tab label="Wallet Tokens" />
+          <Tab label="Token Prices" />
         </Tabs>
       </Box>
 
@@ -125,33 +144,6 @@ export const Stats: React.FC<StatsProps> = ({ onBackHome }) => {
             <TableHead>
               <TableRow>
                 <TableCell>Token</TableCell>
-                <TableCell>Buy Price</TableCell>
-                <TableCell>Current Price</TableCell>
-                <TableCell>Profit/Loss</TableCell>
-                <TableCell>Status</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {data.tokenStats.map((stat: any) => (
-                <TableRow key={stat._id}>
-                  <TableCell>{stat.mint.slice(0, 8)}...</TableCell>
-                  <TableCell>{stat.buyPrice} SOL</TableCell>
-                  <TableCell>{stat.currentPrice} SOL</TableCell>
-                  <TableCell>{stat.profitPercentage}%</TableCell>
-                  <TableCell>{stat.status}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      )}
-
-      {activeTab === 2 && (
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Token</TableCell>
                 <TableCell>Symbol</TableCell>
                 <TableCell>Amount</TableCell>
                 <TableCell>Current Price (SOL)</TableCell>
@@ -170,6 +162,29 @@ export const Stats: React.FC<StatsProps> = ({ onBackHome }) => {
                   <TableCell>
                     {token.currentPrice.toFixed(6)}
                   </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+
+      {activeTab === 2 && (
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Mint</TableCell>
+                <TableCell>Current Price (SOL)</TableCell>
+                <TableCell>Last Updated</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {(data.tokenPrices || []).map((price: any) => (
+                <TableRow key={price._id}>
+                  <TableCell>{price.mint.slice(0, 8)}...</TableCell>
+                  <TableCell>{price.currentPrice}</TableCell>
+                  <TableCell>{new Date(price.lastUpdated).toLocaleString()}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

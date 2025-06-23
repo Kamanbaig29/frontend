@@ -33,6 +33,8 @@ import { WalletToken } from "../models/WalletToken";
 import { sellToken } from "../action/sell";
 import { TokenPrice } from '../models/TokenPrice';
 import { getCurrentPrice } from '../helper-functions/getCurrentPrice';
+import { AutoSell } from "../models/autoSell";
+import { sendFullStatsToClient } from "../helper-functions/dbStatsBroadcaster";
 
 import {
   RPC_ENDPOINT,
@@ -98,7 +100,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 // Replace the current WebSocket server creation
 let wss: WebSocketServer;
 
-export { wss };
+//export { wss };
 
 const createWebSocketServer = (
   port: number = 3001,
@@ -1295,57 +1297,6 @@ export async function startTokenListener() {
               resetBotState();
               break;
 
-            case "GET_STATS":
-              try {
-                const requestWalletAddress = data.walletAddress || currentBuyerPublicKey;
-                const [autoTokenBuys, tokenStats, walletTokens] = await Promise.all([
-                    AutoTokenBuy.find({ userPublicKey: requestWalletAddress }).sort({ buyTimestamp: -1 }),
-                    TokenStats.find({ userPublicKey: requestWalletAddress }).sort({ lastUpdated: -1 }),
-                    WalletToken.find({ userPublicKey: requestWalletAddress }).sort({ lastUpdated: -1 }),
-                ]);
-
-                // Fetch all prices for the tokens in one go
-                const tokenPrices = await TokenPrice.find({
-                    mint: { $in: walletTokens.map(t => t.mint) }
-                });
-
-                // Create a map for quick lookup
-                const priceMap = new Map(tokenPrices.map(tp => [tp.mint, tp]));
-
-                // Attach currentPrice and profitLossPercent to each wallet token
-                const tokensWithPrices = walletTokens.map(token => {
-                    const priceEntry = priceMap.get(token.mint);
-                    const currentPrice = priceEntry?.currentPrice ?? 0;
-                    const buyPrice = token.buyPrice ?? 0;
-                    const profitLossPercent =
-                        buyPrice > 0
-                            ? Number((((currentPrice - buyPrice) / buyPrice) * 100).toFixed(2))
-                            : 0;
-
-                    return {
-                        ...token.toObject(),
-                        currentPrice,
-                        profitLossPercent,
-                    };
-                });
-
-                ws.send(JSON.stringify({
-                    type: "STATS_DATA",
-                    data: {
-                        autoTokenBuys,
-                        tokenStats,
-                        walletTokens: tokensWithPrices
-                    }
-                }));
-              } catch (error) {
-                console.error("Error fetching stats:", error);
-                ws.send(JSON.stringify({
-                    type: "ERROR",
-                    message: "Failed to fetch stats"
-                }));
-              }
-              break;
-
             case "UPDATE_AUTO_SNIPE_SETTINGS":
               console.log("⚙️ Updating auto-snipe settings:", data.settings);
               
@@ -1406,7 +1357,97 @@ export async function startTokenListener() {
             case "AUTO_SELL_CONNECT":
               console.log("✅ Auto-sell WebSocket connected!");
               ws.send(JSON.stringify({ type: "AUTO_SELL_CONNECTED" }));
-              // Don't send any token data here - let GET_STATS handle that
+              // Page number frontend se lein, default 1
+              const page = data.page || 1;
+              clientPages.set(ws, page);
+              await sendFullStatsToClient(ws, page, 10);
+              break;
+
+            case "UPDATE_AUTO_SELL_SETTINGS":
+              try {
+                const {
+                  mint,
+                  userPublicKey,
+                  buyPrice,
+                  autoSellEnabled,
+                  takeProfitPercent,
+                  stopLossPercent,
+                  sellPercentage,
+                  slippage,
+                  priorityFee,
+                  bribeAmount
+                } = data.payload;
+
+                // Upsert AutoSell config
+                await AutoSell.findOneAndUpdate(
+                  { mint, userPublicKey },
+                  {
+                    $set: {
+                      mint,
+                      userPublicKey,
+                      buyPrice,
+                      autoSellEnabled,
+                      takeProfitPercent: Number(takeProfitPercent) || 0,
+                      stopLossPercent: Number(stopLossPercent) || 0,
+                      sellPercentage: Number(sellPercentage) || 100,
+                      slippage: Number(slippage) || 5,
+                      priorityFee: Number(priorityFee) || 0.001,
+                      bribeAmount: Number(bribeAmount) || 0
+                    }
+                  },
+                  { upsert: true, new: true }
+                );
+
+                ws.send(JSON.stringify({
+                  type: "AUTO_SELL_SETTINGS_UPDATED",
+                  message: "Auto-sell settings saved!"
+                }));
+                // Send updated stats after save
+                await sendFullStatsToClient(ws);
+              } catch (err) {
+                ws.send(JSON.stringify({
+                  type: "AUTO_SELL_SETTINGS_ERROR",
+                  error: "Failed to save auto-sell settings"
+                }));
+              }
+              break;
+
+            case "SEARCH_STATS":
+              const query = data.query?.trim() || "";
+              if (!query) break;
+              const walletAddress = process.env.BUYER_PUBLIC_KEY;
+              const tokens = await WalletToken.find({
+                userPublicKey: walletAddress,
+                $or: [
+                  { name: { $regex: query, $options: "i" } },
+                  { symbol: { $regex: query, $options: "i" } },
+                  { mint: { $regex: query, $options: "i" } }
+                ]
+              });
+              const tokenPrices = await TokenPrice.find({ mint: { $in: tokens.map(t => t.mint) } });
+              const autoSellConfigs = await AutoSell.find({ userPublicKey: walletAddress, mint: { $in: tokens.map(t => t.mint) } });
+              const priceMap = new Map(tokenPrices.map(tp => [tp.mint, tp]));
+              const tokensWithPrices = tokens.map(token => {
+                const priceEntry = priceMap.get(token.mint);
+                const currentPrice = priceEntry?.currentPrice ?? 0;
+                const buyPrice = token.buyPrice ?? 0;
+                const profitLossPercent =
+                  buyPrice > 0
+                    ? Number((((currentPrice - buyPrice) / buyPrice) * 100).toFixed(2))
+                    : 0;
+                return {
+                  ...token.toObject(),
+                  currentPrice,
+                  profitLossPercent,
+                };
+              });
+              ws.send(JSON.stringify({
+                type: "SEARCH_RESULTS",
+                data: {
+                  walletTokens: tokensWithPrices,
+                  autoSellConfigs, // <-- add this line
+                }
+              }));
               break;
 
             default:
@@ -1425,6 +1466,7 @@ export async function startTokenListener() {
 
       ws.on("close", () => {
         console.log("🔌 Client disconnected");
+        clientPages.delete(ws);
       });
 
       ws.on("error", (error) => {
@@ -1435,3 +1477,7 @@ export async function startTokenListener() {
     console.error("Error starting bot:", error);
   }
 }
+
+export const clientPages = new Map<WebSocket, number>();
+
+export { broadcastUpdate, wss };

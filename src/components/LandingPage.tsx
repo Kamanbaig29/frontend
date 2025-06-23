@@ -65,7 +65,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               width: '100%'
             }}
           >
-            Automatic Trading
+            Auto Buy
           </Button>
           
           <Button
@@ -82,10 +82,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               width: '100%'
             }}
           >
-            Manual Trading
+            Manual Buy
           </Button>
 
-          <Button
+          {/* <Button
             variant="contained"
             size="large"
             startIcon={<SellIcon />}
@@ -100,7 +100,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             }}
           >
             Manual Sell
-          </Button>
+          </Button> */}
 
           <Button
             variant="contained"
@@ -116,10 +116,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               width: '100%'
             }}
           >
-            Automatic Sell
+            Sell
           </Button>
 
-          <Button
+          {/* <Button
             variant="contained"
             size="large"
             onClick={onViewStats}
@@ -133,7 +133,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             }}
           >
             View Statistics
-          </Button>
+          </Button> */}
         </Box>
       </Paper>
     </Box>

@@ -14,7 +14,6 @@ const FEE_RECIPIENT_PUBLIC_KEY = new PublicKey("5J7LSXEvM9vm5PftLPWDctw86DjXZE27
 export async function getSwapAccounts({
   mintAddress,
   buyer,
-  connection,
   programId,
 }: {
   mintAddress: string;

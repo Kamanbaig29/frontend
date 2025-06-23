@@ -1,10 +1,9 @@
-import { Connection, PublicKey, Keypair } from '@solana/web3.js';
+import { Connection, Keypair } from '@solana/web3.js';
 import { WalletToken } from '../models/WalletToken';
 import { TokenPrice } from '../models/TokenPrice';
 import { getConnection } from '../utils/getProvider';
 import { getSwapAccounts } from '../action/getSwapAccounts';
 import { MEMEHOME_PROGRAM_ID, USER_SECRET_KEY } from '../config/test-config';
-//import { getMint } from '@solana/spl-token';
 import { Program, AnchorProvider, BN, Idl } from '@project-serum/anchor';
 import idl from '../idl/meme_home_idl.json';
 

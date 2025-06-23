@@ -1,14 +1,23 @@
 import { WalletToken } from '../models/WalletToken';
+import { AutoSell } from '../models/autoSell';
 import { TokenPrice } from '../models/TokenPrice';
-import { broadcastUpdate } from '../helper-functions/runner_functions'; // ya jahan se bhi aapka broadcastUpdate hai
-import { wss } from '../trade-bot/tokenListner'; // ya jahan se bhi aapka wss instance hai
+import { broadcastUpdate, wss } from '../trade-bot/tokenListner';
 
-async function broadcastStatsToFrontend() {
-  // Yahan pe aap apne wallet address ya filter laga sakte hain
-  const tokens = await WalletToken.find({});
+// Send paginated stats on demand
+export async function sendFullStatsToClient(ws: any, page: number = 1, pageSize: number = 10) {
+  const walletAddress = process.env.BUYER_PUBLIC_KEY;
+  const skip = (page - 1) * pageSize;
+
+  // Paginated tokens
+  const tokens = await WalletToken.find({ userPublicKey: walletAddress })
+    .skip(skip)
+    .limit(pageSize);
+
+  const totalTokens = await WalletToken.countDocuments({ userPublicKey: walletAddress });
+  const autoSellConfigs = await AutoSell.find({ userPublicKey: walletAddress });
   const tokenPrices = await TokenPrice.find({ mint: { $in: tokens.map(t => t.mint) } });
 
-  // tokensWithPrices build karo (jaise GET_STATS
+  // Attach currentPrice and profitLossPercent to each wallet token
   const priceMap = new Map(tokenPrices.map(tp => [tp.mint, tp]));
   const tokensWithPrices = tokens.map(token => {
     const priceEntry = priceMap.get(token.mint);
@@ -25,13 +34,15 @@ async function broadcastStatsToFrontend() {
     };
   });
 
-  broadcastUpdate(wss, {
+  ws.send(JSON.stringify({
     type: "STATS_DATA",
-    data: { walletTokens: tokensWithPrices }
-  });
-}
-
-// Infinite polling loop
-export function startDbStatsBroadcaster(interval = 1000) {
-  setInterval(broadcastStatsToFrontend, interval);
+    data: {
+      walletTokens: tokensWithPrices,
+      autoSellConfigs,
+      tokenPrices,
+      page,
+      pageSize,
+      totalTokens
+    }
+  }));
 }

@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { AutoTokenBuy } from '../models/AutoTokenBuy';
 import { TokenStats } from '../models/TokenStats';
 import { WalletToken } from '../models/WalletToken';
+import { AutoSell } from '../models/autoSell';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -25,7 +26,8 @@ export async function connectDatabase() {
     await Promise.all([
       AutoTokenBuy.createCollection(),
       TokenStats.createCollection(),
-      WalletToken.createCollection()
+      WalletToken.createCollection(),
+      AutoSell.createCollection()
     ]);
 
     // Get database instance with type checking

@@ -8,7 +8,7 @@ import {
   ComputeBudgetProgram,
   SystemProgram,
 } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID, createInitializeAccountInstruction, getAccount } from "@solana/spl-token";
+import {getAccount } from "@solana/spl-token";
 
 /**
  * Calculate Anchor discriminator for an account or instruction.
