@@ -63,17 +63,17 @@ export async function buyToken({
   // Total required amount calculate karenge
   const totalRequired = amount + priorityFee + bribeAmount + networkFeeBuffer;
   
-  console.log("Parameters:", {
-    amount: amountInSol + " SOL",
-    adjustedAmount: (adjustedAmount / 1e9) + " SOL",
-    minOut: minOut,
-    direction: direction,
-    slippage: slippage + "%",
-    priorityFee: priorityFee / 1e9 + " SOL",
-    bribeAmount: bribeAmount / 1e9 + " SOL",
-    totalRequired: totalRequired / 1e9 + " SOL",
-    maxAllowedAmount: maxAllowedAmount / 1e9 + " SOL"
-  });
+  //console.log("Parameters:", {
+    //amount: amountInSol + " SOL",
+    //adjustedAmount: (adjustedAmount / 1e9) + " SOL",
+    //minOut: minOut,
+    //direction: direction,
+    //slippage: slippage + "%",
+    //priorityFee: priorityFee / 1e9 + " SOL",
+    //bribeAmount: bribeAmount / 1e9 + " SOL",
+    //totalRequired: totalRequired / 1e9 + " SOL",
+    //maxAllowedAmount: maxAllowedAmount / 1e9 + " SOL"
+  //});
 
   // Check karenge ke total required amount max allowed amount se zyada to nahi hai
   if (totalRequired > maxAllowedAmount) {
@@ -83,7 +83,7 @@ export async function buyToken({
 
   // Calculate minOut with slippage
   const minOutWithSlippage = slippage === 0 ? minOut : Math.floor(minOut * (1 - slippage / 100));
-  console.log("Min Out with Slippage:", minOutWithSlippage);
+  //console.log("Min Out with Slippage:", minOutWithSlippage);
 
   const discriminator = calculateDiscriminator("global:swap");
   const data = Buffer.alloc(25);
@@ -124,7 +124,7 @@ export async function buyToken({
 
   // Add priority fee if specified
   if (priorityFee > 0) {
-    console.log("Adding Priority Fee:", priorityFee / 1e9 + " SOL");
+    //console.log("Adding Priority Fee:", priorityFee / 1e9 + " SOL");
     tx.add(
       ComputeBudgetProgram.setComputeUnitPrice({
         microLamports: Math.floor(priorityFee / 1e6) // Convert to microLamports
@@ -134,7 +134,7 @@ export async function buyToken({
 
   // Add bribe if specified
   if (bribeAmount > 0) {
-    console.log("Adding Bribe Amount:", bribeAmount / 1e9 + " SOL");
+    //console.log("Adding Bribe Amount:", bribeAmount / 1e9 + " SOL");
     tx.add(
       SystemProgram.transfer({
         fromPubkey: userKeypair.publicKey,

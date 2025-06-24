@@ -52,23 +52,23 @@ export async function handleManualBuy(
 
   try {
     // 1. Validate inputs
-    console.log("1️⃣ Validating inputs...");
+    //console.log("1️⃣ Validating inputs...");
     if (!mintAddress || !amount || !privateKeyOrKeypair) {
       throw new Error("Missing required parameters");
     }
 
     // 2. Handle keypair creation
-    console.log("2️⃣ Processing keypair...");
+    //console.log("2️⃣ Processing keypair...");
     let userKeypair: Keypair;
     
     if (privateKeyOrKeypair instanceof Keypair) {
       userKeypair = privateKeyOrKeypair;
-      console.log(`✅ Using provided keypair`);
+      //console.log(`✅ Using provided keypair`);
     } else {
       try {
         const secretKey = Uint8Array.from(JSON.parse(privateKeyOrKeypair));
         userKeypair = Keypair.fromSecretKey(secretKey);
-        console.log(`✅ Keypair created from private key`);
+        //console.log(`✅ Keypair created from private key`);
       } catch (error) {
         console.error("❌ Failed to create keypair:", error);
         throw new Error("Invalid private key format");
@@ -78,46 +78,46 @@ export async function handleManualBuy(
     console.log(`👤 Public Key: ${userKeypair.publicKey.toBase58()}`);
 
     // 3. Validate mint address
-    console.log("\n3️⃣ Validating mint address...");
+    //console.log("\n3️⃣ Validating mint address...");
     try {
       const mintInfo = await connection.getParsedAccountInfo(new PublicKey(mintAddress));
       if (!mintInfo.value) {
         throw new Error("Mint account not found");
       }
-      console.log("✅ Mint address is valid");
+      //console.log("✅ Mint address is valid");
     } catch (error) {
       console.error("❌ Invalid mint address:", error);
       throw new Error("Invalid mint address");
     }
 
     // 4. Get swap accounts
-    console.log("\n4️⃣ Fetching swap accounts...");
+    //console.log("\n4️⃣ Fetching swap accounts...");
     const swapAccounts = await getSwapAccounts({
       mintAddress,
       buyer: userKeypair.publicKey,
       connection,
       programId,
     });
-    console.log("✅ Swap accounts fetched successfully");
-    console.log("📊 Swap Account Details:");
-    console.log(`- Bonding Curve: ${swapAccounts.bondingCurve.toBase58()}`);
-    console.log(`- Token Mint: ${swapAccounts.tokenMint.toBase58()}`);
-    console.log(`- User Token Account: ${swapAccounts.userTokenAccount.toBase58()}`);
+    //console.log("✅ Swap accounts fetched successfully");
+    //console.log("📊 Swap Account Details:");
+    //console.log(`- Bonding Curve: ${swapAccounts.bondingCurve.toBase58()}`);
+    //console.log(`- Token Mint: ${swapAccounts.tokenMint.toBase58()}`);
+    //console.log(`- User Token Account: ${swapAccounts.userTokenAccount.toBase58()}`);
 
     // 5. Calculate ATA for curve token account
-    console.log("\n5️⃣ Calculating Associated Token Account...");
+    //console.log("\n5️⃣ Calculating Associated Token Account...");
     const curveTokenATA = await getAssociatedTokenAddress(
       swapAccounts.tokenMint,
       swapAccounts.bondingCurve,
       true
     );
-    console.log(`✅ ATA calculated: ${curveTokenATA.toBase58()}`);
+    //console.log(`✅ ATA calculated: ${curveTokenATA.toBase58()}`);
 
     // 6. Check if ATA exists
-    console.log("\n6️⃣ Checking if ATA exists...");
+    //console.log("\n6️⃣ Checking if ATA exists...");
     const ataInfo = await connection.getAccountInfo(curveTokenATA);
     if (!ataInfo) {
-      console.log("⚠️ ATA doesn't exist, creating...");
+      //console.log("⚠️ ATA doesn't exist, creating...");
       try {
         const createAtaIx = createAssociatedTokenAccountInstruction(
           userKeypair.publicKey,
@@ -144,7 +144,7 @@ export async function handleManualBuy(
     }
 
     // 7. Prepare buy transaction with new parameters
-    console.log("\n7️⃣ Preparing buy transaction...");
+    //console.log("\n7️⃣ Preparing buy transaction...");
     const slippage = options?.slippage || 1;
     const priorityFeeLamports = options?.priorityFee ? Math.floor(options.priorityFee * 1e9) : 1_000_000;
     const bribeAmountLamports = options?.bribeAmount ? Math.floor(options.bribeAmount * 1e9) : 0;

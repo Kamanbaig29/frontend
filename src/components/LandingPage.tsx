@@ -65,10 +65,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               width: '100%'
             }}
           >
-            Auto Buy
+            Buy
           </Button>
           
-          <Button
+          {/*<Button
             variant="contained"
             size="large"
             startIcon={<ManageSearchIcon />}
@@ -83,7 +83,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             }}
           >
             Manual Buy
-          </Button>
+          </Button>*/}
 
           {/* <Button
             variant="contained"

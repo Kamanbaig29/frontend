@@ -2,196 +2,105 @@ import { Connection, PublicKey } from "@solana/web3.js";
 import { Metaplex } from "@metaplex-foundation/js";
 import { WalletToken } from "../models/WalletToken";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { AutoSell } from "../models/autoSell";
-import { TokenPrice } from "../models/TokenPrice";
-import { getCurrentPrice } from "./getCurrentPrice";
 
-const POLL_INTERVAL_MS = 10000; // 30 seconds (recommended)
+// --- BUYPRICE CACHE ---
+const buyPriceCache = new Map<string, number>();
 
-// Function to check and remove only duplicates for current wallet
-async function checkForDuplicates(currentWallet: string) {
-    const duplicates = await WalletToken.aggregate([
-        {
-            $match: {
-                userPublicKey: currentWallet
-            }
-        },
-        {
-            $group: {
-                _id: "$mint",
-                count: { $sum: 1 },
-                docs: { $push: "$_id" }
-            }
-        },
-        {
-            $match: {
-                count: { $gt: 1 }
-            }
-        }
-    ]);
+export function startWalletSyncWatcher(connection: Connection, walletPublicKey: PublicKey) {
+  const userPublicKey = walletPublicKey.toBase58();
 
-    if (duplicates.length > 0) {
-        console.log("🔍 Found duplicate entries for current wallet:");
-        for (const dup of duplicates) {
-            console.log(`Mint: ${dup._id}, Count: ${dup.count}`);
-            const [keep, ...remove] = dup.docs;
-            await WalletToken.deleteMany({ 
-                _id: { $in: remove },
-                userPublicKey: currentWallet
-            });
-            console.log(`✅ Removed ${remove.length} duplicate entries for ${dup._id}`);
-        }
+  // Startup pe cache fill karo
+  (async () => {
+    //console.log(`[${new Date().toLocaleTimeString()}] Filling buyPriceCache from DB...`);
+    const tokens = await WalletToken.find({ userPublicKey });
+    for (const t of tokens) {
+      buyPriceCache.set(`${userPublicKey}:${t.mint}`, t.buyPrice || 0);
     }
-}
+    //console.log(`[${new Date().toLocaleTimeString()}] buyPriceCache filled with ${tokens.length} tokens.`);
+  })();
 
-export async function watchWalletTokens(
-    connection: Connection,
-    walletPublicKey: PublicKey
-) {
-    const metaplex = new Metaplex(connection);
-    let isPolling = true;
+  async function sync() {
+    const syncStart = Date.now();
+    //console.log(`[${new Date().toLocaleTimeString()}] 🔄 Sync started`);
+    const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
+      walletPublicKey,
+      { programId: TOKEN_PROGRAM_ID }
+    );
+    const walletMints = new Set<string>();
+    const tokens = tokenAccounts.value;
+    const batchSize = 5;
+    //console.log(`[${new Date().toLocaleTimeString()}] Total tokens in wallet: ${tokens.length}`);
+    for (let i = 0; i < tokens.length; i += batchSize) {
+      const batch = tokens.slice(i, i + batchSize);
+      // console.log(
+      //   `[${new Date().toLocaleTimeString()}] Processing batch ${
+      //     i / batchSize + 1
+      //   }: tokens ${i + 1} to ${i + batch.length}`
+      // );
+      await Promise.all(
+        batch.map(async (account, idx) => {
+          const mint = account.account.data.parsed.info.mint;
+          const amount = account.account.data.parsed.info.tokenAmount.amount;
+          let name = account.account.data.parsed.info.tokenAmount.name || "Unknown";
+          let symbol = account.account.data.parsed.info.tokenAmount.symbol || "Unknown";
+          let decimals = account.account.data.parsed.info.tokenAmount.decimals ?? 6;
 
-    async function poll() {
-        if (!isPolling) return;
-
-        const currentWallet = walletPublicKey.toBase58();
-        console.log(`🔄 Polling wallet tokens for: ${currentWallet}`);
-
-        try {
-            await checkForDuplicates(currentWallet);
-
-            const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
-                walletPublicKey,
-                { programId: TOKEN_PROGRAM_ID }
-            );
-
-            const dbCount = await WalletToken.countDocuments({ userPublicKey: currentWallet });
-            console.log(`📊 Database entries for current wallet: ${dbCount}`);
-            console.log(`📦 Wallet tokens: ${tokenAccounts.value.length}`);
-
-            for (const account of tokenAccounts.value) {
-                const tokenMint = account.account.data.parsed.info.mint;
-                const tokenAmount = account.account.data.parsed.info.tokenAmount.amount;
-                const decimals = account.account.data.parsed.info.tokenAmount.decimals;
-                const humanReadableAmount = (parseInt(tokenAmount) / Math.pow(10, decimals)).toString();
-
-                try {
-                    const existingToken = await WalletToken.findOne({ 
-                        mint: tokenMint,
-                        userPublicKey: currentWallet
-                    });
-
-                    // === Only update if new token or amount changed ===
-                    if (!existingToken) {
-                        console.log(`📡 Fetching metadata for new token ${tokenMint}...`);
-
-                        const nft = await metaplex
-                            .nfts()
-                            .findByMint({ mintAddress: new PublicKey(tokenMint) });
-
-                        await WalletToken.create({
-                            mint: tokenMint,
-                            amount: humanReadableAmount,
-                            name: nft?.name || "Unknown",
-                            symbol: nft?.symbol || "Unknown",
-                            decimals: decimals,
-                            description: nft?.json?.description || "",
-                            userPublicKey: currentWallet
-                        });
-
-                        console.log(`🆕 Added new token ${tokenMint} with amount ${humanReadableAmount}`);
-
-                        // === Only for new token: update price ===
-                        const latestPrice = await getCurrentPrice(connection, tokenMint);
-                        await TokenPrice.findOneAndUpdate(
-                            { mint: tokenMint },
-                            { $set: { currentPrice: latestPrice, lastUpdated: new Date() } },
-                            { upsert: true }
-                        );
-                    } else if (existingToken.amount !== humanReadableAmount) {
-                        console.log(
-                            `📝 Amount change detected for ${tokenMint}: ${existingToken.amount} → ${humanReadableAmount}`
-                        );
-
-                        await WalletToken.updateOne(
-                            { 
-                                mint: tokenMint,
-                                userPublicKey: currentWallet
-                            },
-                            { amount: humanReadableAmount }
-                        );
-
-                        console.log(`♻️ Updated amount for token ${tokenMint}`);
-
-                        // === Only for changed token: update price ===
-                        const latestPrice = await getCurrentPrice(connection, tokenMint);
-                        await TokenPrice.findOneAndUpdate(
-                            { mint: tokenMint },
-                            { $set: { currentPrice: latestPrice, lastUpdated: new Date() } },
-                            { upsert: true }
-                        );
-                    }
-
-                    // Metadata update (name, symbol) as before
-                    if (existingToken && existingToken.name === "Unknown") {
-                        console.log(`🔄 Updating metadata for token with unknown name: ${tokenMint}`);
-
-                        const nft = await metaplex
-                            .nfts()
-                            .findByMint({ mintAddress: new PublicKey(tokenMint) });
-
-                        await WalletToken.updateOne(
-                            { 
-                                mint: tokenMint,
-                                userPublicKey: currentWallet
-                            },
-                            {
-                                $set: {
-                                    name: nft?.name || "Unknown",
-                                    symbol: nft?.symbol || "Unknown",
-                                    decimals: decimals,
-                                    description: nft?.json?.description || ""
-                                },
-                            }
-                        );
-
-                        console.log(`✅ Metadata updated for token ${tokenMint}`);
-                    }
-                } catch (err) {
-                    console.error(`❌ Error processing token ${tokenMint}:`, err);
-                }
+          // Agar name ya symbol "Unknown" hai to Metaplex se try karo
+          if (name === "Unknown" || symbol === "Unknown") {
+            try {
+              //console.log(`[${new Date().toLocaleTimeString()}] [Batch ${i / batchSize + 1}] Fetching Metaplex meta for mint ${mint}`);
+              const metaplex = new Metaplex(connection);
+              const nft = await metaplex.nfts().findByMint({ mintAddress: new PublicKey(mint) });
+              if (nft) {
+                name = nft.name || name;
+                symbol = nft.symbol || symbol;
+                decimals = nft.mint?.decimals ?? decimals;
+                // //console.log(
+                //   `[${new Date().toLocaleTimeString()}] [Batch ${i / batchSize + 1}] Metaplex meta found for mint ${mint}: name=${name}, symbol=${symbol}, decimals=${decimals}`
+                // );
+              }
+            } catch (e) {
+              //console.error(`[${new Date().toLocaleTimeString()}] ❌ Error fetching Metaplex meta for mint ${mint}:`, e);
             }
+          }
 
-            const walletTokens = await WalletToken.find({ userPublicKey: currentWallet });
-            const autoSellTokens = await AutoSell.find({ userPublicKey: currentWallet });
-
-            const autoSellMints = new Set(autoSellTokens.map(t => t.mint));
-
-            for (const token of walletTokens) {
-                if (!autoSellMints.has(token.mint)) {
-                    await AutoSell.create({
-                        mint: token.mint,
-                        userPublicKey: token.userPublicKey,
-                        buyPrice: token.buyPrice,
-                        // All other fields will use schema defaults
-                    });
-                    console.log(`AutoSell entry created for ${token.mint}`);
-                }
-            }
-        } catch (err) {
-            console.error("❌ Error fetching token accounts:", err);
-        }
-
-        if (isPolling) {
-            setTimeout(poll, POLL_INTERVAL_MS);
-        }
+          walletMints.add(mint);
+          const buyPrice = buyPriceCache.get(`${userPublicKey}:${mint}`) || 0;
+          await WalletToken.findOneAndUpdate(
+            { mint, userPublicKey },
+            { $set: { mint, userPublicKey, amount, buyPrice, name, symbol, decimals } },
+            { upsert: true, new: true }
+          );
+          buyPriceCache.set(`${userPublicKey}:${mint}`, buyPrice);
+          // console.log(
+          //   `[${new Date().toLocaleTimeString()}] [Batch ${i / batchSize + 1}] Token synced: ${mint} (${name}, ${symbol}, amount=${amount})`
+          // );
+        })
+      );
+      // Batch ke baad 2-3 sec ka delay
+      if (i + batchSize < tokens.length) {
+        //console.log(`[${new Date().toLocaleTimeString()}] Batch ${i / batchSize + 1} done, waiting 2.5s before next batch...`);
+        await new Promise((res) => setTimeout(res, 2500));
+      }
     }
+    // Remove tokens from DB which are not in wallet
+    const dbTokens = await WalletToken.find({ userPublicKey });
+    for (const t of dbTokens) {
+      if (!walletMints.has(t.mint)) {
+        await WalletToken.deleteOne({ mint: t.mint, userPublicKey });
+        buyPriceCache.delete(`${userPublicKey}:${t.mint}`);
+        ////console.log(`[${new Date().toLocaleTimeString()}] Token removed from DB (not in wallet): ${t.mint}`);
+      }
+    }
+    const syncEnd = Date.now();
+    //console.log(`[${new Date().toLocaleTimeString()}] ✅ Wallet-DB sync done. Took ${(syncEnd - syncStart) / 1000}s`);
+  }
 
-    const cleanup = () => {
-        console.log('🧹 Cleaning up wallet token watcher...');
-        isPolling = false;
-    };
+  // Initial sync
+  sync();
+  // 5 min interval
+  const interval = setInterval(sync, 5 * 60 * 1000);
 
-    poll();
-    return cleanup;
+  // Cleanup
+  return () => clearInterval(interval);
 }
