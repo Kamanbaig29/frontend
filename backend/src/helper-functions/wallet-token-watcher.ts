@@ -40,10 +40,14 @@ export function startWalletSyncWatcher(connection: Connection, walletPublicKey: 
       await Promise.all(
         batch.map(async (account, idx) => {
           const mint = account.account.data.parsed.info.mint;
-          const amount = account.account.data.parsed.info.tokenAmount.amount;
+          const rawAmount = account.account.data.parsed.info.tokenAmount.amount;
+          let decimals = account.account.data.parsed.info.tokenAmount.decimals ?? 6;
+          
+          // Convert raw amount to proper decimal format
+          const amount = (parseInt(rawAmount) / Math.pow(10, decimals)).toString();
+          
           let name = account.account.data.parsed.info.tokenAmount.name || "Unknown";
           let symbol = account.account.data.parsed.info.tokenAmount.symbol || "Unknown";
-          let decimals = account.account.data.parsed.info.tokenAmount.decimals ?? 6;
 
           // Agar name ya symbol "Unknown" hai to Metaplex se try karo
           if (name === "Unknown" || symbol === "Unknown") {
@@ -66,12 +70,19 @@ export function startWalletSyncWatcher(connection: Connection, walletPublicKey: 
 
           walletMints.add(mint);
           const buyPrice = buyPriceCache.get(`${userPublicKey}:${mint}`) || 0;
+          
+          //console.log(`Token ${mint}: Raw amount=${rawAmount}, Decimals=${decimals}, Converted amount=${amount}, BuyPrice=${buyPrice}`);
+          
+          // Check if token already exists in DB with buy price
+          const existingToken = await WalletToken.findOne({ mint, userPublicKey });
+          const finalBuyPrice = existingToken?.buyPrice || buyPrice;
+          
           await WalletToken.findOneAndUpdate(
             { mint, userPublicKey },
-            { $set: { mint, userPublicKey, amount, buyPrice, name, symbol, decimals } },
+            { $set: { mint, userPublicKey, amount, buyPrice: finalBuyPrice, name, symbol, decimals } },
             { upsert: true, new: true }
           );
-          buyPriceCache.set(`${userPublicKey}:${mint}`, buyPrice);
+          buyPriceCache.set(`${userPublicKey}:${mint}`, finalBuyPrice);
           // console.log(
           //   `[${new Date().toLocaleTimeString()}] [Batch ${i / batchSize + 1}] Token synced: ${mint} (${name}, ${symbol}, amount=${amount})`
           // );
@@ -83,17 +94,15 @@ export function startWalletSyncWatcher(connection: Connection, walletPublicKey: 
         await new Promise((res) => setTimeout(res, 2500));
       }
     }
-    // Remove tokens from DB which are not in wallet
+    // Instead, just log which tokens are missing from wallet
     const dbTokens = await WalletToken.find({ userPublicKey });
-    for (const t of dbTokens) {
-      if (!walletMints.has(t.mint)) {
-        await WalletToken.deleteOne({ mint: t.mint, userPublicKey });
-        buyPriceCache.delete(`${userPublicKey}:${t.mint}`);
-        ////console.log(`[${new Date().toLocaleTimeString()}] Token removed from DB (not in wallet): ${t.mint}`);
-      }
+    const missingTokens = dbTokens.filter(t => !walletMints.has(t.mint));
+    if (missingTokens.length > 0) {
+      console.log(`[${new Date().toLocaleTimeString()}] ⚠️ Tokens not in wallet but in DB: ${missingTokens.map(t => t.mint).join(', ')}`);
     }
+
     const syncEnd = Date.now();
-    //console.log(`[${new Date().toLocaleTimeString()}] ✅ Wallet-DB sync done. Took ${(syncEnd - syncStart) / 1000}s`);
+    console.log(`[${new Date().toLocaleTimeString()}] ✅ Wallet-DB sync done. Took ${(syncEnd - syncStart) / 1000}s`);
   }
 
   // Initial sync

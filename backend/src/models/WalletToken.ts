@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document } from 'mongoose';
 import { wss, clientPages } from '../trade-bot/tokenListner'; // Import the map
-import { sendFullStatsToClient } from '../helper-functions/dbStatsBroadcaster';
+//import { sendFullStatsToClient } from '../helper-functions/dbStatsBroadcaster';
 
 interface IWalletToken {
   mint: string;
@@ -45,6 +45,8 @@ const WalletTokenSchema = new Schema<IWalletToken>({
 
 WalletTokenSchema.index({ mint: 1, userPublicKey: 1 }, { unique: true });
 
+// YEH POST HOOKS HATA DO YA COMMENT KAR DO
+/*
 WalletTokenSchema.post('save', async function (doc: any) {
   if (wss && wss.clients) {
     wss.clients.forEach((ws: any) => {
@@ -62,5 +64,6 @@ WalletTokenSchema.post('findOneAndUpdate', async function (doc: any) {
     });
   }
 });
+*/
 
 export const WalletToken = mongoose.model('WalletToken', WalletTokenSchema);

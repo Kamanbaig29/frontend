@@ -1,7 +1,10 @@
 import { Connection, PublicKey } from "@solana/web3.js";
 import { Metaplex } from "@metaplex-foundation/js";
 import { WalletToken } from "../models/WalletToken";
+import { TokenPrice } from "../models/TokenPrice";
+import { AutoSell } from "../models/autoSell";
 import { getConnection } from "../utils/getProvider";
+import { getCurrentPrice } from "./getCurrentPrice";
 
 export async function addOrUpdateTokenFromBuy({
   mint,
@@ -59,8 +62,58 @@ export async function addOrUpdateTokenFromBuy({
       { $set: { mint, userPublicKey, amount, buyPrice, name, symbol, decimals } },
       { upsert: true, new: true }
     );
+    console.log(`✅ WalletToken updated successfully for mint: ${mint}`);
+
+    // Call separate function for TokenPrice update
+    updateTokenPriceBuy(mint, buyPrice, userPublicKey);
+
   } catch (e) {
     console.error(`❌ Error updating WalletToken in DB for mint ${mint}:`, e);
+  }
+}
+
+// Separate function for TokenPrice update
+async function updateTokenPriceBuy(mint: string, buyPrice: number, userPublicKey: string) {
+  try {
+    const connection = getConnection();
+    const currentPrice = await getCurrentPrice(connection, mint);
+    
+    //if (currentPrice > 0) {
+      await TokenPrice.findOneAndUpdate(
+        { mint },
+        { $set: { mint, currentPrice, lastUpdated: new Date(), buyPrice } },
+        { upsert: true }
+      );
+
+      await AutoSell.findOneAndUpdate(
+        { mint, userPublicKey },
+        { $set: { mint, userPublicKey, buyPrice } },
+        { upsert: true }
+      );
+      
+      console.log(` TokenPrice updated for ${mint}: ${currentPrice}`);
+    //}
+  } catch (error) {
+    console.error(`❌ Error updating TokenPrice for mint ${mint}:`, error);
+  }
+}
+
+
+async function updateTokenPriceSell(mint: string) {
+  try {
+    const connection = getConnection();
+    const currentPrice = await getCurrentPrice(connection, mint);
+    
+    //if (currentPrice > 0) {
+      await TokenPrice.findOneAndUpdate(
+        { mint },
+        { $set: { mint, currentPrice, lastUpdated: new Date()} },
+        { upsert: true }
+      );
+      console.log(` TokenPrice updated for ${mint}: ${currentPrice}`);
+    //}
+  } catch (error) {
+    console.error(`❌ Error updating TokenPrice for mint ${mint}:`, error);
   }
 }
 
@@ -73,6 +126,8 @@ export async function updateOrRemoveTokenAfterSell({
   userPublicKey: string;
   remainingAmount: string;
 }) {
+  //const connection: Connection = getConnection();
+
   if (parseFloat(remainingAmount) <= 0) {
     await WalletToken.deleteOne({ mint, userPublicKey });
     console.log(`🗑️ Token ${mint} removed from DB (sold 100%)`);
@@ -82,5 +137,9 @@ export async function updateOrRemoveTokenAfterSell({
       { $set: { amount: remainingAmount } },
     );
     console.log(`✏️ Token ${mint} amount updated to ${remainingAmount}`);
+    updateTokenPriceSell(mint);
   }
+
+  // Fetch current price and update TokenPrice model after sell
+
 }

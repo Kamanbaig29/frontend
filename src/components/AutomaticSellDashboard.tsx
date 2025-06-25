@@ -1,12 +1,13 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Box, Button, Paper, Typography, CircularProgress, Alert, FormControlLabel, Switch, TextField } from '@mui/material';
 import { useWebSocket } from '../context/webSocketContext';
 import SearchIcon from '@mui/icons-material/Search';
 
 
 export const AutomaticSellDashboard: React.FC<{ onBackHome: () => void }> = ({ onBackHome }) => {
-    const [tokens, setTokens] = useState<any[]>([]);
     const { ws, status, sendMessage } = useWebSocket();
+    const [allTokens, setAllTokens] = useState<any[]>([]);
+    const [tokens, setTokens] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [statusMessage, setStatusMessage] = useState<string | null>(null);
     const [tokenSettings, setTokenSettings] = useState<Record<string, any>>({});
@@ -15,6 +16,8 @@ export const AutomaticSellDashboard: React.FC<{ onBackHome: () => void }> = ({ o
     const [search, setSearch] = useState('');
     const [isSearching, setIsSearching] = useState(false);
     const statsRequested = useRef(false);
+    const [statsData, setStatsData] = useState<{ totalTokens: number, pageSize: number } | null>(null);
+    const pageSize = 10; // ya jitna aap chahen
 
 
     useEffect(() => {
@@ -28,24 +31,39 @@ export const AutomaticSellDashboard: React.FC<{ onBackHome: () => void }> = ({ o
         if (!ws) return;
         if (search.trim().length === 0) {
             setIsSearching(false);
-            // Jab search khali ho, normal page data mangwayein
             sendMessage({ type: 'AUTO_SELL_CONNECT', page });
-            return;
-        }
-        // Debounce search (optional, for less backend load)
-        const timeout = setTimeout(() => {
+        } else {
             setIsSearching(true);
-            sendMessage({ type: 'SEARCH_STATS', query: search.trim() });
-        }, 400);
-        return () => clearTimeout(timeout);
+            const timeout = setTimeout(() => {
+                sendMessage({ type: 'SEARCH_STATS', query: search.trim() });
+            }, 400);
+            return () => clearTimeout(timeout);
+        }
     }, [search, ws, page, sendMessage]);
+
+    useEffect(() => {
+        if (search.trim().length > 0) setPage(1);
+    }, [search]);
+
+    useEffect(() => {
+        if (ws && status === 'connected') {
+            sendMessage({ type: 'GET_ALL_TOKENS' });
+        }
+    }, [ws, status, sendMessage]);
 
     useEffect(() => {
         if (!ws) return;
         const handleMessage = (event: MessageEvent) => {
             try {
                 const data = JSON.parse(event.data);
-                if (data.type === 'SEARCH_RESULTS') {
+                if (data.type === 'ALL_TOKENS') {
+                    setAllTokens(data.tokens || []);
+                    setLoading(false);
+                } else if (data.type === 'TOKEN_UPDATE') {
+                    setAllTokens(prev =>
+                        prev.map(t => t.mint === data.token.mint ? { ...t, ...data.token } : t)
+                    );
+                } else if (data.type === 'SEARCH_RESULTS') {
                     setTokens(data.data.walletTokens || []);
                     setIsSearching(true);
                     setLoading(false);
@@ -73,6 +91,10 @@ export const AutomaticSellDashboard: React.FC<{ onBackHome: () => void }> = ({ o
                 } else if (data.type === 'STATS_DATA') {
                     const walletTokens = data.data.walletTokens || [];
                     setTokens(walletTokens);
+                    setStatsData({
+                        totalTokens: data.data.totalTokens,
+                        pageSize: data.data.pageSize
+                    });
 
                     // Only set the form settings ONCE or if tokens/configs change
                     if (
@@ -116,7 +138,11 @@ export const AutomaticSellDashboard: React.FC<{ onBackHome: () => void }> = ({ o
                             const priceObj = data.prices.find((p: any) => p.mint === token.mint);
                             if (priceObj && token.currentPrice !== priceObj.currentPrice) {
                                 changed = true;
-                                return { ...token, currentPrice: priceObj.currentPrice };
+                                return {
+                                    ...token,
+                                    currentPrice: priceObj.currentPrice,
+                                    lastUpdated: priceObj.lastUpdated
+                                };
                             }
                             return token;
                         });
@@ -168,12 +194,22 @@ export const AutomaticSellDashboard: React.FC<{ onBackHome: () => void }> = ({ o
         }
     }, [status, page, sendMessage]);
 
-    // Filtered tokens based on search
-    const filteredTokens = tokens.filter(token =>
-        (token.name || '').toLowerCase().includes(search.toLowerCase()) ||
-        (token.symbol || '').toLowerCase().includes(search.toLowerCase()) ||
-        (token.mint || '').toLowerCase().includes(search.toLowerCase())
-    );
+    // Search
+    const filteredTokens = useMemo(() => {
+        if (!search) return allTokens;
+        return allTokens.filter(token =>
+            (token.name || '').toLowerCase().includes(search.toLowerCase()) ||
+            (token.symbol || '').toLowerCase().includes(search.toLowerCase()) ||
+            (token.mint || '').toLowerCase().includes(search.toLowerCase())
+        );
+    }, [allTokens, search]);
+
+    // Pagination
+    const paginatedTokens = useMemo(() => {
+        return filteredTokens.slice((page - 1) * pageSize, page * pageSize);
+    }, [filteredTokens, page, pageSize]);
+
+    const totalPages = Math.ceil(filteredTokens.length / pageSize);
 
     return (
         <Box mt={4}>
@@ -208,8 +244,8 @@ export const AutomaticSellDashboard: React.FC<{ onBackHome: () => void }> = ({ o
             </div>
             {loading && <CircularProgress />}
             {statusMessage && <Alert severity="info" sx={{ mb: 2 }}>{statusMessage}</Alert>}
-            {tokens.length > 0 ? (
-                tokens.map((token) => (
+            {paginatedTokens.length > 0 ? (
+                paginatedTokens.map((token) => (
                     <Paper key={token._id} sx={{ p: 2, mb: 2, bgcolor: '#2a2a2a' }}>
                         <Typography color="white">Name: {token.name || 'Unknown'}</Typography>
                         <Typography color="white">Symbol: {token.symbol || '?'}</Typography>
@@ -222,6 +258,12 @@ export const AutomaticSellDashboard: React.FC<{ onBackHome: () => void }> = ({ o
                         </Typography>
                         <Typography color="gray">
                             Current Price: {token.currentPrice ? Number(token.currentPrice).toFixed(9) : '...'} SOL
+                        </Typography>
+                        <Typography color="gray">
+                            Last Updated:{" "}
+                            {token.lastUpdated
+                                ? new Date(token.lastUpdated).toLocaleString()
+                                : 'N/A'}
                         </Typography>
                         <Typography color={token.profitLossPercent > 0 ? 'green' : 'red'}>
                             Profit/Loss: {token.profitLossPercent ? `${token.profitLossPercent.toFixed(2)}%` : '...'}
@@ -353,13 +395,16 @@ export const AutomaticSellDashboard: React.FC<{ onBackHome: () => void }> = ({ o
             ) : (
                 !loading && <Typography color="white" sx={{ mt: 2 }}>No tokens found.</Typography>
             )}
-            {/* Pagination only if not searching */}
-            {!isSearching && (
+            {/* Pagination */}
+            {filteredTokens.length > pageSize && (
                 <div style={{ display: 'flex', justifyContent: 'center', marginTop: 20 }}>
                     <Button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} variant="contained" sx={{ mr: 1 }}>
                         Previous
                     </Button>
-                    <Button onClick={() => setPage(p => p + 1)} variant="contained">
+                    <Typography sx={{ color: 'white', alignSelf: 'center', mx: 2 }}>
+                        Page {page} of {totalPages}
+                    </Typography>
+                    <Button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} variant="contained">
                         Next
                     </Button>
                 </div>

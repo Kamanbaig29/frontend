@@ -4,12 +4,14 @@ import { wss } from '../trade-bot/tokenListner';
 export interface ITokenPrice extends Document {
   mint: string;
   currentPrice: number;
+  buyPrice?: number;
   lastUpdated?: Date;
 }
 
 const TokenPriceSchema: Schema = new Schema({
   mint: { type: String, required: true, unique: true },
   currentPrice: { type: Number, required: true },
+  buyPrice: { type: Number },
   lastUpdated: { type: Date }
 });
 
@@ -17,8 +19,13 @@ const TokenPriceSchema: Schema = new Schema({
 TokenPriceSchema.post('findOneAndUpdate', async function (doc: any) {
   if (doc && wss && wss.clients) {
     const priceUpdate = {
-      type: 'PRICE_UPDATE',
-      prices: [{ mint: doc.mint, currentPrice: doc.currentPrice }]
+      type: 'TOKEN_UPDATE',
+      token: {
+        mint: doc.mint,
+        currentPrice: doc.currentPrice,
+        lastUpdated: doc.lastUpdated,
+        buyPrice: doc.buyPrice
+      }
     };
     wss.clients.forEach((ws: any) => {
       ws.send(JSON.stringify(priceUpdate));

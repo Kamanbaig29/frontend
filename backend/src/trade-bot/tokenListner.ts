@@ -18,18 +18,18 @@ import { handleManualBuy } from "../action/manualBuy";
 import {
   createAssociatedTokenAccountInstruction,
   getAssociatedTokenAddress,
-  TOKEN_PROGRAM_ID,
+  //TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 import WebSocket, { WebSocketServer } from "ws";
 import bs58 from "bs58";
-import { AutoTokenBuy } from "../models/AutoTokenBuy";
-import { TokenStats } from "../models/TokenStats";
+//import { AutoTokenBuy } from "../models/AutoTokenBuy";
+//import { TokenStats } from "../models/TokenStats";
 import { WalletToken } from "../models/WalletToken";
 import { sellToken } from "../action/sell";
 import { TokenPrice } from "../models/TokenPrice";
 import { getCurrentPrice } from "../helper-functions/getCurrentPrice";
 import { AutoSell } from "../models/autoSell";
-import { sendFullStatsToClient } from "../helper-functions/dbStatsBroadcaster";
+//import { sendFullStatsToClient } from "../helper-functions/dbStatsBroadcaster";
 // import { trackBuyTransaction } from "../helper-functions/wallet-token-watcher";
 
 // import { addOrUpdateTokenFromBuy } from "../helper-functions/wallet-token-watcher";
@@ -626,11 +626,28 @@ export async function startTokenListener() {
                 console.log(`Block: ${txDetails.slot}`);
 
                 //console.log("\n=== 💰 FINAL AMOUNTS ===");
-                //console.log(`Total SOL Spent: ${totalSpent.toFixed(9)} SOL`);
-                //console.log(`Network Fee: ${(txDetails.meta.fee / 1e9).toFixed(9)} SOL`);
-                //console.log(`Priority Fee: ${priorityFee / 1e9} SOL`);
-                //console.log(`Bribe Amount: ${bribeAmount / 1e9} SOL`);
-                //console.log(`Actual Buy Amount: ${(totalSpent - (txDetails.meta.fee / 1e9) - (priorityFee / 1e9) - (bribeAmount / 1e9)).toFixed(9)} SOL`);
+                //console.log(
+                //  `Total SOL Spent: ${totalSpent.toFixed(9)} SOL`
+                // );
+                // console.log(
+                //   `Network Fee: ${(txDetails.meta.fee / 1e9).toFixed(
+                //     9
+                //   )} SOL`
+                // );
+                // console.log(
+                //   `Priority Fee: ${priorityFee / 1e9} SOL`
+                // );
+                // console.log(
+                //   `Bribe Amount: ${bribeAmount / 1e9} SOL`
+                // );
+                // console.log(
+                //   `Actual Buy Amount: ${(
+                //     totalSpent -
+                //     txDetails.meta.fee / 1e9 -
+                //     priorityFee / 1e9 -
+                //     bribeAmount / 1e9
+                //   ).toFixed(9)} SOL`
+                // );
 
                 // Calculate and log token amounts
                 //console.log("\n=== 🪙 TOKEN DETAILS ===");
@@ -1615,8 +1632,9 @@ export async function startTokenListener() {
               ws.send(JSON.stringify({ type: "AUTO_SELL_CONNECTED" }));
               // Page number frontend se lein, default 1
               const page = data.page || 1;
+              const pageSize = data.pageSize || 10; // Allow frontend to send pageSize
               clientPages.set(ws, page);
-              await sendFullStatsToClient(ws, page, 10);
+              //await sendFullStatsToClient(ws, page, pageSize);
               break;
 
             case "UPDATE_AUTO_SELL_SETTINGS":
@@ -1661,7 +1679,7 @@ export async function startTokenListener() {
                   })
                 );
                 // Send updated stats after save
-                await sendFullStatsToClient(ws);
+                //await sendFullStatsToClient(ws);
               } catch (err) {
                 ws.send(
                   JSON.stringify({
@@ -1708,6 +1726,7 @@ export async function startTokenListener() {
                   ...token.toObject(),
                   currentPrice,
                   profitLossPercent,
+                  lastUpdated: priceEntry?.lastUpdated ?? null
                 };
               });
               ws.send(
@@ -1719,6 +1738,34 @@ export async function startTokenListener() {
                   },
                 })
               );
+              break;
+
+            case "GET_ALL_TOKENS":
+              {
+                const walletAddress = process.env.BUYER_PUBLIC_KEY;
+                const tokens = await WalletToken.find({ userPublicKey: walletAddress });
+                const tokenPrices = await TokenPrice.find({ mint: { $in: tokens.map(t => t.mint) } });
+                const priceMap = new Map(tokenPrices.map(tp => [tp.mint, tp]));
+                const tokensWithPrices = tokens.map(token => {
+                  const priceEntry = priceMap.get(token.mint);
+                  const currentPrice = priceEntry?.currentPrice ?? 0;
+                  const buyPrice = token.buyPrice ?? 0;
+                  const profitLossPercent =
+                    buyPrice > 0
+                      ? Number((((currentPrice - buyPrice) / buyPrice) * 100).toFixed(2))
+                      : 0;
+                  return {
+                    ...token.toObject(),
+                    currentPrice,
+                    profitLossPercent,
+                    lastUpdated: priceEntry?.lastUpdated ?? null
+                  };
+                });
+                ws.send(JSON.stringify({
+                  type: "ALL_TOKENS",
+                  tokens: tokensWithPrices
+                }));
+              }
               break;
 
             default:
