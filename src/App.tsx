@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@mui/material';
 import { BotProvider } from './context/BotContext';
 import { LandingPage } from './components/LandingPage';
@@ -8,15 +8,23 @@ import { Stats } from './components/Stats';
 import { ManualSellList } from './components/ManualSellList';
 import { WebSocketProvider, useWebSocket } from './context/webSocketContext';
 import { AutomaticSellDashboard } from './components/AutomaticSellDashboard';
+import LoginPage from './components/LoginPage';
 // import { AutomaticSellDashboard } from './components/AutomaticSellDashboard'; // Uncomment if needed
 
 // Create a new component that uses useWebSocket
 const AppContent = () => {
   const [currentView, setCurrentView] = useState<
-    'landing' | 'automatic' | 'manual' | 'manualSell' | 'automaticSell' | 'stats'
-  >('landing');
+    | 'login'
+    | 'landing'
+    | 'automatic'
+    | 'manual'
+    | 'manualSell'
+    | 'automaticSell'
+    | 'stats'
+  >('login');
 
   const { sendMessage } = useWebSocket();
+  const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('authToken'));
 
   const handleModeSelect = (mode: 'manual' | 'automatic') => {
     setCurrentView(mode);
@@ -39,6 +47,25 @@ const AppContent = () => {
     setCurrentView('landing');
   };
 
+  const handleLoginSuccess = () => {
+    setIsLoggedIn(true);
+    setCurrentView('landing');
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('authToken');
+    setIsLoggedIn(false);
+    setCurrentView('login');
+  };
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      setCurrentView('landing');
+    }
+  }, [isLoggedIn]);
+
+  //console.log('AppContent rendered', { isLoggedIn, currentView });
+
   return (
     <BotProvider>
       <div
@@ -51,13 +78,25 @@ const AppContent = () => {
           background: '#1a1a1a',
         }}
       >
+        {!isLoggedIn && (
+          <LoginPage onLoginSuccess={handleLoginSuccess} />
+        )}
+
         {currentView === 'landing' && (
-          <LandingPage
-            onSelectMode={handleModeSelect}
-            onViewStats={handleViewStats}
-            onManualSell={handleManualSell}
-            onAutomaticSell={handleAutomaticSell}
-          />
+          <div>
+            <button
+              onClick={handleLogout}
+              className="absolute top-4 right-4 px-4 py-2 bg-red-600 text-white rounded"
+            >
+              Logout
+            </button>
+            <LandingPage
+              onSelectMode={handleModeSelect}
+              onViewStats={handleViewStats}
+              onManualSell={handleManualSell}
+              onAutomaticSell={handleAutomaticSell}
+            />
+          </div>
         )}
 
         {currentView === 'automatic' && <Dashboard onBackHome={handleBackHome} />}
@@ -123,6 +162,7 @@ const AppContent = () => {
 // Main App component that provides the WebSocket context
 export const App = () => {
   return (
+    
     <WebSocketProvider>
       <AppContent />
     </WebSocketProvider>
