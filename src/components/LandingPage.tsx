@@ -1,3 +1,10 @@
+// Add this at the top of the file, before the imports
+declare global {
+  interface Window {
+    ws?: WebSocket;
+  }
+}
+
 import React from 'react';
 import { Box, Button, Paper, Typography } from '@mui/material';
 import AutoModeIcon from '@mui/icons-material/AutoMode';
@@ -5,18 +12,12 @@ import ManageSearchIcon from '@mui/icons-material/ManageSearch';
 import SellIcon from '@mui/icons-material/Sell';
 
 interface LandingPageProps {
-  onSelectMode: (mode: 'manual' | 'automatic') => void;
+  onBuyClick: () => void;
+  onSellClick: () => void;
   onViewStats: () => void;
-  onManualSell: () => void;
-  onAutomaticSell: () => void;
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({
-  onSelectMode,
-  onViewStats,
-  onManualSell,
-  onAutomaticSell
-}) => {
+export const LandingPage: React.FC<LandingPageProps> = ({ onBuyClick, onSellClick, onViewStats }) => {
   return (
     <Box 
       sx={{ 
@@ -55,10 +56,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             variant="contained"
             size="large"
             startIcon={<AutoModeIcon />}
-            onClick={() => onSelectMode('automatic')}
+            onClick={onBuyClick}
             sx={{
-              bgcolor: '#483D8B',
-              '&:hover': { bgcolor: '#372B7A' },
+              bgcolor: '#4CAF50',
+              '&:hover': { bgcolor: '#45a049' },
               py: 2,
               px: 4,
               fontSize: '1.1rem',
@@ -68,48 +69,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             Buy
           </Button>
           
-          {/*<Button
-            variant="contained"
-            size="large"
-            startIcon={<ManageSearchIcon />}
-            onClick={() => onSelectMode('manual')}
-            sx={{
-              bgcolor: '#483D8B',
-              '&:hover': { bgcolor: '#372B7A' },
-              py: 2,
-              px: 4,
-              fontSize: '1.1rem',
-              width: '100%'
-            }}
-          >
-            Manual Buy
-          </Button>*/}
-
-          {/* <Button
-            variant="contained"
-            size="large"
-            startIcon={<SellIcon />}
-            onClick={onManualSell}
-            sx={{
-              bgcolor: '#FF8C00',
-              '&:hover': { bgcolor: '#FF7F50' },
-              py: 2,
-              px: 4,
-              fontSize: '1.1rem',
-              width: '100%'
-            }}
-          >
-            Manual Sell
-          </Button> */}
-
           <Button
             variant="contained"
             size="large"
             startIcon={<SellIcon />}
-            onClick={onAutomaticSell}
+            onClick={onSellClick}
             sx={{
-              bgcolor: '#CD5C5C',
-              '&:hover': { bgcolor: '#B22222' },
+              bgcolor: '#f44336',
+              '&:hover': { bgcolor: '#e53935' },
               py: 2,
               px: 4,
               fontSize: '1.1rem',
@@ -118,23 +85,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           >
             Sell
           </Button>
-
-          {/* <Button
-            variant="contained"
-            size="large"
-            onClick={onViewStats}
-            sx={{
-              bgcolor: '#3CB371',
-              '&:hover': { bgcolor: '#2E8B57' },
-              py: 2,
-              px: 4,
-              fontSize: '1.1rem',
-              width: '100%'
-            }}
-          >
-            View Statistics
-          </Button> */}
         </Box>
+        <Button
+          variant="outlined"
+          onClick={onViewStats}
+          sx={{ borderColor: '#483D8B', color: '#483D8B', '&:hover': { borderColor: '#372B7A', bgcolor: 'rgba(72, 61, 139, 0.1)' } }}
+        >
+          View Wallet Stats
+        </Button>
       </Paper>
     </Box>
   );

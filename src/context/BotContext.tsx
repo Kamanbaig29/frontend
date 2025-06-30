@@ -11,20 +11,22 @@ interface TokenStats {
   status: "holding" | "selling" | "sold";
 }
 
-interface Token {
+export interface Token {
   mint: string;
-  status: "bought" | "buying" | "failed" | "detected";
-  timestamp: number;
-  creator: string;
-  supply?: string;
-  bondingCurve: string;
-  curveTokenAccount: string;
-  userTokenAccount: string;
-  metadata: string;
-  decimals: number;
-  stats?: TokenStats;
+  status?: "bought" | "buying" | "failed" | "detected";
   transactionSignature?: string;
   executionTimeMs?: number;
+  timestamp?: number; // <-- Add this line
+  buyTime?: number; // <-- Add this line
+  buyPrice?: number;
+  tokenAmount?: number;
+  creator?: string;
+  bondingCurve?: string;
+  curveTokenAccount?: string;
+  metadata?: string;
+  decimals?: number;
+  supply?: number;
+  stats?: TokenStats;
 }
 
 interface State {
@@ -33,21 +35,10 @@ interface State {
   isRunning: boolean;
 }
 
-type Action =
+export type Action =
   | { type: "ADD_TOKEN"; payload: Token }
-  | {
-      type: "UPDATE_TOKEN_STATS";
-      payload: {
-        mint: string;
-        status?: "bought" | "buying" | "failed" | "detected";
-        transactionSignature?: string;
-        executionTimeMs?: number;
-        stats?: TokenStats;
-      };
-    }
-  | { type: "ADD_LOG"; payload: { type: string; message: string } }
-  | { type: "SET_BOT_STATUS"; payload: boolean }
-  | { type: "UPDATE_TOKEN"; payload: Token };
+  | { type: "UPDATE_TOKEN"; payload: Token }
+  | { type: "RESET" }; // <-- Add this
 
 const initialState: State = {
   tokens: [],
@@ -65,28 +56,6 @@ const reducer = (state: State, action: Action): State => {
         };
       }
       return state;
-    case "UPDATE_TOKEN_STATS":
-      return {
-        ...state,
-        tokens: state.tokens.map((token) =>
-          token.mint === action.payload.mint
-            ? {
-                ...token,
-                ...(action.payload.status && { status: action.payload.status }),
-                ...(action.payload.transactionSignature && { transactionSignature: action.payload.transactionSignature }),
-                ...(action.payload.executionTimeMs && { executionTimeMs: action.payload.executionTimeMs }),
-                ...(action.payload.stats && { stats: action.payload.stats }),
-              }
-            : token
-        ),
-      };
-    case "ADD_LOG":
-      return {
-        ...state,
-        logs: [...state.logs, { ...action.payload, timestamp: Date.now() }],
-      };
-    case "SET_BOT_STATUS":
-      return { ...state, isRunning: action.payload };
     case "UPDATE_TOKEN":
       return {
         ...state,
@@ -96,6 +65,8 @@ const reducer = (state: State, action: Action): State => {
             : token
         )
       };
+    case "RESET":
+      return { ...initialState }; // <-- Yeh line use karein
     default:
       return state;
   }

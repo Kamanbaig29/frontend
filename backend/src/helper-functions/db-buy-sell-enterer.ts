@@ -76,12 +76,12 @@ export async function addOrUpdateTokenFromBuy({
 async function updateTokenPriceBuy(mint: string, buyPrice: number, userPublicKey: string) {
   try {
     const connection = getConnection();
-    const currentPrice = await getCurrentPrice(connection, mint);
+    const currentPrice = await getCurrentPrice(connection, mint, new PublicKey(userPublicKey));
     
     //if (currentPrice > 0) {
       await TokenPrice.findOneAndUpdate(
-        { mint },
-        { $set: { mint, currentPrice, lastUpdated: new Date(), buyPrice } },
+        { mint, userPublicKey },
+        { $set: { mint, userPublicKey, currentPrice, lastUpdated: new Date(), buyPrice } },
         { upsert: true }
       );
 
@@ -99,15 +99,15 @@ async function updateTokenPriceBuy(mint: string, buyPrice: number, userPublicKey
 }
 
 
-async function updateTokenPriceSell(mint: string) {
+async function updateTokenPriceSell(mint: string, userPublicKey: string) {
   try {
     const connection = getConnection();
-    const currentPrice = await getCurrentPrice(connection, mint);
+    const currentPrice = await getCurrentPrice(connection, mint, new PublicKey(userPublicKey));
     
     //if (currentPrice > 0) {
       await TokenPrice.findOneAndUpdate(
-        { mint },
-        { $set: { mint, currentPrice, lastUpdated: new Date()} },
+        { mint, userPublicKey },
+        { $set: { mint, userPublicKey, currentPrice, lastUpdated: new Date()} },
         { upsert: true }
       );
       console.log(` TokenPrice updated for ${mint}: ${currentPrice}`);
@@ -137,7 +137,7 @@ export async function updateOrRemoveTokenAfterSell({
       { $set: { amount: remainingAmount } },
     );
     console.log(`✏️ Token ${mint} amount updated to ${remainingAmount}`);
-    updateTokenPriceSell(mint);
+    updateTokenPriceSell(mint, userPublicKey);
   }
 
   // Fetch current price and update TokenPrice model after sell

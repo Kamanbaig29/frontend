@@ -4,31 +4,24 @@ import { AutoSell } from "../models/autoSell";
 import { sellToken } from "../action/sell";
 import { getSwapAccounts } from "../action/getSwapAccounts";
 import { getCurrentPrice } from "./getCurrentPrice";
-import { RPC_ENDPOINT } from "../config/test-config";
 import { updateOrRemoveTokenAfterSell } from "./db-buy-sell-enterer";
+import { getUserKeypairByWallet } from "../utils/userWallet";
 
 // --- CONFIG & UTILS ---
 const MEMEHOME_PROGRAM_ID = new PublicKey(process.env.MEMEHOME_PROGRAM_ID!);
-const secretKeyString = process.env.USER_SECRET_KEY!;
-const secretKeyArray: number[] = JSON.parse(secretKeyString);
-const userKeypair = Keypair.fromSecretKey(Uint8Array.from(secretKeyArray));
-const connection = new Connection(RPC_ENDPOINT);
 
 // Track karta hai ki kaunsa token abhi process ho raha hai
 const processingSells = new Set<string>();
 
 // --- SYNC FUNCTION ---
-async function syncWalletToAutoSell() {
+async function syncWalletToAutoSell(userPublicKey: PublicKey) {
   const startTime = Date.now();
   try {
-    const allWalletTokens = await WalletToken.find({});
-
-    //console.log(`[SYNC] Found ${allWalletTokens.length} tokens in WalletToken to sync.`);
+    const allWalletTokens = await WalletToken.find({ userPublicKey: userPublicKey.toBase58() });
 
     for (const token of allWalletTokens) {
       const { mint, userPublicKey, buyPrice } = token;
 
-      // findOneAndUpdate with upsert:true
       await AutoSell.findOneAndUpdate(
         { mint, userPublicKey },
         {
@@ -43,7 +36,7 @@ async function syncWalletToAutoSell() {
     }
     const endTime = Date.now();
     const duration = ((endTime - startTime) / 1000).toFixed(2);
-    console.log(`[SYNC] ✅ Sync cycle completed in ${duration}s.`);
+    console.log(`[SYNC] ✅ Sync cycle completed in ${duration}s for user ${userPublicKey.toBase58()}.`);
   } catch (error) {
     const endTime = Date.now();
     const duration = ((endTime - startTime) / 1000).toFixed(2);
@@ -52,14 +45,14 @@ async function syncWalletToAutoSell() {
 }
 
 // --- AUTO-SELL LOGIC ---
-async function checkAndExecuteAutoSells() {
+async function checkAndExecuteAutoSells(connection: Connection, userPublicKey: PublicKey) {
   try {
-    const configsToSell = await AutoSell.find({ autoSellEnabled: true });
+    const configsToSell = await AutoSell.find({ autoSellEnabled: true, userPublicKey: userPublicKey.toBase58() });
 
     for (const config of configsToSell) {
       const key = `${config.mint}_${config.userPublicKey}`;
       if (processingSells.has(key)) {
-        continue; // Pehle se process ho raha hai, skip karo
+        continue;
       }
 
       processingSells.add(key);
@@ -70,10 +63,20 @@ async function checkAndExecuteAutoSells() {
         // DB se latest token info lo
         const token = await WalletToken.findOne({ mint, userPublicKey });
         if (!token) {
-          continue; // Token wallet mein nahi hai
+          continue;
         }
 
-        const currentPrice = await getCurrentPrice(connection, mint);
+        // --- DYNAMIC: Get user keypair for this user ---
+        let userKeypair: Keypair;
+        try {
+          userKeypair = await getUserKeypairByWallet(token.userPublicKey);
+        } catch (e) {
+          console.error(`[AUTO-SELL] ❌ Could not get keypair for user ${token.userPublicKey}:`, e);
+          continue;
+        }
+
+        // Use dynamic keypair for price
+        const currentPrice = await getCurrentPrice(connection, mint, userKeypair.publicKey);
         const buyPriceNum = Number(buyPrice) || 0;
         if (!buyPriceNum || !currentPrice) {
           continue;
@@ -106,7 +109,7 @@ async function checkAndExecuteAutoSells() {
           if (sellAmountInSmallestUnit > 0) {
             const swapAccounts = await getSwapAccounts({
               mintAddress: mint,
-              buyer: userKeypair.publicKey, // Sell transaction payer
+              buyer: userKeypair.publicKey,
               connection,
               programId: MEMEHOME_PROGRAM_ID,
             });
@@ -116,7 +119,7 @@ async function checkAndExecuteAutoSells() {
               userKeypair,
               programId: MEMEHOME_PROGRAM_ID,
               amount: BigInt(sellAmountInSmallestUnit),
-              minOut: BigInt(1), // Basic minOut, slippage handle karega
+              minOut: BigInt(1),
               swapAccounts,
               slippage: Number(slippage) || 5,
               priorityFee: Number(priorityFee) || 0.001,
@@ -125,7 +128,6 @@ async function checkAndExecuteAutoSells() {
 
             if (txSignature) {
               console.log(`[AUTO-SELL] ✅ Sold ${sellAmount} of ${mint}. Tx: ${txSignature}`);
-              // DB update karo
               await updateOrRemoveTokenAfterSell({ mint, userPublicKey, remainingAmount: remainingAmount.toString() });
               await AutoSell.updateOne({ mint, userPublicKey }, { $set: { autoSellEnabled: false } });
             }
@@ -134,7 +136,7 @@ async function checkAndExecuteAutoSells() {
       } catch (error) {
         console.error(`[AUTO-SELL] ❌ Error processing ${config.mint}:`, error);
       } finally {
-        processingSells.delete(key); // Process khatam, set se hata do
+        processingSells.delete(key);
       }
     }
   } catch (error) {
@@ -143,16 +145,16 @@ async function checkAndExecuteAutoSells() {
 }
 
 // --- MAIN ENTRY ---
-export function startAutoSellWorker(): () => void {
-  console.log("🔁 Auto-sell worker started.");
+export function startAutoSellWorker(connection: Connection, userPublicKey: PublicKey): () => void {
+  console.log(`🔁 Auto-sell worker started for user: ${userPublicKey.toBase58()}`);
 
   // 1. Sync Logic
-  syncWalletToAutoSell(); // Pehli baar
-  const syncIntervalId = setInterval(syncWalletToAutoSell, 60 * 1000); // Har minute
+  syncWalletToAutoSell(userPublicKey); // Pehli baar
+  const syncIntervalId = setInterval(() => syncWalletToAutoSell(userPublicKey), 60 * 1000);
 
   // 2. Auto-Sell Logic
-  checkAndExecuteAutoSells(); // Pehli baar
-  const sellIntervalId = setInterval(checkAndExecuteAutoSells, 5000); // Har 5 seconds
+  checkAndExecuteAutoSells(connection, userPublicKey); // Pehli baar
+  const sellIntervalId = setInterval(() => checkAndExecuteAutoSells(connection, userPublicKey), 5000);
 
   // Cleanup function
   return () => {

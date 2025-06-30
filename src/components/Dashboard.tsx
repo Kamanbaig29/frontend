@@ -18,9 +18,6 @@ import {
   Grid,
   Typography,
   Box,
-  Tabs,
-  Tab,
-  Alert,
   CircularProgress,
 } from '@mui/material';
 
@@ -55,8 +52,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBackHome }) => {
   const { state, dispatch } = useBot();
   const { ws, status: wsStatus, sendMessage } = useWebSocket();
   const [status, setStatus] = useState('Initializing...');
-  const [activeTab, setActiveTab] = useState(0);
-
   const [settings, setSettings] = useState<AutoSnipeSettings>({
     buyAmount: 0.1,    // Default 0.1 SOL
     slippage: 1,       // Default 1%
@@ -65,19 +60,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBackHome }) => {
     autoBuyEnabled: false
   });
 
-  // Manual Buy State
-  const [manualBuyMint, setManualBuyMint] = useState('');
-  const [manualBuyAmount, setManualBuyAmount] = useState('');
-  const [manualBuyPrivateKey, setManualBuyPrivateKey] = useState('');
-  const [manualBuySlippage, setManualBuySlippage] = useState('1');
-  const [manualBuyPriorityFee, setManualBuyPriorityFee] = useState('0.001');
-  const [manualBuyBribeAmount, setManualBuyBribeAmount] = useState('0');
-  const [manualBuyLoading, setManualBuyLoading] = useState(false);
-  const [manualBuyError, setManualBuyError] = useState<string | null>(null);
-  const [manualBuySuccess, setManualBuySuccess] = useState<string | null>(null);
-
   useEffect(() => {
     if (ws && wsStatus === 'connected') {
+      // Send authentication first
+      const token = localStorage.getItem('token');
+      if (token) {
+        sendMessage({
+          type: 'AUTHENTICATE',
+          token: token
+        });
+      }
+
+      // Then set mode to automatic
       sendMessage({
         type: 'SET_MODE',
         mode: 'automatic'
@@ -104,13 +98,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBackHome }) => {
             type: 'UPDATE_TOKEN',
             payload: {
               mint: data.details.mint,
-              status: 'Bought',
+              status: 'bought', // <-- yahan fix karo
               executionTimeMs: data.details.executionTimeMs,
               transactionSignature: data.details.txSignature,
               buyTime: data.details.buyTime,
               buyPrice: data.details.buyPrice,
               tokenAmount: data.details.tokenAmount,
-              // Include all other token details
               creator: data.details.creator,
               bondingCurve: data.details.bondingCurve,
               curveTokenAccount: data.details.curveTokenAccount,
@@ -119,18 +112,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBackHome }) => {
               supply: data.details.supply
             }
           });
-        }
-
-        // Handle manual buy responses
-        if (data.type === 'MANUAL_BUY_SUCCESS') {
-          setManualBuySuccess(`Token bought successfully! Transaction: ${data.signature}. Time: ${data.details.executionTimeMs}ms`);
-          setManualBuyMint('');
-          setManualBuyAmount('');
-          setManualBuyPrivateKey('');
-          setManualBuyLoading(false);
-        } else if (data.type === 'MANUAL_BUY_ERROR') {
-          setManualBuyError(data.error || 'Transaction failed');
-          setManualBuyLoading(false);
         }
       };
 
@@ -150,56 +131,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBackHome }) => {
     if (ws && wsStatus === 'connected') {
       sendMessage({
         type: 'UPDATE_AUTO_SNIPE_SETTINGS',
-        settings: newSettings
-      });
-    }
-  };
-
-  const handleManualBuy = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setManualBuyLoading(true);
-    setManualBuyError(null);
-    setManualBuySuccess(null);
-
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-      setManualBuyError('WebSocket is not connected. Please wait or check server.');
-      setManualBuyLoading(false);
-      return;
-    }
-
-    if (!manualBuyMint || !manualBuyAmount || !manualBuyPrivateKey) {
-      setManualBuyError('All fields are required');
-      setManualBuyLoading(false);
-      return;
-    }
-
-    try {
-      const walletAddress = import.meta.env.VITE_BUYER_PUBLIC_KEY || '';
-      if (!walletAddress) {
-        setManualBuyError('Wallet address not found in environment variables');
-        setManualBuyLoading(false);
-        return;
-      }
-
-      const messageToSend = {
-        type: 'MANUAL_BUY',
-        data: {
-          mintAddress: manualBuyMint,
-          amount: parseFloat(manualBuyAmount),
-          privateKey: manualBuyPrivateKey,
-          walletAddress: walletAddress,
-          slippage: parseFloat(manualBuySlippage),
-          priorityFee: parseFloat(manualBuyPriorityFee),
-          bribeAmount: parseFloat(manualBuyBribeAmount)
+        settings: {
+          autoBuyEnabled: newSettings.autoBuyEnabled,
+          buyAmount: Math.floor(Number(newSettings.buyAmount) * 1_000_000_000), // <-- YEH LINE
+          slippage: newSettings.slippage,
+          priorityFee: Math.floor(Number(newSettings.priorityFee) * 1_000_000_000),
+          bribeAmount: Math.floor(Number(newSettings.bribeAmount) * 1_000_000_000)
         }
-      };
-
-      console.log('Sending MANUAL_BUY message:', messageToSend);
-      sendMessage(messageToSend);
-
-    } catch (err) {
-      setManualBuyError(err instanceof Error ? err.message : 'An unknown error occurred during buy request.');
-      setManualBuyLoading(false);
+      });
     }
   };
 
@@ -323,12 +262,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBackHome }) => {
                 <TableCell key="status">
                   <Chip
                     label={token.status}
-                    color={getStatusColor(token.status)}
+                    color={getStatusColor(token.status ?? 'detected')}
                     size="small"
                   />
                 </TableCell>
                 <TableCell key="time">
-                  {new Date(token.timestamp).toLocaleTimeString()}
+                  {new Date(token.timestamp ?? 0).toLocaleTimeString()}
                 </TableCell>
                 <TableCell key="buy-time">
                   {token.executionTimeMs ? `${token.executionTimeMs}ms` : '-'}
@@ -340,7 +279,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBackHome }) => {
                 </TableCell>
                 <TableCell key="creator">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-white">{token.creator.slice(0, 8)}...</span>
+                    <span className="font-mono text-white">{token.creator?.slice(0, 8) ?? '--------'}...</span>
                   </div>
                 </TableCell>
                 <TableCell key="supply">
@@ -348,17 +287,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBackHome }) => {
                 </TableCell>
                 <TableCell key="bonding-curve">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-white">{token.bondingCurve.slice(0, 8)}...</span>
+                    <span className="font-mono text-white">{token.bondingCurve?.slice(0, 8) ?? '--------'}...</span>
                   </div>
                 </TableCell>
                 <TableCell key="curve-token">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-white">{token.curveTokenAccount.slice(0, 8)}...</span>
+                    <span className="font-mono text-white">{token.curveTokenAccount?.slice(0, 8) ?? '--------'}...</span>
                   </div>
                 </TableCell>
                 <TableCell key="metadata">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-white">{token.metadata.slice(0, 8)}...</span>
+                    <span className="font-mono text-white">{token.metadata?.slice(0, 8) ?? '--------'}...</span>
                   </div>
                 </TableCell>
                 <TableCell key="decimals">{token.decimals}</TableCell>
@@ -373,205 +312,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBackHome }) => {
     </div>
   );
 
-  const renderManualBuySection = () => (
-    <Paper
-      elevation={3}
-      sx={{
-        p: 3,
-        mt: 3,
-        bgcolor: '#6A5ACD',
-        color: 'white',
-        borderRadius: 2
-      }}
-    >
-      <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'white' }}>
-        Manual Token Buy
-      </Typography>
+  const handleBackHomeClick = () => {
+    // Reset tokens and settings (frontend)
+    dispatch({ type: 'RESET' });
+    setSettings({
+      buyAmount: 0.1,
+      slippage: 1,
+      priorityFee: 0,
+      bribeAmount: 0,
+      autoBuyEnabled: false
+    });
+    setStatus('Initializing...');
 
-      <form onSubmit={handleManualBuy}>
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
-            <TextField
-              label="Token Mint Address"
-              value={manualBuyMint}
-              onChange={(e) => setManualBuyMint(e.target.value)}
-              required
-              fullWidth
-              variant="outlined"
-              sx={{
-                '& .MuiInputBase-input': { color: 'white' },
-                '& .MuiInputLabel-root': { color: 'white' },
-                '& .MuiOutlinedInput-root': {
-                  '& fieldset': { borderColor: 'white' },
-                  '&:hover fieldset': { borderColor: 'white' },
-                  '&.Mui-focused fieldset': { borderColor: 'white' }
-                }
-              }}
-            />
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <TextField
-              label="Amount (SOL)"
-              type="number"
-              value={manualBuyAmount}
-              onChange={(e) => setManualBuyAmount(e.target.value)}
-              required
-              fullWidth
-              variant="outlined"
-              inputProps={{
-                min: "0.1",
-                step: "0.1",
-                pattern: "^[0-9]*[.]?[0-9]*$"
-              }}
-              sx={{
-                '& .MuiInputBase-input': { color: 'white' },
-                '& .MuiInputLabel-root': { color: 'white' },
-                '& .MuiOutlinedInput-root': {
-                  '& fieldset': { borderColor: 'white' },
-                  '&:hover fieldset': { borderColor: 'white' },
-                  '&.Mui-focused fieldset': { borderColor: 'white' }
-                }
-              }}
-            />
-          </Grid>
-          <Grid item xs={12}>
-            <TextField
-              label="Wallet Private Key"
-              type="password"
-              value={manualBuyPrivateKey}
-              onChange={(e) => setManualBuyPrivateKey(e.target.value)}
-              required
-              fullWidth
-              variant="outlined"
-              sx={{
-                '& .MuiInputBase-input': { color: 'white' },
-                '& .MuiInputLabel-root': { color: 'white' },
-                '& .MuiOutlinedInput-root': {
-                  '& fieldset': { borderColor: 'white' },
-                  '&:hover fieldset': { borderColor: 'white' },
-                  '&.Mui-focused fieldset': { borderColor: 'white' }
-                }
-              }}
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <TextField
-              label="Slippage (%)"
-              type="number"
-              value={manualBuySlippage}
-              onChange={(e) => setManualBuySlippage(e.target.value)}
-              required
-              fullWidth
-              variant="outlined"
-              inputProps={{
-                min: "0.1",
-                max: "100",
-                step: "0.1"
-              }}
-              sx={{
-                '& .MuiInputBase-input': { color: 'white' },
-                '& .MuiInputLabel-root': { color: 'white' },
-                '& .MuiOutlinedInput-root': {
-                  '& fieldset': { borderColor: 'white' },
-                  '&:hover fieldset': { borderColor: 'white' },
-                  '&.Mui-focused fieldset': { borderColor: 'white' }
-                }
-              }}
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <TextField
-              label="Priority Fee (SOL)"
-              type="number"
-              value={manualBuyPriorityFee}
-              onChange={(e) => setManualBuyPriorityFee(e.target.value)}
-              required
-              fullWidth
-              variant="outlined"
-              inputProps={{
-                min: "0",
-                step: "0.001"
-              }}
-              sx={{
-                '& .MuiInputBase-input': { color: 'white' },
-                '& .MuiInputLabel-root': { color: 'white' },
-                '& .MuiOutlinedInput-root': {
-                  '& fieldset': { borderColor: 'white' },
-                  '&:hover fieldset': { borderColor: 'white' },
-                  '&.Mui-focused fieldset': { borderColor: 'white' }
-                }
-              }}
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <TextField
-              label="Bribe Amount (SOL)"
-              type="number"
-              value={manualBuyBribeAmount}
-              onChange={(e) => setManualBuyBribeAmount(e.target.value)}
-              required
-              fullWidth
-              variant="outlined"
-              inputProps={{
-                min: "0",
-                step: "0.001"
-              }}
-              sx={{
-                '& .MuiInputBase-input': { color: 'white' },
-                '& .MuiInputLabel-root': { color: 'white' },
-                '& .MuiOutlinedInput-root': {
-                  '& fieldset': { borderColor: 'white' },
-                  '&:hover fieldset': { borderColor: 'white' },
-                  '&.Mui-focused fieldset': { borderColor: 'white' }
-                }
-              }}
-            />
-          </Grid>
-          <Grid item xs={12}>
-            <Button
-              type="submit"
-              variant="contained"
-              disabled={manualBuyLoading || wsStatus !== 'connected'}
-              fullWidth
-              sx={{
-                bgcolor: '#483D8B',
-                '&:hover': { bgcolor: '#372B7A' },
-                height: '48px',
-                fontSize: '1.1rem',
-                fontWeight: 'bold'
-              }}
-            >
-              {manualBuyLoading ? <CircularProgress size={24} color="inherit" /> : 'Buy Token'}
-            </Button>
-          </Grid>
-        </Grid>
-      </form>
+    // Backend ko bhi inform karo
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      sendMessage({ type: 'RESET_STATE' });
+    }
 
-      {manualBuyError && (
-        <Alert
-          severity="error"
-          sx={{
-            mt: 2,
-            '& .MuiAlert-message': { color: '#d32f2f' }
-          }}
-        >
-          {manualBuyError}
-        </Alert>
-      )}
-
-      {manualBuySuccess && (
-        <Alert
-          severity="success"
-          sx={{
-            mt: 2,
-            '& .MuiAlert-message': { color: '#2e7d32' }
-          }}
-        >
-          {manualBuySuccess}
-        </Alert>
-      )}
-    </Paper>
-  );
+    onBackHome(); // Go back to home page
+  };
 
   return (
     <div className="container mx-auto p-4">
@@ -583,7 +342,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBackHome }) => {
           </p>
         </div>
         <Button
-          onClick={onBackHome}
+          onClick={handleBackHomeClick} // <-- Use new handler
           variant="contained"
           sx={{
             bgcolor: '#483D8B',
@@ -594,22 +353,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBackHome }) => {
           Back to Home
         </Button>
       </div>
-
-      <Tabs 
-        value={activeTab} 
-        onChange={(e, newValue) => setActiveTab(newValue)}
-        sx={{
-          '& .MuiTab-root': { color: 'white' },
-          '& .Mui-selected': { color: '#483D8B' },
-          '& .MuiTabs-indicator': { backgroundColor: '#483D8B' }
-        }}
-      >
-        <Tab label="Auto Buy" />
-        <Tab label="Manual Buy" />
-      </Tabs>
-
-      {activeTab === 0 && renderAutoBuySection()}
-      {activeTab === 1 && renderManualBuySection()}
+      {renderAutoBuySection()}
     </div>
   );
 };

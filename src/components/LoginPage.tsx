@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import bs58 from 'bs58';
 
 interface LoginPageProps {
   onLoginSuccess: () => void;
@@ -80,9 +81,10 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     e.preventDefault();
     try {
       const data = await handleApiCall('/api/auth/login', { email, password }, 'Login successful!');
-      // TODO: Store data.token in localStorage or context
-      localStorage.setItem('authToken', data.token); 
-      onLoginSuccess();
+      if (data.token) {
+        localStorage.setItem('token', data.token);
+        onLoginSuccess();
+      }
     } catch (error) {
        // Error is already set by handleApiCall
     }
@@ -107,20 +109,21 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       const signed = await provider.signMessage(encodedMessage, "utf8");
 
       // Send publicKey, message, and signature to backend for verification
+      const signature = bs58.encode(signed.signature);
+
       const response = await fetch('http://localhost:4000/api/auth/phantom-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           publicKey,
           message,
-          signature: Array.from(signed.signature), // send as array for backend
+          signature,
         }),
       });
 
       const data = await response.json();
-      if (response.ok) {
-        // Save token, login success
-        localStorage.setItem('authToken', data.token);
+      if (data.token) {
+        localStorage.setItem('token', data.token);
         onLoginSuccess();
       } else {
         alert(data.message || 'Phantom login failed');

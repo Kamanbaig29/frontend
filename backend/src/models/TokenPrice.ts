@@ -3,17 +3,20 @@ import { wss } from '../trade-bot/tokenListner';
 
 export interface ITokenPrice extends Document {
   mint: string;
+  userPublicKey: string;
   currentPrice: number;
   buyPrice?: number;
   lastUpdated?: Date;
 }
 
 const TokenPriceSchema: Schema = new Schema({
-  mint: { type: String, required: true, unique: true },
+  mint: { type: String, required: true },
+  userPublicKey: { type: String, required: true },
   currentPrice: { type: Number, required: true },
   buyPrice: { type: Number },
   lastUpdated: { type: Date }
 });
+TokenPriceSchema.index({ mint: 1, userPublicKey: 1 }, { unique: true });
 
 // Post-update hook for findOneAndUpdate
 TokenPriceSchema.post('findOneAndUpdate', async function (doc: any) {

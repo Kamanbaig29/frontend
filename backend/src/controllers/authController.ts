@@ -6,6 +6,8 @@ import User from '../models/user_auth'; // Importing our User model
 import sendEmail from '../utils/sendEmail'; // Importing our email utility
 import { PublicKey } from '@solana/web3.js';
 import * as ed25519 from '@noble/ed25519';
+import { generateBotWallet } from '../utils/walletUtils';
+import bs58 from 'bs58';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'default_secret';
 
@@ -43,12 +45,17 @@ export const signup: RequestHandler = async (req, res) => {
     const passwordHash = await bcrypt.hash(password, salt);
     const otp = crypto.randomInt(100000, 999999).toString();
 
+    // Generate wallet for new user
+    const { publicKey, encryptedSecretKey } = generateBotWallet();
+
     user = new User({
       name,
       email,
       passwordHash,
       otp,
       otpExpires: new Date(Date.now() + 10 * 60 * 1000),
+      botWalletPublicKey: publicKey,
+      botWalletSecretKeyEncrypted: encryptedSecretKey
     });
 
     await user.save();
@@ -99,93 +106,118 @@ export const verifyOtp: RequestHandler = async (req, res) => {
 
 // --- 3. LOGIN CONTROLLER ---
 export const login: RequestHandler = async (req, res) => {
+  try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
-        res.status(400).json({ message: 'Email and password are required.' });
-        return;
-    }
-
-    try {
-        const user = await User.findOne({ email }).select('+passwordHash');
-
-        if (!user || !user.passwordHash) {
-            res.status(401).json({ message: 'Invalid credentials.' });
-            return;
-        }
-
-        if (!user.isVerified) {
-            res.status(403).json({ message: 'Account is not verified. Please check your email.' });
-            return;
-        }
-
-        const isMatch = await bcrypt.compare(password, user.passwordHash);
-        if (!isMatch) {
-            res.status(401).json({ message: 'Invalid credentials.' });
-            return;
-        }
-
-        const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '1d' });
-        
-        const userResponse = user.toObject();
-        delete userResponse.passwordHash;
-
-        res.status(200).json({
-            message: 'Login successful.',
-            token,
-            user: userResponse
-        });
-
-    } catch (error) {
-        console.error('Login Error:', error);
-        res.status(500).json({ message: 'Server error during login.' });
-    }
-};
-
-export const phantomLogin = async (req: Request, res: Response) => {
-  const { publicKey, message, signature } = req.body;
-
-  if (!publicKey || !message || !signature) {
-    res.status(400).json({ message: 'Missing parameters.' });
-    return;
-  }
-
-  try {
-    const pubKey = new PublicKey(publicKey);
-    const msgUint8 = new TextEncoder().encode(message);
-    const sigUint8 = Uint8Array.from(signature);
-
-    // Use noble-ed25519 to verify
-    const isValid = await ed25519.verify(
-      sigUint8,
-      msgUint8,
-      pubKey.toBytes()
-    );
-
-    if (!isValid) {
-      res.status(401).json({ message: 'Invalid signature.' });
+    // Find user by email and explicitly select passwordHash
+    const user = await User.findOne({ email }).select('+passwordHash');
+    if (!user || !user.passwordHash) {
+      res.status(401).json({ message: 'Invalid credentials' });
       return;
     }
 
-    // Find or create user
-    let user = await User.findOne({ solanaAddress: publicKey });
-    if (!user) {
-      user = await User.create({
-        solanaAddress: publicKey,
-        isVerified: true,
-      });
+    // Check password
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+    if (!isPasswordValid) {
+      res.status(401).json({ message: 'Invalid credentials' });
+      return;
     }
 
-    // Create JWT
-    const token = jwt.sign({ id: user.id, solanaAddress: publicKey }, process.env.JWT_SECRET || 'secret', { expiresIn: '1d' });
+    // Generate JWT token
+    const token = jwt.sign(
+      { id: user._id, email: user.email },
+      process.env.JWT_SECRET!,
+      { expiresIn: '24h' }
+    );
 
-    res.status(200).json({
-      message: 'Phantom login successful.',
+    res.json({
+      message: 'Login successful',
       token,
-      user: { solanaAddress: publicKey }
+      user: {
+        id: user._id,
+        email: user.email,
+        walletAddress: user.botWalletPublicKey
+      }
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ message: 'Login failed' });
+  }
+};
+
+export const phantomLogin: RequestHandler = async (req, res) => {
+  try {
+    const { publicKey, signature, message } = req.body;
+
+    // Defensive check
+    if (typeof publicKey !== "string" || typeof signature !== "string" || typeof message !== "string") {
+      res.status(400).json({ message: "Invalid payload for Phantom login" });
+      return;
+    }
+
+    // Debug log
+    console.log("Phantom login payload:", { publicKey, signature, message });
+
+    // Verify signature
+    const messageBytes = new TextEncoder().encode(message);
+    const publicKeyBytes = bs58.decode(publicKey);
+    const signatureBytes = bs58.decode(signature);
+
+    const isValid = await ed25519.verify(signatureBytes, messageBytes, publicKeyBytes);
+    if (!isValid) {
+      res.status(401).json({ message: 'Invalid signature' });
+      return;
+    }
+
+    // Find or create user - use solanaAddress field from model
+    let user = await User.findOne({ solanaAddress: publicKey });
+    
+    if (!user) {
+      // Create new user with Phantom wallet
+      const salt = await bcrypt.genSalt(10);
+      const passwordHash = await bcrypt.hash(Math.random().toString(36), 10);
+      
+      // Generate wallet for new user
+      const { publicKey: newPublicKey, encryptedSecretKey } = generateBotWallet();
+
+      user = new User({
+        solanaAddress: publicKey,
+        email: `${publicKey.slice(0, 8)}...@phantom.com`,
+        passwordHash: passwordHash,
+        isVerified: true,
+        botWalletPublicKey: newPublicKey,
+        botWalletSecretKeyEncrypted: encryptedSecretKey
+      });
+      await user.save();
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { id: user._id, email: user.email },
+      process.env.JWT_SECRET!,
+      { expiresIn: '24h' }
+    );
+
+    res.json({
+      message: 'Phantom login successful',
+      token,
+      user: {
+        id: user._id,
+        email: user.email,
+        walletAddress: user.botWalletPublicKey
+      }
     });
   } catch (error) {
     console.error('Phantom login error:', error);
-    res.status(500).json({ message: 'Server error during Phantom login.' });
+    res.status(500).json({ message: 'Phantom login failed' });
+  }
+};
+
+export const logout: RequestHandler = async (req, res) => {
+  try {
+    res.json({ message: 'Logout successful' });
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({ message: 'Logout failed' });
   }
 };

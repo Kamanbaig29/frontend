@@ -63,17 +63,21 @@ export async function buyToken({
   // Total required amount calculate karenge
   const totalRequired = amount + priorityFee + bribeAmount + networkFeeBuffer;
   
-  //console.log("Parameters:", {
-    //amount: amountInSol + " SOL",
-    //adjustedAmount: (adjustedAmount / 1e9) + " SOL",
-    //minOut: minOut,
-    //direction: direction,
-    //slippage: slippage + "%",
-    //priorityFee: priorityFee / 1e9 + " SOL",
-    //bribeAmount: bribeAmount / 1e9 + " SOL",
-    //totalRequired: totalRequired / 1e9 + " SOL",
-    //maxAllowedAmount: maxAllowedAmount / 1e9 + " SOL"
-  //});
+  console.log("=== BUY DEBUG ===", {
+    amount, // lamports
+    adjustedAmount, // amount/1000
+    minOut,
+    direction,
+    slippage,
+    priorityFee,
+    bribeAmount,
+    user: userKeypair.publicKey.toBase58(),
+    feeRecipient: swapAccounts.feeRecipient.toBase58(),
+    bondingCurve: swapAccounts.bondingCurve.toBase58(),
+    tokenMint: swapAccounts.tokenMint.toBase58(),
+    curveTokenAccount: swapAccounts.curveTokenAccount.toBase58(),
+    userTokenAccount: swapAccounts.userTokenAccount.toBase58(),
+  });
 
   // Check karenge ke total required amount max allowed amount se zyada to nahi hai
   if (totalRequired > maxAllowedAmount) {

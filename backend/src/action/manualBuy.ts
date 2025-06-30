@@ -10,11 +10,12 @@ import {
 } from "@solana/spl-token";
 import { getSwapAccounts } from "./getSwapAccounts";
 import { buyToken } from "./buy";
+import { getCurrentPrice } from "../helper-functions/getCurrentPrice";
 
-interface ManualBuyResult {
-  success: boolean;
-  signature?: string;
-  message?: string;
+export interface ManualBuyResult {
+  signature: string;
+  tokenAmount?: number | string;
+  buyPrice: number; // <-- Add this line
   error?: string;
   details?: {
     mintAddress: string;
@@ -146,18 +147,29 @@ export async function handleManualBuy(
     // 7. Prepare buy transaction with new parameters
     //console.log("\n7️⃣ Preparing buy transaction...");
     const slippage = options?.slippage || 1;
-    const priorityFeeLamports = options?.priorityFee ? Math.floor(options.priorityFee * 1e9) : 1_000_000;
-    const bribeAmountLamports = options?.bribeAmount ? Math.floor(options.bribeAmount * 1e9) : 0;
+    const priorityFeeLamports = options?.priorityFee ?? 1_000_000;
+    const bribeAmountLamports = options?.bribeAmount ?? 0;
 
     // Calculate total required amount including fees
-    const totalRequired = amount + priorityFeeLamports + bribeAmountLamports + 10_000_000;
+    const networkFeeBuffer = 2_000_000; // lamports
+    const totalRequired = amount + priorityFeeLamports + bribeAmountLamports + networkFeeBuffer;
 
     // Check wallet balance
-    const balance = await connection.getBalance(userKeypair.publicKey);
+    const balance = await connection.getBalance(userKeypair.publicKey); // lamports
+
+    console.log("[MANUAL_BUY] manualBuy.ts values:");
+    console.log("  amount:", amount);
+    console.log("  priorityFee:", priorityFeeLamports);
+    console.log("  bribeAmount:", bribeAmountLamports);
+    console.log("  networkFeeBuffer:", networkFeeBuffer);
+    console.log("  totalRequired:", totalRequired);
+    console.log("  balance:", balance);
+
     if (balance < totalRequired) {
       throw new Error(`Insufficient balance. Need ${totalRequired / 1e9} SOL (including fees)`);
     }
-
+    // Get current price
+    const buyPricePerToken = await getCurrentPrice(connection, mintAddress, userKeypair.publicKey);
     // 8. Execute buy transaction with new parameters
     console.log("\n8️⃣ Executing buy transaction...");
     try {
@@ -206,28 +218,45 @@ export async function handleManualBuy(
         throw new Error("Failed to fetch transaction details");
       }
 
-      console.log("\n✨ Transaction successful!");
-      console.log("----------------------------------------");
-      console.log(`📝 Signature: ${signature}`);
-      console.log(`📊 Block: ${txDetails.slot}`);
-      console.log(`💰 Fee: ${txDetails.meta?.fee} lamports`);
-      console.log("----------------------------------------\n");
+      if (!txDetails.meta) {
+        throw new Error("Transaction meta is null");
+      }
 
-      // FIX: Added userTokenAccount to details
+      // Get actual tokens received
+      const userTokenAccount = swapAccounts.userTokenAccount;
+      const accountKeys = txDetails.transaction.message.getAccountKeys().staticAccountKeys;
+      const userTokenAccountIndex = accountKeys.findIndex(
+        (key) => key.toBase58() === userTokenAccount.toBase58()
+      );
+
+      const preTokenBalance =
+        txDetails.meta.preTokenBalances?.find(
+          (balance) => balance.accountIndex === userTokenAccountIndex
+        )?.uiTokenAmount.uiAmount || 0;
+
+      const postTokenBalance =
+        txDetails.meta.postTokenBalances?.find(
+          (balance) => balance.accountIndex === userTokenAccountIndex
+        )?.uiTokenAmount.uiAmount || 0;
+
+      const tokensReceived = postTokenBalance - preTokenBalance;
+      const total_token = postTokenBalance + preTokenBalance;
+      // Calculate buy price per token (SOL per token)
+
       return {
-        success: true,
         signature,
-        message: "Token bought successfully",
+        tokenAmount: tokensReceived, // tokens (not SOL)
+        buyPrice: buyPricePerToken,  // price per token (SOL per token)
         details: {
           mintAddress,
-          amount: amount / 1e9,
-          price: amount / 1e9,
+          amount: total_token,     // tokens
+          price: buyPricePerToken,    // SOL per token
           timestamp: Date.now(),
           transactionFee: txDetails.meta?.fee,
           slippage: slippage,
           priorityFee: priorityFeeLamports / 1e9,
           bribeAmount: bribeAmountLamports / 1e9,
-          userTokenAccount: swapAccounts.userTokenAccount.toBase58() // Added this line
+          userTokenAccount: swapAccounts.userTokenAccount.toBase58()
         },
       };
     } catch (error) {
@@ -237,7 +266,8 @@ export async function handleManualBuy(
   } catch (error) {
     console.error("\n❌ Manual buy failed:", error);
     return {
-      success: false,
+      signature: "",
+      buyPrice: 0, // <-- Add this line
       error: error instanceof Error ? error.message : "Unknown error occurred",
     };
   }

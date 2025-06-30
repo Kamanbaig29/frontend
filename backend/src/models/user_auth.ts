@@ -70,11 +70,11 @@ const UserSchema: Schema = new Schema({
   botWalletPublicKey: {
     type: String,
     unique: true,
-    sparse: true, // `sparse` is needed for optional unique fields
+    sparse: true, // Allows null values
   },
   botWalletSecretKeyEncrypted: {
     type: String,
-    select: false,
+    select: false, // Hide from default queries
   },
 
   // --- Timestamps ---

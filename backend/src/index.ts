@@ -5,14 +5,16 @@ dotenv.config();
 import express from 'express';
 import cors from 'cors';
 import authRoutes from './routes/authRoutes'; 
+import botRoutes from './routes/botRoutes';
 
 // --- Existing Bot Imports ---
 import { connectDatabase } from "./config/database";
-import { startTokenListener } from "./trade-bot/tokenListner";
+//import { startTokenListener } from "./trade-bot/tokenListner";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { startWalletSyncWatcher } from "../src/helper-functions/wallet-token-watcher";
 import { startPriceUpdateService } from '../src/helper-functions/priceUpdateService';
 import { startAutoSellWorker } from './helper-functions/autosellworker';
+import { wss } from './trade-bot/tokenListner';
 
 // import { startDbStatsBroadcaster } from './helper-functions/dbStatsBroadcaster';
 
@@ -28,11 +30,12 @@ async function main() {
 
   // --- 2. Setup and Start Express API Server ---
   const app = express();
-  const PORT = process.env.API_PORT || 4000;
+  const PORT = Number(process.env.API_PORT) || 4000;
 
   app.use(cors()); // Enable CORS for frontend
   app.use(express.json()); // Enable JSON body parsing
   app.use('/api/auth', authRoutes); // Register authentication routes
+  app.use('/api/bot', botRoutes);
 
   app.get('/', (req, res) => {
     res.send('Bot and API server is running!');
@@ -41,21 +44,17 @@ async function main() {
   app.listen(PORT, () => {
     console.log(`🚀 API Server listening on http://localhost:${PORT}`);
   });
-
   // --- 3. Start Existing Bot Services ---
   const connection = new Connection(process.env.RPC_ENDPOINT!);
-  const walletPublicKey = new PublicKey(process.env.BUYER_PUBLIC_KEY!);
 
-  console.log("Wallet watcher Activated");
-  cleanupWatcher = await startWalletSyncWatcher(connection, walletPublicKey);
-  
-  cleanupPriceService = startPriceUpdateService();
-  
-  startTokenListener();
-  
-  cleanupAutoSellWorker = startAutoSellWorker();
+  // REMOVE or COMMENT OUT these lines:
+  // console.log("Wallet watcher Activated");
+  // cleanupWatcher = await startWalletSyncWatcher(connection);
+  // cleanupPriceService = startPriceUpdateService();
+  // startTokenListener();
+  // cleanupAutoSellWorker = startAutoSellWorker();
 
-  console.log("🚀 Bot services started successfully");
+  // console.log("🚀 Bot services started successfully");
 }
 
 main().catch(err => {
@@ -66,19 +65,22 @@ main().catch(err => {
 // --- Graceful Shutdown Logic (Existing) ---
 process.on("SIGINT", () => {
   console.log("Received SIGINT, cleaning up...");
-  if (cleanupWatcher) cleanupWatcher();
-  if (cleanupPriceService) cleanupPriceService();
-  if (cleanupAutoSellWorker) cleanupAutoSellWorker();
+  // if (cleanupWatcher) cleanupWatcher();
+  // if (cleanupPriceService) cleanupPriceService();
+  // if (cleanupAutoSellWorker) cleanupAutoSellWorker();
   console.log("✅ All services stopped successfully");
   process.exit(0);
 });
 
 process.on("SIGTERM", () => {
   console.log("Received SIGTERM, cleaning up...");
-  if (cleanupWatcher) cleanupWatcher();
-  if (cleanupPriceService) cleanupPriceService();
-  if (cleanupAutoSellWorker) cleanupAutoSellWorker();
+  // if (cleanupWatcher) cleanupWatcher();
+  // if (cleanupPriceService) cleanupPriceService();
+  // if (cleanupAutoSellWorker) cleanupAutoSellWorker();
   console.log("✅ All services stopped successfully");
   process.exit(0);
 });
+
+// Export WebSocket server for use in other modules
+export { wss };
 

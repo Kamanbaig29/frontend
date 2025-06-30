@@ -9,13 +9,29 @@ import { ManualSellList } from './components/ManualSellList';
 import { WebSocketProvider, useWebSocket } from './context/webSocketContext';
 import { AutomaticSellDashboard } from './components/AutomaticSellDashboard';
 import LoginPage from './components/LoginPage';
+import WalletInfo from './components/walletInfo';
+import WalletButton from './components/walletButton';
+import { Typography } from '@mui/material';
 // import { AutomaticSellDashboard } from './components/AutomaticSellDashboard'; // Uncomment if needed
+
+function sendSetMode(ws: WebSocket | null, mode: 'manual' | 'automatic') {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'SET_MODE', mode }));
+  } else if (ws) {
+    ws.addEventListener('open', function handler() {
+      ws.send(JSON.stringify({ type: 'SET_MODE', mode }));
+      ws.removeEventListener('open', handler);
+    });
+  }
+}
 
 // Create a new component that uses useWebSocket
 const AppContent = () => {
   const [currentView, setCurrentView] = useState<
     | 'login'
     | 'landing'
+    | 'selectBuyMode'
+    | 'selectSellMode'
     | 'automatic'
     | 'manual'
     | 'manualSell'
@@ -23,48 +39,73 @@ const AppContent = () => {
     | 'stats'
   >('login');
 
-  const { sendMessage } = useWebSocket();
-  const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('authToken'));
+  const { ws, isAuthenticated, authenticate } = useWebSocket();
+  const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('token'));
 
   const handleModeSelect = (mode: 'manual' | 'automatic') => {
-    setCurrentView(mode);
+    if (ws && isAuthenticated) {
+      console.log(`[AppContent] Sending SET_MODE: ${mode}`);
+      ws.send(JSON.stringify({ type: 'SET_MODE', mode }));
+      setCurrentView(mode);
+    } else {
+      console.error('[AppContent] Cannot send SET_MODE. WebSocket not open or user not authenticated.');
+    }
   };
 
-  const handleViewStats = () => {
-    setCurrentView('stats');
-  };
-
-  const handleManualSell = () => {
-    setCurrentView('manualSell');
-  };
-
-  const handleAutomaticSell = () => {
-    setCurrentView('automaticSell');
-  };
-
-  const handleBackHome = () => {
-    sendMessage({ type: 'RESET_STATE' });
-    setCurrentView('landing');
-  };
+  const handleGoToBuySelection = () => setCurrentView('selectBuyMode');
+  const handleGoToSellSelection = () => setCurrentView('selectSellMode');
+  const handleViewStats = () => setCurrentView('stats');
+  const handleManualSell = () => setCurrentView('manualSell');
+  const handleAutomaticSell = () => setCurrentView('automaticSell');
+  const handleBackHome = () => setCurrentView('landing');
 
   const handleLoginSuccess = () => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      console.log('[AppContent] Login successful. Calling authenticate and starting services...');
+      
+      // Call start-services API
+      fetch('http://localhost:4000/api/bot/start-services', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      })
+      .then(res => res.json())
+      .then(data => console.log('Bot services started:', data))
+      .catch(error => console.error('Failed to start bot services:', error));
+
+      // Authenticate WebSocket
+      authenticate(token);
+    }
     setIsLoggedIn(true);
-    setCurrentView('landing');
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('authToken');
+    const token = localStorage.getItem('token');
+    if (token) {
+      fetch('http://localhost:4000/api/bot/stop-services', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }).then(res => res.json())
+        .then(data => console.log('Bot services stopped:', data))
+        .catch(err => console.error('Failed to stop bot services:', err));
+    }
+
+    localStorage.removeItem('token');
     setIsLoggedIn(false);
     setCurrentView('login');
   };
 
   useEffect(() => {
-    if (isLoggedIn) {
+    if (isLoggedIn && isAuthenticated) {
       setCurrentView('landing');
     }
-  }, [isLoggedIn]);
-
-  //console.log('AppContent rendered', { isLoggedIn, currentView });
+  }, [isLoggedIn, isAuthenticated]);
 
   return (
     <BotProvider>
@@ -84,25 +125,73 @@ const AppContent = () => {
 
         {currentView === 'landing' && (
           <div>
-            <button
-              onClick={handleLogout}
-              className="absolute top-4 right-4 px-4 py-2 bg-red-600 text-white rounded"
-            >
-              Logout
-            </button>
+            <WalletButton onLogout={handleLogout} />
             <LandingPage
-              onSelectMode={handleModeSelect}
+              onBuyClick={handleGoToBuySelection}
+              onSellClick={handleGoToSellSelection}
               onViewStats={handleViewStats}
-              onManualSell={handleManualSell}
-              onAutomaticSell={handleAutomaticSell}
             />
           </div>
         )}
 
-        {currentView === 'automatic' && <Dashboard onBackHome={handleBackHome} />}
+        {currentView === 'selectBuyMode' && (
+          <div className="text-center">
+            <Typography variant="h4" color="white" gutterBottom>Select Buy Mode</Typography>
+            <div className="space-x-4 mt-4">
+              <Button
+                variant="contained"
+                onClick={() => handleModeSelect('automatic')}
+                disabled={!isAuthenticated}
+              >
+                Auto-Snipe
+              </Button>
+              <Button
+                variant="contained"
+                onClick={() => handleModeSelect('manual')}
+                disabled={!isAuthenticated}
+              >
+                Manual Buy
+              </Button>
+            </div>
+            {!isAuthenticated && <Typography sx={{ color: 'yellow', mt: 2 }}>Authenticating...</Typography>}
+            <Button onClick={handleBackHome} variant="text" sx={{ color: 'white', mt: 4 }}>Back</Button>
+          </div>
+        )}
+
+        {currentView === 'selectSellMode' && (
+          <div className="text-center">
+            <Typography variant="h4" color="white" gutterBottom>Select Sell Mode</Typography>
+            <div className="space-x-4 mt-4">
+              <Button
+                variant="contained"
+                onClick={handleAutomaticSell}
+                disabled={!isAuthenticated}
+              >
+                Auto-Sell
+              </Button>
+              <Button
+                variant="contained"
+                onClick={handleManualSell}
+                disabled={!isAuthenticated}
+              >
+                Manual Sell
+              </Button>
+            </div>
+            {!isAuthenticated && <Typography sx={{ color: 'yellow', mt: 2 }}>Authenticating...</Typography>}
+            <Button onClick={handleBackHome} variant="text" sx={{ color: 'white', mt: 4 }}>Back</Button>
+          </div>
+        )}
+
+        {currentView === 'automatic' && (
+          <div>
+            <WalletButton onLogout={handleLogout} />
+            <Dashboard onBackHome={handleBackHome} />
+          </div>
+        )}
 
         {currentView === 'manual' && (
           <div className="container mx-auto p-4">
+            <WalletButton onLogout={handleLogout} />
             <div className="flex justify-between items-center mb-6">
               <div>
                 <h1 className="text-2xl font-bold text-white">Manual Trading</h1>
@@ -127,6 +216,7 @@ const AppContent = () => {
 
         {currentView === 'manualSell' && (
           <div className="container mx-auto p-4">
+            <WalletButton onLogout={handleLogout} />
             <div className="flex justify-between items-center mb-6">
               <div>
                 <h1 className="text-2xl font-bold text-white">Manual Sell</h1>
@@ -150,10 +240,18 @@ const AppContent = () => {
         )}
 
         {currentView === 'automaticSell' && (
-          <AutomaticSellDashboard onBackHome={handleBackHome} />
+          <div>
+            <WalletButton onLogout={handleLogout} />
+            <AutomaticSellDashboard onBackHome={handleBackHome} />
+          </div>
         )}
 
-        {currentView === 'stats' && <Stats onBackHome={handleBackHome} />}
+        {currentView === 'stats' && (
+          <div>
+            <WalletButton onLogout={handleLogout} />
+            <Stats onBackHome={handleBackHome} />
+          </div>
+        )}
       </div>
     </BotProvider>
   );

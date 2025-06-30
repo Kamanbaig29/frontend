@@ -2,6 +2,7 @@ import { WalletToken } from '../models/WalletToken';
 import { TokenPrice } from '../models/TokenPrice';
 import { getConnection } from '../utils/getProvider';
 import { getCurrentPrice } from './getCurrentPrice';
+import { PublicKey, Connection } from '@solana/web3.js';
 
 
 // Helper function for delay
@@ -10,41 +11,38 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 
 // Batch price updater with wallet token sync
-async function updatePrices() {
-  const connection = getConnection();
+async function updatePrices(connection: Connection, userPublicKey: PublicKey) {
   const startTime = Date.now();
   
   try {
-    // Get all unique mints from WalletToken collection
-    const walletTokens = await WalletToken.distinct('mint');
+    // Get all unique mints for this user
+    const walletTokens = await WalletToken.find({ userPublicKey: userPublicKey.toBase58() });
     const BATCH_SIZE = 3;
     const DELAY_BETWEEN_BATCHES = 3000;
 
-    console.log(`🔄 Starting price update for ${walletTokens.length} tokens`);
+    console.log(`🔄 Starting price update for ${walletTokens.length} tokens for user ${userPublicKey.toBase58()}`);
 
     for (let i = 0; i < walletTokens.length; i += BATCH_SIZE) {
       const batch = walletTokens.slice(i, i + BATCH_SIZE);
-      await Promise.all(batch.map(async (mint) => {
+      await Promise.all(batch.map(async (walletToken) => {
         try {
-          // Get current price
-          const currentPrice = await getCurrentPrice(connection, mint);
+          const mint = walletToken.mint;
+          const currentPrice = await getCurrentPrice(connection, mint, userPublicKey);
           
           if (currentPrice > 0) {
-            // Get buy price from WalletToken for this mint
-            const walletToken = await WalletToken.findOne({ mint });
-            const buyPrice = walletToken?.buyPrice || 0;
+            const buyPrice = walletToken.buyPrice || 0;
             
             // Update TokenPrice with current price and buy price from wallet
             await TokenPrice.findOneAndUpdate(
-              { mint },
-              { $set: { mint, currentPrice, buyPrice, lastUpdated: new Date() } },
+              { mint, userPublicKey: userPublicKey.toBase58() },
+              { $set: { mint, currentPrice, buyPrice, lastUpdated: new Date(), userPublicKey: userPublicKey.toBase58() } },
               { upsert: true }
             );
             
             //console.log(`✅ TokenPrice updated for ${mint}: Current=${currentPrice}, Buy=${buyPrice}`);
           }
         } catch (error) {
-          console.error(`❌ Error updating price for mint ${mint}:`, error);
+          console.error(`❌ Error updating price for mint ${walletToken.mint}:`, error);
         }
       }));
 
@@ -55,7 +53,7 @@ async function updatePrices() {
     
     const endTime = Date.now();
     const totalTime = (endTime - startTime) / 1000;
-    console.log(`⏱️ Price update cycle completed in ${totalTime.toFixed(2)} seconds`);
+    console.log(`⏱️ Price update cycle completed in ${totalTime.toFixed(2)} seconds for user ${userPublicKey.toBase58()}`);
     
   } catch (error) {
     const endTime = Date.now();
@@ -64,20 +62,20 @@ async function updatePrices() {
   }
 }
 
-// Start the price update service with 5 minute interval
-export function startPriceUpdateService(interval: number = 5 * 60 * 1000) {
-  console.log(`🚀 Price update service started with ${interval / 1000 / 60} minute interval`);
+// Start the price update service for a specific user
+export function startPriceUpdateService(connection: Connection, userPublicKey: PublicKey, interval: number = 5 * 60 * 1000) {
+  console.log(`🚀 Price update service started for user ${userPublicKey.toBase58()} with ${interval / 1000 / 60} minute interval`);
   let stopped = false;
   let timeoutId: NodeJS.Timeout;
 
   const run = async () => {
     if (stopped) return;
     
-    console.log(`🔄 Starting price update cycle at ${new Date().toLocaleTimeString()}`);
+    console.log(`🔄 Starting price update cycle at ${new Date().toLocaleTimeString()} for user ${userPublicKey.toBase58()}`);
     
     try {
-      await updatePrices();
-      console.log(`✅ Price update cycle completed at ${new Date().toLocaleTimeString()}`);
+      await updatePrices(connection, userPublicKey);
+      console.log(`✅ Price update cycle completed at ${new Date().toLocaleTimeString()} for user ${userPublicKey.toBase58()}`);
     } catch (error) {
       console.error(`❌ Error in price update cycle:`, error);
     }
@@ -92,6 +90,6 @@ export function startPriceUpdateService(interval: number = 5 * 60 * 1000) {
   return () => {
     stopped = true;
     clearTimeout(timeoutId);
-    console.log("⏹️ Price update service stopped");
+    console.log(`⏹️ Price update service stopped for user ${userPublicKey.toBase58()}`);
   };
 }
