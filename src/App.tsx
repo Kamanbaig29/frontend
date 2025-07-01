@@ -128,7 +128,7 @@ const AppContent = () => {
             <WalletButton onLogout={handleLogout} />
             <LandingPage
               onBuyClick={handleGoToBuySelection}
-              onSellClick={handleGoToSellSelection}
+              onSellClick={() => setCurrentView('automaticSell')}
               onViewStats={handleViewStats}
             />
           </div>

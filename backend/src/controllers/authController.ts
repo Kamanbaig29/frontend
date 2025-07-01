@@ -8,6 +8,7 @@ import { PublicKey } from '@solana/web3.js';
 import * as ed25519 from '@noble/ed25519';
 import { generateBotWallet } from '../utils/walletUtils';
 import bs58 from 'bs58';
+import {WalletToken} from '../models/WalletToken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'default_secret';
 
@@ -125,7 +126,7 @@ export const login: RequestHandler = async (req, res) => {
 
     // Generate JWT token
     const token = jwt.sign(
-      { id: user._id, email: user.email },
+      { id: user._id, email: user.email, walletAddress: user.botWalletPublicKey},
       process.env.JWT_SECRET!,
       { expiresIn: '24h' }
     );
@@ -193,7 +194,7 @@ export const phantomLogin: RequestHandler = async (req, res) => {
 
     // Generate JWT token
     const token = jwt.sign(
-      { id: user._id, email: user.email },
+      { id: user._id, email: user.email, walletAddress: user.botWalletPublicKey },
       process.env.JWT_SECRET!,
       { expiresIn: '24h' }
     );

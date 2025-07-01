@@ -129,7 +129,7 @@ export async function updateOrRemoveTokenAfterSell({
   //const connection: Connection = getConnection();
 
   if (parseFloat(remainingAmount) <= 0) {
-    await WalletToken.deleteOne({ mint, userPublicKey });
+    //await WalletToken.deleteOne({ mint, userPublicKey });
     console.log(`🗑️ Token ${mint} removed from DB (sold 100%)`);
   } else {
     await WalletToken.findOneAndUpdate(

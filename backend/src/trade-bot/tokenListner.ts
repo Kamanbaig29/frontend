@@ -19,6 +19,7 @@ import { handleManualBuy } from "../action/manualBuy";
 import {
   createAssociatedTokenAccountInstruction,
   getAssociatedTokenAddress,
+  getAccount,
   //TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 import WebSocket, { WebSocketServer } from "ws";
@@ -52,6 +53,10 @@ import {
 } from "../utils/userWallet";
 import jwt from "jsonwebtoken";
 import { connection } from "mongoose";
+import { Server as HttpServer } from "http";
+import User from "../models/user_auth";
+import crypto from 'crypto';
+//import { startAutoSellWorker } from '../helper-functions/autosellworker';
 
 const MEMEHOME_PROGRAM_ID = new PublicKey(process.env.MEMEHOME_PROGRAM_ID!);
 
@@ -100,6 +105,7 @@ interface WSWithUser extends WebSocket {
   trackedTokens?: TokenData[];
   _autoSnipeActive?: boolean;
   _autoSnipeCleanup?: () => void;
+  walletAddress?: string;
 }
 
 const defaultAutoSnipeSettings = {
@@ -122,35 +128,17 @@ const userSessions = new Map<
 >();
 
 // Create WebSocket server with retry logic
-const createWebSocketServer = (
-  port: number = 3001,
-  retries: number = 3
-): WebSocketServer => {
-  try {
-    const server = new WebSocketServer({ port });
-    console.log(`📡 WebSocket server started on port ${port}`);
-    return server;
-  } catch (error: any) {
-    if (error.code === "EADDRINUSE") {
-      if (retries > 0) {
-        console.log(`Port ${port} in use, trying ${port + 1}...`);
-        return createWebSocketServer(port + 1, retries - 1);
-      }
-      console.error("❌ No available ports found after retries");
-      process.exit(1);
-    }
-    throw error;
-  }
+export const createWebSocketServer = (server: HttpServer): WebSocketServer => {
+  const wss = new WebSocketServer({ server });
+  console.log(`📡 WebSocket server attached to existing HTTP server`);
+  return wss;
 };
-
-// Initialize WebSocket server
-wss = createWebSocketServer();
 
 // JWT verification function
 const verifyToken = (token: string) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || "secret");
-    return decoded as { id: string; email: string };
+    return decoded as { id: string; email: string; walletAddress?: string };
   } catch (err) {
     console.error("❌ Token verification failed:", err);
     return null;
@@ -585,7 +573,7 @@ const stopTokenListener = (userId: string) => {
   console.log(`[TOKEN_LISTENER] STOP for userId: ${userId}`);
 };
 
-// Global WebSocket connection handler setup
+export function setupWebSocketHandlers(wss: WebSocketServer) {
 wss.on("connection", (ws: WSWithUser) => {
   console.log("🔌 New client connected");
   logAllUserSessions();
@@ -599,20 +587,20 @@ wss.on("connection", (ws: WSWithUser) => {
       switch (data.type) {
         case "AUTHENTICATE": {
           const authToken = data.token;
+            console.log("[WS] AUTHENTICATE received. Token present?", !!authToken);
           if (!authToken) {
-            ws.send(
-              JSON.stringify({ type: "AUTH_ERROR", error: "No token provided" })
-            );
+              ws.send(JSON.stringify({ type: "AUTH_ERROR", error: "No token provided" }));
             return;
           }
           const decoded = verifyToken(authToken);
+            console.log("[WS] Decoded JWT:", decoded);
           if (!decoded) {
-            ws.send(
-              JSON.stringify({ type: "AUTH_ERROR", error: "Invalid token" })
-            );
+              ws.send(JSON.stringify({ type: "AUTH_ERROR", error: "Invalid token" }));
             return;
           }
           ws.userId = decoded.id;
+            ws.walletAddress = decoded.walletAddress;
+            console.log(`[WS] Set ws.userId = ${ws.userId}, ws.walletAddress = ${ws.walletAddress}`);
           ws.autoSnipeSettings = { ...defaultAutoSnipeSettings };
           ws.trackedTokens = [];
 
@@ -818,51 +806,193 @@ wss.on("connection", (ws: WSWithUser) => {
           }
           break;
 
-        case "MANUAL_SELL":
-          // Handle manual sell
-          if (!ws.userId) {
-            ws.send(
-              JSON.stringify({ type: "ERROR", error: "User not authenticated" })
-            );
-            break;
-          }
+          case "MANUAL_SELL": {
+            // Log user info for every manual sell request
+            console.log("🛒 [MANUAL_SELL] Request received");
+            console.log("  ws.userId:", ws.userId);
+            console.log("  ws.walletAddress:", ws.walletAddress);
+            console.log("  Request walletAddress:", data.walletAddress);
 
-          try {
-            const userSession = userSessions.get(ws.userId);
-            if (!userSession) {
-              ws.send(
-                JSON.stringify({
-                  type: "ERROR",
-                  error: "User session not found",
-                })
-              );
-              break;
+            const {
+                mint,
+                percent,
+                walletAddress,
+                slippage,
+                priorityFee,
+                bribeAmount,
+            } = data;
+
+            if (!mint || !percent || !walletAddress) {
+                ws.send(JSON.stringify({ type: "ERROR", error: "Missing required fields for manual sell" }));
+                return;
             }
 
-            const result = await sellToken({
-              connection: getConnection(),
-              userKeypair: await getUserKeypairById(ws.userId),
+            const connection = getConnection();
+            let userKeypair;
+            try {
+                userKeypair = await getUserKeypairByWallet(walletAddress);
+            } catch (e) {
+                ws.send(JSON.stringify({ type: "ERROR", error: "User wallet not found or decryption failed" }));
+                return;
+            }
+            const mintPubkey = new PublicKey(mint);
+
+            // Get user's token account address (ATA)
+            const userTokenAccount = await getAssociatedTokenAddress(mintPubkey, userKeypair.publicKey);
+
+            // Get live token account info from blockchain
+            let tokenAccountInfo;
+            try {
+                tokenAccountInfo = await getAccount(connection, userTokenAccount);
+            } catch (e) {
+                ws.send(JSON.stringify({ type: "MANUAL_SELL_ERROR", error: "Token account not found in wallet" }));
+                return;
+            }
+
+            const token = await WalletToken.findOne({ mint, userPublicKey: walletAddress });
+            const decimals = token?.decimals ?? 6;
+            const tokenAmount = Number(tokenAccountInfo.amount) / Math.pow(10, decimals);
+
+            // 3. Calculate sell amounts
+            let sellAmount = (tokenAmount * percent) / 100;
+            let sellAmountInSmallestUnit = Math.floor(sellAmount * Math.pow(10, decimals));
+
+            if (sellAmountInSmallestUnit <= 0) {
+                ws.send(JSON.stringify({ type: "MANUAL_SELL_ERROR", error: "Sell amount too small" }));
+                return;
+            }
+
+            // 4. Log all details
+            console.log("\n=== MANUAL SELL REQUEST ===");
+            console.log("User Wallet:", walletAddress);
+            console.log("User PublicKey:", userKeypair.publicKey.toBase58());
+            console.log("Token Mint:", mint);
+            console.log("Sell Percentage:", percent + "%");
+            console.log("Token Amount:", tokenAmount);
+            console.log("Decimals:", decimals);
+            console.log("Sell Amount:", sellAmount);
+            console.log("Sell Amount (smallest unit):", sellAmountInSmallestUnit);
+
+            // 5. Prepare Solana connection and swap accounts
+            const swapAccounts = await getSwapAccounts({
+                mintAddress: mint,
+                buyer: userKeypair.publicKey,
+                connection,
               programId: MEMEHOME_PROGRAM_ID,
-              amount: BigInt(data.amount),
-              minOut: BigInt(1),
-              swapAccounts: await getSwapAccounts({
-                mintAddress: data.mintAddress,
-                buyer: userSession.userPublicKey,
-                connection: getConnection(),
-                programId: MEMEHOME_PROGRAM_ID,
-              }),
-              slippage: data.slippage || 1,
-              priorityFee: data.priorityFee || 0,
-              bribeAmount: data.bribeAmount || 0,
             });
 
+            // 6. Get reserves for expected output calculation
+            const tokenVaultInfo = await connection.getTokenAccountBalance(swapAccounts.curveTokenAccount);
+            const tokenReserve = BigInt(tokenVaultInfo.value.amount);
+            const bondingCurveInfo = await connection.getAccountInfo(swapAccounts.bondingCurve);
+            if (!bondingCurveInfo) {
+                ws.send(JSON.stringify({ type: "MANUAL_SELL_ERROR", error: "Bonding curve account not found" }));
+                return;
+            }
+            const solReserve = BigInt(bondingCurveInfo.lamports);
+
+            // 7. Calculate expected output
+            const expectedSolOut = calculateAmountOut(
+                BigInt(sellAmountInSmallestUnit),
+                tokenReserve,
+                solReserve
+            );
+
+            // 8. Log reserves and expected output
+            console.log("Token Reserve:", tokenReserve.toString());
+            console.log("SOL Reserve:", solReserve.toString());
+            console.log("Expected SOL Output (before slippage):", Number(expectedSolOut) / 1e9, "SOL");
+
+            // 9. Prepare sell parameters
+            const slippageValue = typeof slippage === "number" ? slippage : 0;
+            const priorityFeeValue = typeof priorityFee === "number" ? priorityFee : 0;
+            const bribeAmountValue = typeof bribeAmount === "number" ? bribeAmount : 0;
+
+            // 10. Execute sell
+            try {
+                const preBalance = await connection.getBalance(userKeypair.publicKey);
+                const manualSellStartTime = Date.now();
+
+                let txSignature;
+                if (userKeypair.publicKey.toBase58() === walletAddress) {
+                    txSignature = await sellToken({
+                        connection,
+                        userKeypair,
+                programId: MEMEHOME_PROGRAM_ID,
+                        amount: BigInt(sellAmountInSmallestUnit),
+                        minOut: expectedSolOut / 100n, // 1% slippage (or override with slippage param)
+                        swapAccounts,
+                        slippage: slippageValue,
+                        priorityFee: priorityFeeValue,
+                        bribeAmount: bribeAmountValue,
+                    });
+                } else {
+                    // If the wallet address is different, we need to create a new transaction
+                    const createAtaIx = createAssociatedTokenAccountInstruction(
+                        userKeypair.publicKey,
+                        swapAccounts.curveTokenAccount,
+                        swapAccounts.bondingCurve,
+                        swapAccounts.tokenMint
+                    );
+
+                    const createAtaTx = new Transaction().add(createAtaIx);
+                    createAtaTx.feePayer = userKeypair.publicKey;
+                    createAtaTx.recentBlockhash = (
+                        await connection.getLatestBlockhash()
+                    ).blockhash;
+
+                    createAtaTx.sign(userKeypair);
+
+                    txSignature = await connection.sendRawTransaction(
+                        createAtaTx.serialize()
+                    );
+                }
+
+                if (txSignature) {
+                    await connection.confirmTransaction(txSignature);
+                }
+                const manualSellEndTime = Date.now();
+                const postBalance = await connection.getBalance(userKeypair.publicKey);
+                const actualSolReceived = (postBalance - preBalance) / 1e9;
+
+                // 11. Log transaction summary
+                console.log("\n=== MANUAL SELL SUMMARY ===");
+                console.log(`User: ${walletAddress} (${userKeypair.publicKey.toBase58()})`);
+                console.log(`Tokens Sold: ${sellAmount} (${sellAmountInSmallestUnit} in smallest unit)`);
+                const remainingAmount = tokenAmount - sellAmount;
+                console.log("Remaining Amount:", remainingAmount);
+                console.log(`Expected SOL Output (before slippage): ${Number(expectedSolOut) / 1e9} SOL`);
+                const expectedSolOutWithSlippage = (Number(expectedSolOut) * (1 - slippageValue / 100)) / 1e9;
+                console.log(`Expected SOL Output (after slippage): ${expectedSolOutWithSlippage} SOL`);
+                console.log(`Priority Fee: ${priorityFeeValue} SOL`);
+                console.log(`Bribe Amount: ${bribeAmountValue} SOL`);
+                console.log(`Actual SOL Received (wallet diff): ${actualSolReceived} SOL`);
+                console.log(`Execution Time: ${manualSellEndTime - manualSellStartTime} ms`);
+                console.log("============================\n");
+
+                // 12. Update database
+                await updateOrRemoveTokenAfterSell({
+                    mint,
+                    userPublicKey: walletAddress,
+                    remainingAmount: remainingAmount.toString(),
+                });
+
+                // 13. Send success response
             ws.send(
               JSON.stringify({
                 type: "MANUAL_SELL_SUCCESS",
-                result,
+                        signature: txSignature,
+                        details: {
+                            mint,
+                            soldAmount: sellAmount.toString(),
+                            remainingAmount: remainingAmount.toString(),
+                            expectedSolOut: expectedSolOut.toString(),
+                            executionTimeMs: manualSellEndTime - manualSellStartTime,
+                        },
               })
             );
           } catch (error) {
+                console.error("❌ Manual sell failed:", error);
             ws.send(
               JSON.stringify({
                 type: "MANUAL_SELL_ERROR",
@@ -871,12 +1001,72 @@ wss.on("connection", (ws: WSWithUser) => {
             );
           }
           break;
+          }
 
         case "RESET_STATE":
           console.log(`[INFO] User ${ws.userId} returned to initial state`);
           ws.autoSnipeSettings = { ...defaultAutoSnipeSettings };
           ws.trackedTokens = [];
           break;
+
+          case "GET_USER_TOKENS": {
+            console.log("[WS] GET_USER_TOKENS for ws.walletAddress:", ws.walletAddress);
+            if (!ws.walletAddress) {
+                ws.send(JSON.stringify({ type: "ERROR", error: "User not authenticated" }));
+                break;
+            }
+            const userTokens = await WalletToken.find({ userPublicKey: ws.walletAddress });
+            console.log("[WS] WalletToken.find result:", userTokens.length, "tokens");
+            ws.send(JSON.stringify({ type: "USER_TOKENS", tokens: userTokens }));
+            break;
+          }
+
+          case "UPDATE_AUTO_SELL_SETTINGS":
+            if (!ws.walletAddress) {
+              ws.send(JSON.stringify({ type: 'ERROR', error: 'Unauthorized' }));
+              return;
+            }
+            // Update settings in DB for this user/token
+            await AutoSell.updateOne(
+              { mint: data.payload.mint, userPublicKey: ws.walletAddress },
+              { $set: data.payload },
+              { upsert: true }
+            );
+            ws.send(JSON.stringify({ type: 'AUTO_SELL_SETTINGS_UPDATED', message: 'Settings updated!' }));
+            break;
+
+          case "AUTO_SELL_CONNECT": {
+            console.log("[WS] AUTO_SELL_CONNECT for ws.walletAddress:", ws.walletAddress);
+            if (!ws.walletAddress) {
+                ws.send(JSON.stringify({ type: "ERROR", error: "User not authenticated" }));
+                break;
+            }
+            const userTokens = await WalletToken.find({ userPublicKey: ws.walletAddress });
+            console.log("[WS] WalletToken.find result (AUTO_SELL_CONNECT):", userTokens.length, "tokens");
+            ws.send(JSON.stringify({ type: "USER_TOKENS", tokens: userTokens }));
+            break;
+          }
+
+          case "GET_TOKEN_PRICES": {
+            console.log("[WS] GET_TOKEN_PRICES request received");
+            if (!ws.walletAddress) {
+                ws.send(JSON.stringify({ type: "ERROR", error: "User not authenticated" }));
+                break;
+            }
+            const prices = await TokenPrice.find({ userPublicKey: ws.walletAddress });
+            ws.send(JSON.stringify({ type: "TOKEN_PRICES", prices }));
+            break;
+          }
+
+          case "GET_USER_AUTOSELL_CONFIGS": {
+            if (!ws.walletAddress) {
+                ws.send(JSON.stringify({ type: "ERROR", error: "User not authenticated" }));
+                break;
+            }
+            const configs = await AutoSell.find({ userPublicKey: ws.walletAddress });
+            ws.send(JSON.stringify({ type: "USER_AUTOSELL_CONFIGS", configs }));
+            break;
+          }
 
         default:
           console.log("⚠️ Unknown message type:", data.type);
@@ -914,6 +1104,7 @@ wss.on("connection", (ws: WSWithUser) => {
     console.error("❌ WebSocket error:", error);
   });
 });
+}
 
 // Initialize global settings
 if (!global.autoSnipeSettings) {
@@ -942,3 +1133,4 @@ process.on("uncaughtException", (err) => {
 process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection:", reason);
 });
+

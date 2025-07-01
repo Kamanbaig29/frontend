@@ -58,7 +58,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
       }
       
       console.log("[WebSocket Context] Attempting to connect...");
-      const socket = new WebSocket('ws://localhost:3001');
+      const socket = new WebSocket('ws://localhost:4000');
       socketRef.current = socket;
 
       socket.onopen = () => {
