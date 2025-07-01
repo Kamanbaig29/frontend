@@ -25,3 +25,8 @@ programs
 *.njsproj
 *.sln
 *.sw?
+
+.env
+frontend/.env
+backend/.env
+
