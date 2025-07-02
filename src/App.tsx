@@ -39,8 +39,9 @@ const AppContent = () => {
     | 'stats'
   >('login');
 
-  const { ws, isAuthenticated, authenticate } = useWebSocket();
-  const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('token'));
+  const { ws, isAuthenticated, authenticate, status } = useWebSocket();
+  const token = localStorage.getItem('token');
+  const [isLoggedIn, setIsLoggedIn] = useState(!!token);
 
   const handleModeSelect = (mode: 'manual' | 'automatic') => {
     if (ws && isAuthenticated) {
@@ -73,7 +74,7 @@ const AppContent = () => {
         },
       })
       .then(res => res.json())
-      .then(data => console.log('Bot services started:', data))
+      //.then(data => console.log('Bot services started:', data))
       .catch(error => console.error('Failed to start bot services:', error));
 
       // Authenticate WebSocket
@@ -107,6 +108,10 @@ const AppContent = () => {
     }
   }, [isLoggedIn, isAuthenticated]);
 
+  useEffect(() => {
+    if (!token) setIsLoggedIn(false);
+  }, [token]);
+
   return (
     <BotProvider>
       <div
@@ -119,138 +124,142 @@ const AppContent = () => {
           background: '#1a1a1a',
         }}
       >
-        {!isLoggedIn && (
-          <LoginPage onLoginSuccess={handleLoginSuccess} />
-        )}
-
-        {currentView === 'landing' && (
-          <div>
-            <WalletButton onLogout={handleLogout} />
-            <LandingPage
-              onBuyClick={handleGoToBuySelection}
-              onSellClick={() => setCurrentView('automaticSell')}
-              onViewStats={handleViewStats}
-            />
-          </div>
-        )}
-
-        {currentView === 'selectBuyMode' && (
-          <div className="text-center">
-            <Typography variant="h4" color="white" gutterBottom>Select Buy Mode</Typography>
-            <div className="space-x-4 mt-4">
-              <Button
-                variant="contained"
-                onClick={() => handleModeSelect('automatic')}
-                disabled={!isAuthenticated}
-              >
-                Auto-Snipe
-              </Button>
-              <Button
-                variant="contained"
-                onClick={() => handleModeSelect('manual')}
-                disabled={!isAuthenticated}
-              >
-                Manual Buy
-              </Button>
-            </div>
-            {!isAuthenticated && <Typography sx={{ color: 'yellow', mt: 2 }}>Authenticating...</Typography>}
-            <Button onClick={handleBackHome} variant="text" sx={{ color: 'white', mt: 4 }}>Back</Button>
-          </div>
-        )}
-
-        {currentView === 'selectSellMode' && (
-          <div className="text-center">
-            <Typography variant="h4" color="white" gutterBottom>Select Sell Mode</Typography>
-            <div className="space-x-4 mt-4">
-              <Button
-                variant="contained"
-                onClick={handleAutomaticSell}
-                disabled={!isAuthenticated}
-              >
-                Auto-Sell
-              </Button>
-              <Button
-                variant="contained"
-                onClick={handleManualSell}
-                disabled={!isAuthenticated}
-              >
-                Manual Sell
-              </Button>
-            </div>
-            {!isAuthenticated && <Typography sx={{ color: 'yellow', mt: 2 }}>Authenticating...</Typography>}
-            <Button onClick={handleBackHome} variant="text" sx={{ color: 'white', mt: 4 }}>Back</Button>
-          </div>
-        )}
-
-        {currentView === 'automatic' && (
-          <div>
-            <WalletButton onLogout={handleLogout} />
-            <Dashboard onBackHome={handleBackHome} />
-          </div>
-        )}
-
-        {currentView === 'manual' && (
-          <div className="container mx-auto p-4">
-            <WalletButton onLogout={handleLogout} />
-            <div className="flex justify-between items-center mb-6">
+        {!token ? (
+          <LoginPage onLoginSuccess={() => setIsLoggedIn(true)} />
+        ) : !isAuthenticated || status !== "connected" ? (
+          <div>Loading...</div>
+        ) : (
+          <>
+            {currentView === 'landing' && (
               <div>
-                <h1 className="text-2xl font-bold text-white">Manual Trading</h1>
-                <p className="text-sm text-gray-400 mt-1">
-                  Buy tokens manually by providing mint address and amount
-                </p>
+                <WalletButton onLogout={handleLogout} />
+                <LandingPage
+                  onBuyClick={handleGoToBuySelection}
+                  onSellClick={() => setCurrentView('automaticSell')}
+                  onViewStats={handleViewStats}
+                />
               </div>
-              <Button
-                onClick={handleBackHome}
-                variant="contained"
-                sx={{
-                  bgcolor: '#483D8B',
-                  '&:hover': { bgcolor: '#372B7A' },
-                }}
-              >
-                Back to Home
-              </Button>
-            </div>
-            <ManualBuyForm />
-          </div>
-        )}
+            )}
 
-        {currentView === 'manualSell' && (
-          <div className="container mx-auto p-4">
-            <WalletButton onLogout={handleLogout} />
-            <div className="flex justify-between items-center mb-6">
+            {currentView === 'selectBuyMode' && (
+              <div className="text-center">
+                <Typography variant="h4" color="white" gutterBottom>Select Buy Mode</Typography>
+                <div className="space-x-4 mt-4">
+                  <Button
+                    variant="contained"
+                    onClick={() => handleModeSelect('automatic')}
+                    disabled={!isAuthenticated}
+                  >
+                    Auto-Snipe
+                  </Button>
+                  <Button
+                    variant="contained"
+                    onClick={() => handleModeSelect('manual')}
+                    disabled={!isAuthenticated}
+                  >
+                    Manual Buy
+                  </Button>
+                </div>
+                {!isAuthenticated && <Typography sx={{ color: 'yellow', mt: 2 }}>Authenticating...</Typography>}
+                <Button onClick={handleBackHome} variant="text" sx={{ color: 'white', mt: 4 }}>Back</Button>
+              </div>
+            )}
+
+            {currentView === 'selectSellMode' && (
+              <div className="text-center">
+                <Typography variant="h4" color="white" gutterBottom>Select Sell Mode</Typography>
+                <div className="space-x-4 mt-4">
+                  <Button
+                    variant="contained"
+                    onClick={handleAutomaticSell}
+                    disabled={!isAuthenticated}
+                  >
+                    Auto-Sell
+                  </Button>
+                  <Button
+                    variant="contained"
+                    onClick={handleManualSell}
+                    disabled={!isAuthenticated}
+                  >
+                    Manual Sell
+                  </Button>
+                </div>
+                {!isAuthenticated && <Typography sx={{ color: 'yellow', mt: 2 }}>Authenticating...</Typography>}
+                <Button onClick={handleBackHome} variant="text" sx={{ color: 'white', mt: 4 }}>Back</Button>
+              </div>
+            )}
+
+            {currentView === 'automatic' && (
               <div>
-                <h1 className="text-2xl font-bold text-white">Manual Sell</h1>
-                <p className="text-sm text-gray-400 mt-1">
-                  Sell tokens manually by selecting from token list
-                </p>
+                <WalletButton onLogout={handleLogout} />
+                <Dashboard onBackHome={handleBackHome} />
               </div>
-              <Button
-                onClick={handleBackHome}
-                variant="contained"
-                sx={{
-                  bgcolor: '#483D8B',
-                  '&:hover': { bgcolor: '#372B7A' },
-                }}
-              >
-                Back to Home
-              </Button>
-            </div>
-            <ManualSellList />
-          </div>
-        )}
+            )}
 
-        {currentView === 'automaticSell' && (
-          <div>
-            <WalletButton onLogout={handleLogout} />
-            <AutomaticSellDashboard onBackHome={handleBackHome} />
-          </div>
-        )}
+            {currentView === 'manual' && (
+              <div className="container mx-auto p-4">
+                <WalletButton onLogout={handleLogout} />
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h1 className="text-2xl font-bold text-white">Manual Trading</h1>
+                    <p className="text-sm text-gray-400 mt-1">
+                      Buy tokens manually by providing mint address and amount
+                    </p>
+                  </div>
+                  <Button
+                    onClick={handleBackHome}
+                    variant="contained"
+                    sx={{
+                      bgcolor: '#483D8B',
+                      '&:hover': { bgcolor: '#372B7A' },
+                    }}
+                  >
+                    Back to Home
+                  </Button>
+                </div>
+                <ManualBuyForm />
+              </div>
+            )}
 
-        {currentView === 'stats' && (
-          <div>
-            <WalletButton onLogout={handleLogout} />
-            <Stats onBackHome={handleBackHome} />
-          </div>
+            {currentView === 'manualSell' && (
+              <div className="container mx-auto p-4">
+                <WalletButton onLogout={handleLogout} />
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h1 className="text-2xl font-bold text-white">Manual Sell</h1>
+                    <p className="text-sm text-gray-400 mt-1">
+                      Sell tokens manually by selecting from token list
+                    </p>
+                  </div>
+                  <Button
+                    onClick={handleBackHome}
+                    variant="contained"
+                    sx={{
+                      bgcolor: '#483D8B',
+                      '&:hover': { bgcolor: '#372B7A' },
+                    }}
+                  >
+                    Back to Home
+                  </Button>
+                </div>
+                <ManualSellList />
+              </div>
+            )}
+
+            {currentView === 'automaticSell' && (
+              <div>
+                <WalletButton onLogout={handleLogout} />
+                <AutomaticSellDashboard onBackHome={handleBackHome} />
+              </div>
+            )}
+
+            {currentView === 'stats' && (
+              <div>
+                <WalletButton onLogout={handleLogout} />
+                <Stats onBackHome={handleBackHome} />
+              </div>
+            )}
+          </>
         )}
       </div>
     </BotProvider>

@@ -23,7 +23,7 @@ import {
   //TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 import WebSocket, { WebSocketServer } from "ws";
-import bs58 from "bs58";
+//import bs58 from "bs58";
 //import { AutoTokenBuy } from "../models/AutoTokenBuy";
 //import { TokenStats } from "../models/TokenStats";
 import { WalletToken } from "../models/WalletToken";
@@ -39,12 +39,12 @@ import {
   addOrUpdateTokenFromBuy,
   updateOrRemoveTokenAfterSell,
 } from "../helper-functions/db-buy-sell-enterer";
-import { RPC_ENDPOINT } from "../config/test-config";
+//import { RPC_ENDPOINT } from "../config/test-config";
 
 import {
   calculateAmountOut,
-  broadcastUpdate,
-  checkWalletBalance,
+  //broadcastUpdate,
+  //checkWalletBalance,
 } from "../helper-functions/runner_functions";
 
 import {
@@ -52,11 +52,12 @@ import {
   getUserKeypairByWallet,
 } from "../utils/userWallet";
 import jwt from "jsonwebtoken";
-import { connection } from "mongoose";
+//import { connection } from "mongoose";
 import { Server as HttpServer } from "http";
-import User from "../models/user_auth";
-import crypto from 'crypto';
+//import User from "../models/user_auth";
+//import crypto from 'crypto';
 //import { startAutoSellWorker } from '../helper-functions/autosellworker';
+import UserPreset from '../models/userPreset';
 
 const MEMEHOME_PROGRAM_ID = new PublicKey(process.env.MEMEHOME_PROGRAM_ID!);
 
@@ -64,11 +65,7 @@ const MEMEHOME_PROGRAM_ID = new PublicKey(process.env.MEMEHOME_PROGRAM_ID!);
 const processedMints = new Set<string>();
 
 // Add this interface at the top of the file
-interface SolanaError extends Error {
-  logs?: string[];
-  code?: string | number;
-  details?: Record<string, unknown>;
-}
+
 
 // Add interface for token data
 interface TokenData {
@@ -152,9 +149,9 @@ const handleAutoSnipe = async (
   logInfo: any,
   userId: string
 ) => {
-  console.log(`[DEBUG] 1. handleAutoSnipe called for user: ${userId}`);
+  //console.log(`[DEBUG] 1. handleAutoSnipe called for user: ${userId}`);
   try {
-    console.log("📝 Received logs:", logInfo.logs);
+    //console.log("📝 Received logs:", logInfo.logs);
 
     // Check if user is logged in
     if (!userId) {
@@ -172,11 +169,11 @@ const handleAutoSnipe = async (
     }
 
     console.log(
-      "✅ [TOKEN DETECTION] Auto-buy is enabled, proceeding with token detection..."
+      "✅ [TOKEN DETECTION] Auto-buy is enabled, proceeding with Buy Token..."
     );
-    console.log(
-      `[DEBUG] 2. Conditions met, proceeding to get transaction for signature: ${logInfo.signature}`
-    );
+    //console.log(
+    //  `[DEBUG] 2. Conditions met, proceeding to get transaction for signature: ${logInfo.signature}`
+    //);
 
     const { logs, signature } = logInfo;
     let mintAddress: string | undefined;
@@ -296,14 +293,14 @@ const handleAutoSnipe = async (
     }
 
     // Get swap accounts
-    console.log(`[DEBUG] 5. Getting swap accounts for mint: ${mintAddress}`);
+    //console.log(`[DEBUG] 5. Getting swap accounts for mint: ${mintAddress}`);
     const swapAccounts = await getSwapAccounts({
       mintAddress,
       buyer: userPublicKey,
       connection,
       programId: MEMEHOME_PROGRAM_ID,
     });
-    console.log(`[DEBUG] 6. Swap accounts fetched.`);
+    //console.log(`[DEBUG] 6. Swap accounts fetched.`);
 
     // Calculate curve token ATA
     const curveTokenATA = await getAssociatedTokenAddress(
@@ -332,7 +329,7 @@ const handleAutoSnipe = async (
       }
     } else {
       try {
-        console.log("[DEBUG] 7. ATA does not exist. Attempting to create...");
+        //console.log("[DEBUG] 7. ATA does not exist. Attempting to create...");
         const createAtaIx = createAssociatedTokenAccountInstruction(
           userPublicKey,
           curveTokenATA,
@@ -346,24 +343,24 @@ const handleAutoSnipe = async (
           await connection.getLatestBlockhash()
         ).blockhash;
 
-        console.log(`[DEBUG] 8. Fetching keypair for user ID: ${userId}`);
+        //console.log(`[DEBUG] 8. Fetching keypair for user ID: ${userId}`);
         const userKeypair = await getUserKeypairById(userId);
-        console.log(
-          `[DEBUG] 9. Keypair fetched. Signing ATA creation transaction.`
-        );
+        //console.log(
+        //  `[DEBUG] 9. Keypair fetched. Signing ATA creation transaction.`
+        //);
         createAtaTx.sign(userKeypair);
 
         const signature = await connection.sendRawTransaction(
           createAtaTx.serialize()
         );
-        console.log(
-          `[DEBUG] 10. ATA creation transaction sent. Signature: ${signature}`
-        );
+        //console.log(
+        //  `[DEBUG] 10. ATA creation transaction sent. Signature: ${signature}`
+        //);
 
         if (signature) {
           await connection.confirmTransaction(signature);
         }
-        console.log(`[DEBUG] 11. ATA creation confirmed.`);
+        //console.log(`[DEBUG] 11. ATA creation confirmed.`);
 
         const newAtaInfo = await connection.getAccountInfo(curveTokenATA);
         if (!newAtaInfo) {
@@ -386,7 +383,7 @@ const handleAutoSnipe = async (
     }
 
     try {
-      console.log(`[DEBUG] 12. Preparing to execute buy transaction.`);
+      //console.log(`[DEBUG] 12. Preparing to execute buy transaction.`);
       const settings = userSession.ws.autoSnipeSettings!;
       const buyAmount = Number(settings.buyAmount);
       const priorityFee = Number(settings.priorityFee);
@@ -402,23 +399,23 @@ const handleAutoSnipe = async (
         return;
       }
 
-      console.log("\n=== 💰 TRANSACTION BREAKDOWN ===");
-      console.log(`Priority Fee: ${priorityFee / 1e9} SOL`);
-      console.log(`Bribe Amount: ${bribeAmount / 1e9} SOL`);
-      console.log(`Network Fee Buffer: 0.01 SOL`);
-      console.log(`Slippage: ${settings.slippage}%`);
-      console.log("==============================\n");
+      //console.log("\n=== 💰 TRANSACTION BREAKDOWN ===");
+      //console.log(`Priority Fee: ${priorityFee / 1e9} SOL`);
+      //console.log(`Bribe Amount: ${bribeAmount / 1e9} SOL`);
+      //console.log(`Network Fee Buffer: 0.01 SOL`);
+      //console.log(`Slippage: ${settings.slippage}%`);
+      //console.log("==============================\n");
 
-      const autoBuyStartTime = Date.now();
       const buyPriceAtDetection = await getCurrentPrice(
         connection,
         mintAddress,
         userPublicKey
       );
-
-      console.log(
-        `[DEBUG] 13. Fetching keypair for buy transaction for user ID: ${userId}`
-      );
+      
+      //console.log(
+        //`[DEBUG] 13. Fetching keypair for buy transaction for user ID: ${userId}`
+        //);
+      const autoBuyStartTime = Date.now();
       const signature = await buyToken({
         connection,
         userKeypair: await getUserKeypairById(userId),
@@ -587,20 +584,20 @@ wss.on("connection", (ws: WSWithUser) => {
       switch (data.type) {
         case "AUTHENTICATE": {
           const authToken = data.token;
-            console.log("[WS] AUTHENTICATE received. Token present?", !!authToken);
           if (!authToken) {
-              ws.send(JSON.stringify({ type: "AUTH_ERROR", error: "No token provided" }));
+            ws.send(JSON.stringify({ type: "AUTH_ERROR", error: "No token provided" }));
             return;
           }
           const decoded = verifyToken(authToken);
-            console.log("[WS] Decoded JWT:", decoded);
           if (!decoded) {
-              ws.send(JSON.stringify({ type: "AUTH_ERROR", error: "Invalid token" }));
+            ws.send(JSON.stringify({ type: "AUTH_ERROR", error: "Invalid token" }));
             return;
           }
           ws.userId = decoded.id;
-            ws.walletAddress = decoded.walletAddress;
-            console.log(`[WS] Set ws.userId = ${ws.userId}, ws.walletAddress = ${ws.walletAddress}`);
+          ws.walletAddress = decoded.walletAddress;
+
+          await ensureUserPreset(ws.userId);
+
           ws.autoSnipeSettings = { ...defaultAutoSnipeSettings };
           ws.trackedTokens = [];
 
@@ -702,7 +699,7 @@ wss.on("connection", (ws: WSWithUser) => {
 
           // Log old and new settings
           console.log(`🛠️ [AUTO_SNIPE_SETTINGS] User: ${ws.userId}`);
-          console.log("    Old settings:", ws.autoSnipeSettings);
+          //console.log("    Old settings:", ws.autoSnipeSettings);
           console.log("    New settings:", data.settings);
 
           ws.autoSnipeSettings = {
@@ -726,15 +723,15 @@ wss.on("connection", (ws: WSWithUser) => {
           break;
 
         case "MANUAL_BUY":
-          console.log("[DEBUG] MANUAL_BUY case started.");
+          //console.log("[DEBUG] MANUAL_BUY case started.");
 
           // Log frontend se aayi values
-          console.log("[MANUAL_BUY] Frontend values:");
-          console.log("  mintAddress:", data.mintAddress);
-          console.log("  amount (lamports):", data.amount, "(", data.amount / 1e9, "SOL )");
-          console.log("  slippage:", data.slippage);
-          console.log("  priorityFee (lamports):", data.priorityFee, "(", data.priorityFee / 1e9, "SOL )");
-          console.log("  bribeAmount (lamports):", data.bribeAmount, "(", data.bribeAmount / 1e9, "SOL )");
+          //console.log("[MANUAL_BUY] Frontend values:");
+          //console.log("  mintAddress:", data.mintAddress);
+          //console.log("  amount (lamports):", data.amount, "(", data.amount / 1e9, "SOL )");
+          //console.log("  slippage:", data.slippage);
+          //console.log("  priorityFee (lamports):", data.priorityFee, "(", data.priorityFee / 1e9, "SOL )");
+          //console.log("  bribeAmount (lamports):", data.bribeAmount, "(", data.bribeAmount / 1e9, "SOL )");
 
           if (!ws.userId) {
             ws.send(JSON.stringify({ type: "ERROR", error: "User not authenticated" }));
@@ -744,11 +741,11 @@ wss.on("connection", (ws: WSWithUser) => {
             const userKeypair = await getUserKeypairById(ws.userId);
 
             // Backend calculation logs
-            const networkFeeBuffer = 2_000_000; // Example buffer
-            const totalRequired = data.amount + (data.priorityFee || 0) + (data.bribeAmount || 0) + networkFeeBuffer;
-            console.log("[MANUAL_BUY] Backend calculation:");
-            console.log("  networkFeeBuffer (lamports):", networkFeeBuffer, "(", networkFeeBuffer / 1e9, "SOL )");
-            console.log("  totalRequired (lamports):", totalRequired, "(", totalRequired / 1e9, "SOL )");
+            //const networkFeeBuffer = 2_000_000; // Example buffer
+            //const totalRequired = data.amount + (data.priorityFee || 0) + (data.bribeAmount || 0) + networkFeeBuffer;
+            //console.log("[MANUAL_BUY] Backend calculation:");
+            //console.log("  networkFeeBuffer (lamports):", networkFeeBuffer, "(", networkFeeBuffer / 1e9, "SOL )");
+            //console.log("  totalRequired (lamports):", totalRequired, "(", totalRequired / 1e9, "SOL )");
             
 
             
@@ -767,7 +764,7 @@ wss.on("connection", (ws: WSWithUser) => {
                 bribeAmount: data.bribeAmount || 0,
               }
             );
-            console.log("[DEBUG] handleManualBuy result:", result);
+            //console.log("[DEBUG] handleManualBuy result:", result);
 
             if (result && result.signature) {
               // 1. DB update karo (same as auto-buy)
@@ -1068,6 +1065,69 @@ wss.on("connection", (ws: WSWithUser) => {
             break;
           }
 
+        case "GET_PRESETS": {
+          console.log("🟢 [WS] GET_PRESETS message received from userId:", ws.userId);
+
+          if (!ws.userId) {
+            ws.send(JSON.stringify({ type: "ERROR", error: "User not authenticated" }));
+            console.log("🔴 [WS] GET_PRESETS: User not authenticated, aborting.");
+            break;
+          }
+          let userPreset = await UserPreset.findOne({ userId: ws.userId });
+          if (!userPreset) {
+            console.log("🟡 [WS] No userPreset found, creating default for userId:", ws.userId);
+            userPreset = await UserPreset.create({
+              userId: ws.userId,
+              buyPresets: [{}, {}, {}],
+              sellPresets: [{}, {}, {}],
+              activeBuyPreset: 0,
+              activeSellPreset: 0,
+            });
+          }
+          console.log("🟢 [WS] Sending PRESETS to frontend:", {
+            buyPresets: userPreset.buyPresets,
+            sellPresets: userPreset.sellPresets,
+            activeBuyPreset: userPreset.activeBuyPreset,
+            activeSellPreset: userPreset.activeSellPreset,
+          });
+          ws.send(JSON.stringify({
+            type: "PRESETS",
+            buyPresets: userPreset.buyPresets,
+            sellPresets: userPreset.sellPresets,
+            activeBuyPreset: userPreset.activeBuyPreset,
+            activeSellPreset: userPreset.activeSellPreset,
+          }));
+          break;
+        }
+
+        case "APPLY_PRESET": {
+          const { mode, presetIndex } = data; // mode: "buy" or "sell"
+          console.log("[WS] APPLY_PRESET", { mode, presetIndex, userId: ws.userId });
+          if (!ws.userId) break;
+          const userPreset = await UserPreset.findOne({ userId: ws.userId });
+          if (!userPreset) break;
+          if (mode === "buy") userPreset.activeBuyPreset = presetIndex;
+          else if (mode === "sell") userPreset.activeSellPreset = presetIndex;
+          await userPreset.save();
+          ws.send(JSON.stringify({ type: "ACTIVE_PRESET_UPDATED", mode, presetIndex }));
+          break;
+        }
+
+        case "UPDATE_PRESET": {
+          const { mode, presetIndex, settings } = data;
+          if (!ws.userId) break;
+          const userPreset = await UserPreset.findOne({ userId: ws.userId });
+          if (!userPreset) break;
+          if (mode === "buy") {
+            userPreset.buyPresets[presetIndex] = { ...userPreset.buyPresets[presetIndex], ...settings };
+          } else {
+            userPreset.sellPresets[presetIndex] = { ...userPreset.sellPresets[presetIndex], ...settings };
+          }
+          await userPreset.save();
+          ws.send(JSON.stringify({ type: "PRESET_UPDATED", mode, presetIndex, settings }));
+          break;
+        }
+
         default:
           console.log("⚠️ Unknown message type:", data.type);
           ws.send(
@@ -1133,4 +1193,18 @@ process.on("uncaughtException", (err) => {
 process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection:", reason);
 });
+
+async function ensureUserPreset(userId: string) {
+  let userPreset = await UserPreset.findOne({ userId });
+  if (!userPreset) {
+    userPreset = await UserPreset.create({
+      userId,
+      buyPresets: [{}, {}, {}],
+      sellPresets: [{}, {}, {}],
+      activeBuyPreset: 0,
+      activeSellPreset: 0,
+    });
+  }
+  return userPreset;
+}
 

@@ -49,7 +49,7 @@ export async function buyToken({
   console.log("\n=== 💸 BUY TOKEN INITIATED ===");
   
   // Amount ko SOL mein convert karke log karenge
-  const amountInSol = amount / 1e9;
+  //const amountInSol = amount / 1e9;
   
   // Contract ke liye amount ko 1000 se divide karenge
   const adjustedAmount = Math.floor(amount / 1000);
@@ -63,21 +63,21 @@ export async function buyToken({
   // Total required amount calculate karenge
   const totalRequired = amount + priorityFee + bribeAmount + networkFeeBuffer;
   
-  console.log("=== BUY DEBUG ===", {
-    amount, // lamports
-    adjustedAmount, // amount/1000
-    minOut,
-    direction,
-    slippage,
-    priorityFee,
-    bribeAmount,
-    user: userKeypair.publicKey.toBase58(),
-    feeRecipient: swapAccounts.feeRecipient.toBase58(),
-    bondingCurve: swapAccounts.bondingCurve.toBase58(),
-    tokenMint: swapAccounts.tokenMint.toBase58(),
-    curveTokenAccount: swapAccounts.curveTokenAccount.toBase58(),
-    userTokenAccount: swapAccounts.userTokenAccount.toBase58(),
-  });
+  //console.log("=== BUY DEBUG ===", {
+    //amount, // lamports
+    //adjustedAmount, // amount/1000
+    //minOut,
+    //direction,
+    //slippage,
+    //priorityFee,
+    //bribeAmount,
+    //user: userKeypair.publicKey.toBase58(),
+    //feeRecipient: swapAccounts.feeRecipient.toBase58(),
+    //bondingCurve: swapAccounts.bondingCurve.toBase58(),
+    //tokenMint: swapAccounts.tokenMint.toBase58(),
+    //curveTokenAccount: swapAccounts.curveTokenAccount.toBase58(),
+    //userTokenAccount: swapAccounts.userTokenAccount.toBase58(),
+  //});
 
   // Check karenge ke total required amount max allowed amount se zyada to nahi hai
   if (totalRequired > maxAllowedAmount) {

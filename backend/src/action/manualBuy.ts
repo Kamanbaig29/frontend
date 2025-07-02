@@ -43,13 +43,13 @@ export async function handleManualBuy(
   }
 ): Promise<ManualBuyResult> {
   console.log("\n🛒 Starting manual buy process...");
-  console.log("----------------------------------------");
-  console.log(`🎯 Mint Address: ${mintAddress}`);
-  console.log(`💰 Amount: ${amount} lamports (${amount / 1e9} SOL)`);
-  console.log(`📊 Slippage: ${options?.slippage || 1}%`);
-  console.log(`⚡ Priority Fee: ${options?.priorityFee || 0.001} SOL`);
-  console.log(`💰 Bribe Amount: ${options?.bribeAmount || 0} SOL`);
-  console.log("----------------------------------------\n");
+  //console.log("----------------------------------------");
+  //console.log(`🎯 Mint Address: ${mintAddress}`);
+  //console.log(`💰 Amount: ${amount} lamports (${amount / 1e9} SOL)`);
+  //console.log(`📊 Slippage: ${options?.slippage || 1}%`);
+  //console.log(`⚡ Priority Fee: ${options?.priorityFee || 0.001} SOL`);
+  //console.log(`💰 Bribe Amount: ${options?.bribeAmount || 0} SOL`);
+  //console.log("----------------------------------------\n");
 
   try {
     // 1. Validate inputs
@@ -157,13 +157,13 @@ export async function handleManualBuy(
     // Check wallet balance
     const balance = await connection.getBalance(userKeypair.publicKey); // lamports
 
-    console.log("[MANUAL_BUY] manualBuy.ts values:");
-    console.log("  amount:", amount);
-    console.log("  priorityFee:", priorityFeeLamports);
-    console.log("  bribeAmount:", bribeAmountLamports);
-    console.log("  networkFeeBuffer:", networkFeeBuffer);
-    console.log("  totalRequired:", totalRequired);
-    console.log("  balance:", balance);
+    //console.log("[MANUAL_BUY] manualBuy.ts values:");
+    //console.log("  amount:", amount);
+    //console.log("  priorityFee:", priorityFeeLamports);
+    //console.log("  bribeAmount:", bribeAmountLamports);
+    //console.log("  networkFeeBuffer:", networkFeeBuffer);
+    //console.log("  totalRequired:", totalRequired);
+    //console.log("  balance:", balance);
 
     if (balance < totalRequired) {
       throw new Error(`Insufficient balance. Need ${totalRequired / 1e9} SOL (including fees)`);

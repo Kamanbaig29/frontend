@@ -47,6 +47,8 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       }
       
       setMessage(data.message || successMessage);
+      localStorage.setItem('token', data.token);
+      window.location.reload();
       return data;
 
     } catch (err: any) {
@@ -83,7 +85,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       const data = await handleApiCall('/api/auth/login', { email, password }, 'Login successful!');
       if (data.token) {
         localStorage.setItem('token', data.token);
-        onLoginSuccess();
+        window.location.reload();
       }
     } catch (error) {
        // Error is already set by handleApiCall
@@ -124,7 +126,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       const data = await response.json();
       if (data.token) {
         localStorage.setItem('token', data.token);
-        onLoginSuccess();
+        window.location.reload();
       } else {
         alert(data.message || 'Phantom login failed');
       }

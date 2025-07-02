@@ -3,11 +3,10 @@ import React, { createContext, useContext, useEffect, useState, useRef, type Rea
 // Define the shape of the context state
 export interface WebSocketContextType {
   ws: WebSocket | null;
-  status: 'connecting' | 'connected' | 'disconnected' | 'error'; // <-- yeh line add karo
+  status: 'connecting' | 'connected' | 'disconnected' | 'error';
   sendMessage: (data: any) => void;
-  isAuthenticated: boolean; // <-- yeh line add karo
+  isAuthenticated: boolean;
   authenticate: (token: string) => void;
-  // ...baaki properties...
 }
 
 // Create the context with a default value
@@ -15,8 +14,8 @@ const WebSocketContext = createContext<WebSocketContextType>({
   ws: null,
   status: 'disconnected',
   sendMessage: () => console.error('sendMessage function not ready'),
-  isAuthenticated: false, // <-- add default value
-  authenticate: () => {}, // <-- add default value
+  isAuthenticated: false,
+  authenticate: () => {},
 });
 
 // Custom hook to use the WebSocket context
@@ -33,9 +32,10 @@ interface WebSocketProviderProps {
 export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
   const socketRef = useRef<WebSocket | null>(null);
   const [status, setStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('disconnected');
-  const [isAuthenticated, setIsAuthenticated] = useState(false); // <-- add state
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem("token"));
 
+  // Helper to send messages
   const sendMessage = (data: any) => {
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify(data));
@@ -44,95 +44,90 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     }
   };
 
-  const authenticate = (token: string) => {
-    sendMessage({ type: 'AUTHENTICATE', token });
-    setIsAuthenticated(true); // <-- update state on authenticate
+  // Call this after login to update token and trigger reconnect
+  const authenticate = (newToken: string) => {
+    localStorage.setItem("token", newToken);
+    setToken(newToken);
   };
 
+  // Call this after logout to clear token and trigger disconnect
+  const logout = () => {
+    localStorage.removeItem("token");
+    setToken(null);
+    setIsAuthenticated(false);
+  };
+
+  // Reconnect WebSocket whenever token changes
   useEffect(() => {
-    // This function encapsulates the connection logic.
-    const connect = () => {
-      // Prevent multiple connection attempts
-      if (socketRef.current && socketRef.current.readyState !== WebSocket.CLOSED) {
-        return;
+    if (!token) {
+      // If no token, close any open socket and reset state
+      if (socketRef.current) {
+        socketRef.current.close();
+        socketRef.current = null;
       }
-      
-      console.log("[WebSocket Context] Attempting to connect...");
-      const socket = new WebSocket('ws://localhost:4000');
-      socketRef.current = socket;
+      setIsAuthenticated(false);
+      setStatus('disconnected');
+      return;
+    }
 
-      socket.onopen = () => {
-        console.log('[WebSocket Context] Connection established');
-        setStatus('connected');
-        if (reconnectTimeoutRef.current) {
-          clearTimeout(reconnectTimeoutRef.current);
-        }
-        const token = localStorage.getItem("token");
-        if (token) {
-          sendMessage({ type: "AUTHENTICATE", token });
-        }
-      };
+    // Clean up any previous socket
+    if (socketRef.current) {
+      socketRef.current.close();
+      socketRef.current = null;
+    }
 
-      socket.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        console.log('WebSocket: Received message:', data);
+    setStatus('connecting');
+    const socket = new WebSocket('ws://localhost:4000');
+    socketRef.current = socket;
 
-        if (data.type === 'AUTH_SUCCESS') {
-          console.log('[WebSocket Context] Authentication successful!');
-          setIsAuthenticated(true); // <-- update state on auth success
-          // Handle successful authentication
-        }
-      };
-
-      socket.onclose = () => {
-        console.log('[WebSocket Context] Connection closed');
-        setStatus('disconnected');
-        socketRef.current = null; // Clear the ref
-        
-        // Schedule reconnection
-        if (!reconnectTimeoutRef.current) {
-            reconnectTimeoutRef.current = setTimeout(() => {
-                console.log("[WebSocket Context] Reconnecting...");
-                connect();
-            }, 3000); // Reconnect after 3 seconds
-        }
-      };
-
-      socket.onerror = (error) => {
-        console.error('[WebSocket Context] Error:', error);
-        setStatus('error');
-        socket.close(); // This will trigger the onclose handler, which handles reconnect logic.
-      };
+    socket.onopen = () => {
+      setStatus('connected');
+      sendMessage({ type: "AUTHENTICATE", token });
     };
 
-    connect();
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
 
-    // The cleanup function is crucial for preventing memory leaks.
-    return () => {
-      console.log("[WebSocket Context] Cleanup function running.");
-      // Clear the reconnect timer if it's set.
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-        reconnectTimeoutRef.current = null;
+      if (data.type === 'AUTH_SUCCESS') {
+        setIsAuthenticated(true);
       }
-      // We only close the socket on unmount.
-      // The logic inside `connect` prevents re-creating it if it's not needed.
+
+      if (
+        data.type === "AUTH_ERROR" ||
+        (data.type === "ERROR" && data.error && data.error.toLowerCase().includes("token"))
+      ) {
+        logout();
+        window.location.href = "/"; // or your login route
+      }
+    };
+
+    socket.onclose = () => {
+      setStatus('disconnected');
+      socketRef.current = null;
+      setIsAuthenticated(false);
+    };
+
+    socket.onerror = (error) => {
+      setStatus('error');
+      socket.close();
+    };
+
+    // Cleanup on unmount or token change
+    return () => {
       if (socketRef.current) {
-        socketRef.current.onclose = null; // Prevent the automatic reconnect from firing on purposefule close.
+        socketRef.current.onclose = null;
         socketRef.current.close();
         socketRef.current = null;
       }
     };
-  }, []); // The empty dependency array is correct.
+  }, [token]);
 
-  // We expose the raw socket object via the ref's current value.
-  const value = { ws: socketRef.current, status, sendMessage, isAuthenticated, authenticate };
-
+  // Expose context
   return (
     <WebSocketContext.Provider value={{
       ws: socketRef.current,
-      status,           // <-- add this
-      sendMessage,      // <-- add this
+      status,
+      sendMessage,
       isAuthenticated,
       authenticate,
     }}>

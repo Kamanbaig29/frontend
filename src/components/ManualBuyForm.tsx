@@ -36,7 +36,7 @@ export const ManualBuyForm: React.FC = () => {
     const handleMessage = (event: MessageEvent) => {
       try {
         const response = JSON.parse(event.data);
-        console.log("ManualBuyForm received message:", response);
+        //console.log("ManualBuyForm received message:", response);
 
         if (response.type === "MANUAL_BUY_SUCCESS") {
           setSuccess(
