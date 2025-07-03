@@ -40,3 +40,9 @@
 .read-the-docs {
   color: #888;
 }
+
+.MuiInputBase-input.Mui-disabled {
+  color: #aaa !important;
+  -webkit-text-fill-color: #aaa !important;
+  opacity: 1 !important;
+}

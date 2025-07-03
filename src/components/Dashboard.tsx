@@ -23,6 +23,8 @@ import {
 
 interface DashboardProps {
   onBackHome: () => void;
+  activeBuyPreset: number;
+  buyPresets: any[];
 }
 
 interface AutoSnipeSettings {
@@ -48,15 +50,16 @@ const getStatusColor = (status: string): StatusColor => {
   }
 };
 
-export const Dashboard: React.FC<DashboardProps> = ({ onBackHome }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ onBackHome, activeBuyPreset, buyPresets }) => {
   const { state, dispatch } = useBot();
   const { ws, status: wsStatus, sendMessage } = useWebSocket();
   const [status, setStatus] = useState('Initializing...');
+  const activePreset = buyPresets[activeBuyPreset] || {};
   const [settings, setSettings] = useState<AutoSnipeSettings>({
-    buyAmount: 0.1,    // Default 0.1 SOL
-    slippage: 1,       // Default 1%
-    priorityFee: 0,    // Default 0 SOL
-    bribeAmount: 0,    // Default 0 SOL
+    buyAmount: 0.00001,
+    slippage: Number(activePreset.slippage) || 1,
+    priorityFee: Number(activePreset.priorityFee) || 0,
+    bribeAmount: Number(activePreset.bribeAmount) || 0,
     autoBuyEnabled: false
   });
 
@@ -124,6 +127,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBackHome }) => {
     }
   }, [ws, wsStatus, dispatch, sendMessage]);
 
+  useEffect(() => {
+    const activePreset = buyPresets[activeBuyPreset] || {};
+    setSettings((prev) => ({
+      ...prev,
+      slippage: Number(activePreset.slippage) || 1,
+      priorityFee: Number(activePreset.priorityFee) || 0,
+      bribeAmount: Number(activePreset.bribeAmount) || 0,
+    }));
+  }, [activeBuyPreset, buyPresets]);
+
   const handleSettingsChange = (field: keyof AutoSnipeSettings, value: number | boolean) => {
     const newSettings = { ...settings, [field]: value };
     setSettings(newSettings);
@@ -157,49 +170,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBackHome }) => {
               value={settings.buyAmount}
               onChange={(e) => handleSettingsChange('buyAmount', parseFloat(e.target.value))}
               fullWidth
-              InputProps={{ inputProps: { min: 0.01, step: 0.01 } }}
-              sx={{ 
-                '& .MuiOutlinedInput-root': { color: 'white' },
-                '& .MuiInputLabel-root': { color: 'white' }
-              }}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <TextField
-              label="Slippage (%)"
-              type="number"
-              value={settings.slippage}
-              onChange={(e) => handleSettingsChange('slippage', parseFloat(e.target.value))}
-              fullWidth
-              InputProps={{ inputProps: { min: 0.1, max: 5, step: 0.1 } }}
-              sx={{ 
-                '& .MuiOutlinedInput-root': { color: 'white' },
-                '& .MuiInputLabel-root': { color: 'white' }
-              }}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <TextField
-              label="Priority Fee (SOL)"
-              type="number"
-              value={settings.priorityFee}
-              onChange={(e) => handleSettingsChange('priorityFee', parseFloat(e.target.value))}
-              fullWidth
-              InputProps={{ inputProps: { min: 0, step: 0.001 } }}
-              sx={{ 
-                '& .MuiOutlinedInput-root': { color: 'white' },
-                '& .MuiInputLabel-root': { color: 'white' }
-              }}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <TextField
-              label="Bribe Amount (SOL)"
-              type="number"
-              value={settings.bribeAmount}
-              onChange={(e) => handleSettingsChange('bribeAmount', parseFloat(e.target.value))}
-              fullWidth
-              InputProps={{ inputProps: { min: 0, step: 0.001 } }}
+              InputProps={{ inputProps: { min: 0.00001, step: 0.00001 } }}
               sx={{ 
                 '& .MuiOutlinedInput-root': { color: 'white' },
                 '& .MuiInputLabel-root': { color: 'white' }
@@ -316,10 +287,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onBackHome }) => {
     // Reset tokens and settings (frontend)
     dispatch({ type: 'RESET' });
     setSettings({
-      buyAmount: 0.1,
-      slippage: 1,
-      priorityFee: 0,
-      bribeAmount: 0,
+      buyAmount: 0.00001,
+      slippage: Number(activePreset.slippage) || 1,
+      priorityFee: Number(activePreset.priorityFee) || 0,
+      bribeAmount: Number(activePreset.bribeAmount) || 0,
       autoBuyEnabled: false
     });
     setStatus('Initializing...');

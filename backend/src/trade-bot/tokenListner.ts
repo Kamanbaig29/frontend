@@ -386,8 +386,30 @@ const handleAutoSnipe = async (
       //console.log(`[DEBUG] 12. Preparing to execute buy transaction.`);
       const settings = userSession.ws.autoSnipeSettings!;
       const buyAmount = Number(settings.buyAmount);
-      const priorityFee = Number(settings.priorityFee);
-      const bribeAmount = Number(settings.bribeAmount);
+
+      // Get active buy preset from DB
+      const userPreset = await UserPreset.findOne({ userId });
+      const activePreset = (userPreset?.buyPresets?.[userPreset.activeBuyPreset] || {}) as { slippage?: number|string, priorityFee?: number|string, bribeAmount?: number|string };
+
+      // Use preset values for fees
+      const slippage = Number(activePreset.slippage) || 1;
+      const priorityFee = Math.floor(Number(activePreset.priorityFee || 0) * 1_000_000_000);
+      const bribeAmount = Math.floor(Number(activePreset.bribeAmount || 0) * 1_000_000_000);
+
+      // Log for debugging
+      console.log(`[AUTO SNIPE] Using preset #${userPreset?.activeBuyPreset ?? 0}:`);
+      console.log(`  Slippage: ${slippage}`);
+      console.log(`  Priority Fee: ${priorityFee}`);
+      console.log(`  Bribe Amount: ${bribeAmount}`);
+
+      console.log("\n=== [AUTO SNIPE BUY PARAMETERS] ===");
+      console.log(`Active Buy Preset Index: ${userPreset?.activeBuyPreset ?? 0}`);
+      console.log(`Preset Object:`, activePreset);
+      console.log(`Buy Amount (lamports): ${buyAmount} (${buyAmount / 1e9} SOL)`);
+      console.log(`Slippage: ${slippage}`);
+      console.log(`Priority Fee (lamports): ${priorityFee} (${priorityFee / 1e9} SOL)`);
+      console.log(`Bribe Amount (lamports): ${bribeAmount} (${bribeAmount / 1e9} SOL)`);
+      console.log("====================================\n");
 
       const totalRequired = buyAmount + priorityFee + bribeAmount + 10_000_000;
 
@@ -424,7 +446,7 @@ const handleAutoSnipe = async (
         minOut: MIN_OUT_AMOUNT,
         direction: DIRECTION,
         swapAccounts,
-        slippage: settings.slippage,
+        slippage: slippage,
         priorityFee: priorityFee,
         bribeAmount: bribeAmount,
       });
@@ -570,6 +592,9 @@ const stopTokenListener = (userId: string) => {
   console.log(`[TOKEN_LISTENER] STOP for userId: ${userId}`);
 };
 
+// Add this map at the top to track auto fee intervals per user
+const autoFeeIntervals = new Map<string, NodeJS.Timeout>();
+
 export function setupWebSocketHandlers(wss: WebSocketServer) {
 wss.on("connection", (ws: WSWithUser) => {
   console.log("🔌 New client connected");
@@ -614,6 +639,7 @@ wss.on("connection", (ws: WSWithUser) => {
             JSON.stringify({
               type: "AUTH_SUCCESS",
               message: "WebSocket authenticated successfully",
+              walletAddress: decoded.walletAddress, // <-- add this
             })
           );
           break;
@@ -723,15 +749,15 @@ wss.on("connection", (ws: WSWithUser) => {
           break;
 
         case "MANUAL_BUY":
-          //console.log("[DEBUG] MANUAL_BUY case started.");
+          console.log("[DEBUG] MANUAL_BUY case started.");
 
-          // Log frontend se aayi values
-          //console.log("[MANUAL_BUY] Frontend values:");
-          //console.log("  mintAddress:", data.mintAddress);
-          //console.log("  amount (lamports):", data.amount, "(", data.amount / 1e9, "SOL )");
-          //console.log("  slippage:", data.slippage);
-          //console.log("  priorityFee (lamports):", data.priorityFee, "(", data.priorityFee / 1e9, "SOL )");
-          //console.log("  bribeAmount (lamports):", data.bribeAmount, "(", data.bribeAmount / 1e9, "SOL )");
+           //Log frontend se aayi values
+          console.log("[MANUAL_BUY] Frontend values:");
+          console.log("  mintAddress:", data.mintAddress);
+          console.log("  amount (lamports):", data.amount, "(", data.amount / 1e9, "SOL )");
+          console.log("  slippage:", data.slippage);
+          console.log("  priorityFee (lamports):", data.priorityFee, "(", data.priorityFee / 1e9, "SOL )");
+          console.log("  bribeAmount (lamports):", data.bribeAmount, "(", data.bribeAmount / 1e9, "SOL )");
 
           if (!ws.userId) {
             ws.send(JSON.stringify({ type: "ERROR", error: "User not authenticated" }));
@@ -1101,8 +1127,7 @@ wss.on("connection", (ws: WSWithUser) => {
         }
 
         case "APPLY_PRESET": {
-          const { mode, presetIndex } = data; // mode: "buy" or "sell"
-          console.log("[WS] APPLY_PRESET", { mode, presetIndex, userId: ws.userId });
+          const { mode, presetIndex } = data;
           if (!ws.userId) break;
           const userPreset = await UserPreset.findOne({ userId: ws.userId });
           if (!userPreset) break;
@@ -1110,6 +1135,14 @@ wss.on("connection", (ws: WSWithUser) => {
           else if (mode === "sell") userPreset.activeSellPreset = presetIndex;
           await userPreset.save();
           ws.send(JSON.stringify({ type: "ACTIVE_PRESET_UPDATED", mode, presetIndex }));
+          // --- Add this: ---
+          ws.send(JSON.stringify({
+            type: "PRESETS",
+            buyPresets: userPreset.buyPresets,
+            sellPresets: userPreset.sellPresets,
+            activeBuyPreset: userPreset.activeBuyPreset,
+            activeSellPreset: userPreset.activeSellPreset,
+          }));
           break;
         }
 
@@ -1125,6 +1158,70 @@ wss.on("connection", (ws: WSWithUser) => {
           }
           await userPreset.save();
           ws.send(JSON.stringify({ type: "PRESET_UPDATED", mode, presetIndex, settings }));
+          // --- Add this: ---
+          ws.send(JSON.stringify({
+            type: "PRESETS",
+            buyPresets: userPreset.buyPresets,
+            sellPresets: userPreset.sellPresets,
+            activeBuyPreset: userPreset.activeBuyPreset,
+            activeSellPreset: userPreset.activeSellPreset,
+          }));
+          break;
+        }
+
+        // --- NEW: SUBSCRIBE_AUTO_FEE ---
+        case "SUBSCRIBE_AUTO_FEE": {
+          if (!ws.userId) break;
+          // Clear any existing interval
+          if (autoFeeIntervals.has(ws.userId)) {
+            clearInterval(autoFeeIntervals.get(ws.userId)!);
+          }
+          const { Connection } = require("@solana/web3.js");
+
+          const MAINNET_RPC_URL = "https://mainnet.helius-rpc.com/?api-key=d70232c8-cb8c-4fb0-9d3f-985fc6f90880"; // <-- apna RPC daalein
+          const mainnetConnection = new Connection(MAINNET_RPC_URL, "confirmed");
+          // Start sending auto fee updates every 5 seconds
+          const interval = setInterval(async () => {
+            try {
+              // 1. Get recent prioritization fees
+              const fees = await mainnetConnection.getRecentPrioritizationFees();
+              let priorityFee = 0;
+              if (fees && fees[0]) {
+                priorityFee = fees[0].prioritizationFee / 1e9;
+              }
+              // 2. Minimum threshold (e.g. 0.001 SOL)
+              if (priorityFee < 0.001) priorityFee = 0.001;
+              const priorityFeeStr = priorityFee.toFixed(5);
+
+              let bribeAmount = priorityFee * 2;
+              if (bribeAmount < 0.001) bribeAmount = 0.001;
+              const bribeAmountStr = (bribeAmount).toFixed(5);
+
+              ws.send(JSON.stringify({
+                type: "AUTO_FEE_UPDATE",
+                priorityFee: priorityFeeStr,
+                bribeAmount: bribeAmountStr,
+              }));
+            } catch (e) {
+              console.error("Failed to fetch network fees:", e);
+              ws.send(JSON.stringify({
+                type: "AUTO_FEE_UPDATE",
+                priorityFee: "0.001",
+                bribeAmount: "0.001"
+              }));
+            }
+          }, 5000);
+          autoFeeIntervals.set(ws.userId, interval);
+          break;
+        }
+
+        // --- NEW: UNSUBSCRIBE_AUTO_FEE ---
+        case "UNSUBSCRIBE_AUTO_FEE": {
+          if (!ws.userId) break;
+          if (autoFeeIntervals.has(ws.userId)) {
+            clearInterval(autoFeeIntervals.get(ws.userId)!);
+            autoFeeIntervals.delete(ws.userId);
+          }
           break;
         }
 
@@ -1157,6 +1254,12 @@ wss.on("connection", (ws: WSWithUser) => {
       stopTokenListener(ws.userId);
       userSessions.delete(ws.userId);
       console.log(`🛑 Cleaned up session for user: ${ws.userId}`);
+    }
+
+    // Clean up interval on disconnect
+    if (ws.userId && autoFeeIntervals.has(ws.userId)) {
+      clearInterval(autoFeeIntervals.get(ws.userId)!);
+      autoFeeIntervals.delete(ws.userId);
     }
   });
 

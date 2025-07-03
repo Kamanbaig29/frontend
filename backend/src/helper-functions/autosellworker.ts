@@ -6,6 +6,8 @@ import { getSwapAccounts } from "../action/getSwapAccounts";
 import { getCurrentPrice } from "./getCurrentPrice";
 import { updateOrRemoveTokenAfterSell } from "./db-buy-sell-enterer";
 import { getUserKeypairByWallet } from "../utils/userWallet";
+import UserPreset from '../models/userPreset';
+import User from '../models/user_auth';
 
 // --- CONFIG & UTILS ---
 const MEMEHOME_PROGRAM_ID = new PublicKey(process.env.MEMEHOME_PROGRAM_ID!);
@@ -33,8 +35,11 @@ export async function checkAndExecuteAllAutoSells(connection: Connection) {
       processingSells.add(key);
 
       try {
-        // Log which user/token is being checked
-        console.log(`[AUTO-SELL][${userPublicKey}] Checking token ${mint} for auto-sell conditions...`);
+        // Log config being processed
+        console.log(`\n[AUTO-SELL][${userPublicKey}] --- Processing token: ${mint} ---`);
+        console.log(`[AUTO-SELL][${userPublicKey}] Config:`, {
+          buyPrice, takeProfitPercent, stopLossPercent, sellPercentage
+        });
 
         const token = await WalletToken.findOne({ mint, userPublicKey });
         if (!token) {
@@ -57,8 +62,15 @@ export async function checkAndExecuteAllAutoSells(connection: Connection) {
           continue;
         }
 
+        // Calculate profit/loss
+        const profitLossPercent = ((currentPrice - buyPriceNum) / buyPriceNum) * 100;
+        console.log(`[AUTO-SELL][${userPublicKey}] buyPrice: ${buyPriceNum}, currentPrice: ${currentPrice}`);
+        console.log(`[AUTO-SELL][${userPublicKey}] Profit/Loss: ${profitLossPercent.toFixed(2)}%`);
+
         const takeProfitPrice = buyPriceNum * (1 + (Number(takeProfitPercent) || 0) / 100);
         const stopLossPrice = buyPriceNum * (1 - (Number(stopLossPercent) || 0) / 100);
+
+        console.log(`[AUTO-SELL][${userPublicKey}] takeProfitPrice: ${takeProfitPrice}, stopLossPrice: ${stopLossPrice}`);
 
         let shouldSell = false;
         let reason = "";
@@ -72,7 +84,7 @@ export async function checkAndExecuteAllAutoSells(connection: Connection) {
         }
 
         if (shouldSell) {
-          console.log(`[AUTO-SELL][${userPublicKey}] 🎯 Triggered for ${mint} due to ${reason}.`);
+          console.log(`[AUTO-SELL][${userPublicKey}] 🎯 Sell triggered for ${mint} due to ${reason}.`);
 
           const tokenAmount = parseFloat(token.amount);
           const decimals = token.decimals || 6;
@@ -80,7 +92,33 @@ export async function checkAndExecuteAllAutoSells(connection: Connection) {
           const remainingAmount = tokenAmount - sellAmount;
           const sellAmountInSmallestUnit = Math.round(sellAmount * Math.pow(10, decimals));
 
+          console.log(`[AUTO-SELL][${userPublicKey}] tokenAmount: ${tokenAmount}, decimals: ${decimals}`);
+          console.log(`[AUTO-SELL][${userPublicKey}] sellAmount: ${sellAmount}, sellAmountInSmallestUnit: ${sellAmountInSmallestUnit}`);
+          console.log(`[AUTO-SELL][${userPublicKey}] remainingAmount: ${remainingAmount}`);
+
           if (sellAmountInSmallestUnit > 0) {
+            // 1. Get userId from userPublicKey (if not in config)
+            const user = await User.findOne({ walletAddress: userPublicKey });
+            const userId = user?._id;
+
+            // 2. Get user's active sell preset
+            const userPreset = await UserPreset.findOne({ userId });
+            const activeSellPreset = (userPreset?.sellPresets?.[userPreset.activeSellPreset] || {}) as {
+              slippage?: number;
+              priorityFee?: number;
+              bribeAmount?: number;
+            };
+
+            console.log(`[AUTO-SELL][${userPublicKey}] activeSellPreset object:`, activeSellPreset);
+
+            if (
+              activeSellPreset.slippage === undefined ||
+              activeSellPreset.priorityFee === undefined ||
+              activeSellPreset.bribeAmount === undefined
+            ) {
+              console.warn(`[AUTO-SELL][${userPublicKey}] WARNING: activeSellPreset is missing fee fields, using defaults!`, activeSellPreset);
+            }
+
             const swapAccounts = await getSwapAccounts({
               mintAddress: mint,
               buyer: userKeypair.publicKey,
@@ -88,6 +126,13 @@ export async function checkAndExecuteAllAutoSells(connection: Connection) {
               programId: MEMEHOME_PROGRAM_ID,
             });
 
+            // 3. Log the fee parameters before selling
+            console.log(`[AUTO-SELL][${userPublicKey}] Using sell params for ${mint}:`);
+            console.log(`  Slippage: ${Number(activeSellPreset.slippage) || 5}`);
+            console.log(`  Priority Fee: ${Number(activeSellPreset.priorityFee) || 0.001}`);
+            console.log(`  Bribe Amount: ${Number(activeSellPreset.bribeAmount) || 0}`);
+
+            // 4. Use these in sellToken
             const txSignature = await sellToken({
               connection,
               userKeypair,
@@ -95,9 +140,9 @@ export async function checkAndExecuteAllAutoSells(connection: Connection) {
               amount: BigInt(sellAmountInSmallestUnit),
               minOut: BigInt(1),
               swapAccounts,
-              slippage: Number(slippage) || 5,
-              priorityFee: Number(priorityFee) || 0.001,
-              bribeAmount: Number(bribeAmount) || 0,
+              slippage: Number(activeSellPreset.slippage) || 5,
+              priorityFee: Number(activeSellPreset.priorityFee) || 0.001,
+              bribeAmount: Number(activeSellPreset.bribeAmount) || 0,
             });
 
             if (txSignature) {

@@ -7,6 +7,7 @@ export interface WebSocketContextType {
   sendMessage: (data: any) => void;
   isAuthenticated: boolean;
   authenticate: (token: string) => void;
+  walletAddress?: string; // <-- add this
 }
 
 // Create the context with a default value
@@ -34,6 +35,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
   const [status, setStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('disconnected');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [token, setToken] = useState<string | null>(() => localStorage.getItem("token"));
+  const [walletAddress, setWalletAddress] = useState<string | undefined>(undefined);
 
   // Helper to send messages
   const sendMessage = (data: any) => {
@@ -90,6 +92,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
 
       if (data.type === 'AUTH_SUCCESS') {
         setIsAuthenticated(true);
+        if (data.walletAddress) setWalletAddress(data.walletAddress); // <-- set here
       }
 
       if (
@@ -130,6 +133,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
       sendMessage,
       isAuthenticated,
       authenticate,
+      walletAddress, // <-- add this
     }}>
       {children}
     </WebSocketContext.Provider>

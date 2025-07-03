@@ -15,7 +15,13 @@ function getCurrentUserId(): string | null {
   }
 }
 
-export const AutomaticSellDashboard: React.FC<{ onBackHome: () => void }> = ({ onBackHome }) => {
+interface AutomaticSellDashboardProps {
+  onBackHome: () => void;
+  activeSellPreset: number;
+  sellPresets: any[];
+}
+
+export const AutomaticSellDashboard: React.FC<AutomaticSellDashboardProps> = ({ onBackHome, activeSellPreset, sellPresets }) => {
     const { ws, sendMessage } = useWebSocket();
     const [tokens, setTokens] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -26,7 +32,6 @@ export const AutomaticSellDashboard: React.FC<{ onBackHome: () => void }> = ({ o
     const [search, setSearch] = useState('');
     const currentUserId = getCurrentUserId();
 
-    // Authenticate and get tokens on mount
     useEffect(() => {
         const token = localStorage.getItem("token");
         if (ws && token) {
@@ -35,7 +40,6 @@ export const AutomaticSellDashboard: React.FC<{ onBackHome: () => void }> = ({ o
         }
     }, [ws]);
 
-    // Get token prices and autosell configs
     useEffect(() => {
         if (ws) ws.send(JSON.stringify({ type: 'GET_TOKEN_PRICES' }));
     }, [ws]);
@@ -43,7 +47,6 @@ export const AutomaticSellDashboard: React.FC<{ onBackHome: () => void }> = ({ o
         if (ws) ws.send(JSON.stringify({ type: 'GET_USER_AUTOSELL_CONFIGS' }));
     }, [ws]);
 
-    // Sync tokenSettings with tokens and autoSellConfigs
     useEffect(() => {
         if (tokens.length && autoSellConfigs.length) {
             const autoSellMap: Record<string, any> = {};
@@ -58,16 +61,12 @@ export const AutomaticSellDashboard: React.FC<{ onBackHome: () => void }> = ({ o
                     takeProfitPercent: cfg.takeProfitPercent ?? '',
                     stopLossPercent: cfg.stopLossPercent ?? '',
                     sellPercentage: cfg.sellPercentage ?? '100',
-                    slippage: cfg.slippage ?? '5',
-                    priorityFee: cfg.priorityFee ?? '0.001',
-                    bribeAmount: cfg.bribeAmount ?? '0'
                 };
             });
             setTokenSettings(initialSettings);
         }
     }, [tokens, autoSellConfigs]);
 
-    // Handle incoming WebSocket messages
     useEffect(() => {
         if (!ws) return;
         const handleMessage = (event: MessageEvent) => {
@@ -107,30 +106,35 @@ export const AutomaticSellDashboard: React.FC<{ onBackHome: () => void }> = ({ o
                     takeProfitPercent: settings.takeProfitPercent,
                     stopLossPercent: settings.stopLossPercent,
                     sellPercentage: settings.sellPercentage,
-                    slippage: settings.slippage,
-                    priorityFee: settings.priorityFee,
-                    bribeAmount: settings.bribeAmount
                 }
             }));
         }
     };
 
     const handleManualSell = (token: any) => {
+        if (!token || !token._id) {
+            console.error('Invalid token:', token);
+            return;
+        }
+        if (!Array.isArray(sellPresets) || typeof activeSellPreset !== 'number' || !sellPresets[activeSellPreset]) {
+            console.error('Invalid sellPresets or activeSellPreset:', { sellPresets, activeSellPreset });
+            return;
+        }
         const settings = tokenSettings[token._id];
-        if (ws && settings) {
+        const preset = sellPresets[activeSellPreset];
+        if (ws && settings && preset) {
             ws.send(JSON.stringify({
                 type: 'MANUAL_SELL',
                 mint: token.mint,
                 percent: Number(settings?.sellPercentage || 100),
                 walletAddress: token.userPublicKey,
-                slippage: Number(settings?.slippage || 1),
-                priorityFee: Number(settings?.priorityFee || 0.001),
-                bribeAmount: Number(settings?.bribeAmount || 0)
+                slippage: Number(preset.slippage || 1),
+                priorityFee: Number(preset.priorityFee || 0.001),
+                bribeAmount: Number(preset.bribeAmount || 0)
             }));
         }
     };
 
-    // Search filter (for future)
     const filteredTokens = useMemo(() => {
         if (!search) return tokens;
         return tokens.filter(token =>
@@ -256,45 +260,6 @@ export const AutomaticSellDashboard: React.FC<{ onBackHome: () => void }> = ({ o
                                     '& .MuiOutlinedInput-notchedOutline': { borderColor: 'gray' }
                                 }}
                                 InputProps={{ inputProps: { min: 1, max: 100, step: 1 } }}
-                            />
-                            <TextField
-                                label="Slippage %"
-                                type="number"
-                                value={tokenSettings[token._id]?.slippage ?? ''}
-                                onChange={e => handleSettingChange(token._id, 'slippage', e.target.value)}
-                                sx={{
-                                    mt: 1, mr: 2, width: 120,
-                                    '& .MuiInputLabel-root': { color: 'white' },
-                                    '& .MuiInputBase-input': { color: 'white' },
-                                    '& .MuiOutlinedInput-notchedOutline': { borderColor: 'gray' }
-                                }}
-                                InputProps={{ inputProps: { min: 0, max: 100, step: 0.1 } }}
-                            />
-                            <TextField
-                                label="Priority Fee (SOL)"
-                                type="number"
-                                value={tokenSettings[token._id]?.priorityFee ?? ''}
-                                onChange={e => handleSettingChange(token._id, 'priorityFee', e.target.value)}
-                                sx={{
-                                    mt: 1, mr: 2, width: 150,
-                                    '& .MuiInputLabel-root': { color: 'white' },
-                                    '& .MuiInputBase-input': { color: 'white' },
-                                    '& .MuiOutlinedInput-notchedOutline': { borderColor: 'gray' }
-                                }}
-                                InputProps={{ inputProps: { min: 0, step: 0.0001 } }}
-                            />
-                            <TextField
-                                label="Bribe Amount (SOL)"
-                                type="number"
-                                value={tokenSettings[token._id]?.bribeAmount ?? ''}
-                                onChange={e => handleSettingChange(token._id, 'bribeAmount', e.target.value)}
-                                sx={{
-                                    mt: 1, mr: 2, width: 150,
-                                    '& .MuiInputLabel-root': { color: 'white' },
-                                    '& .MuiInputBase-input': { color: 'white' },
-                                    '& .MuiOutlinedInput-notchedOutline': { borderColor: 'gray' }
-                                }}
-                                InputProps={{ inputProps: { min: 0, step: 0.0001 } }}
                             />
                             <Button
                                 variant="contained"

@@ -1,7 +1,6 @@
 import mongoose, { Schema, Document } from "mongoose";
 
 export interface IPreset {
-  buyAmount: string;
   slippage: number;
   priorityFee: string;
   bribeAmount: string;
@@ -20,7 +19,6 @@ export interface IUserPreset extends Document {
 }
 
 const PresetSchema: Schema = new Schema({
-  buyAmount: { type: String, required: true, default: "0.001" },
   slippage: { type: Number, required: true, default: 1 },
   priorityFee: { type: String, required: true, default: "0.001" },
   bribeAmount: { type: String, required: true, default: "0.001" },

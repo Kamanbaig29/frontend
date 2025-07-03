@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions, Button,
   ToggleButtonGroup, ToggleButton, Box, Typography, TextField, MenuItem, Checkbox, FormControlLabel
@@ -32,23 +32,88 @@ const PresetModal: React.FC<PresetModalProps> = ({
   const [form, setForm] = useState<any>({});
   const { ws } = useWebSocket();
 
+  // Add a ref to track autoFee subscription
+  const autoFeeSubscribed = useRef(false);
+
   // Update form when preset or mode changes
   useEffect(() => {
     if (mode === 'buy' && buyPresets && buyPresets[activeBuyPreset]) {
-      console.log("Setting form from buyPresets:", buyPresets[activeBuyPreset]);
       setForm({ ...buyPresets[activeBuyPreset] });
     }
     if (mode === 'sell' && sellPresets && sellPresets[activeSellPreset]) {
-      console.log("Setting form from sellPresets:", sellPresets[activeSellPreset]);
       setForm({ ...sellPresets[activeSellPreset] });
     }
-  }, [mode, activeBuyPreset, activeSellPreset, buyPresets, sellPresets]);
+    // eslint-disable-next-line
+  }, [mode, activeBuyPreset, activeSellPreset]);
+
+  // --- NEW: Listen for AUTO_FEE_UPDATE messages and update form ---
+  useEffect(() => {
+    if (!ws) return;
+
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "AUTO_FEE_UPDATE" && form.autoFee) {
+          setForm((prev: any) => ({
+            ...prev,
+            priorityFee: data.priorityFee,
+            bribeAmount: data.bribeAmount,
+          }));
+        }
+      } catch {}
+    };
+
+    ws.addEventListener("message", handleMessage);
+    return () => ws.removeEventListener("message", handleMessage);
+  }, [ws, form.autoFee]);
+
+  // --- NEW: Subscribe/Unsubscribe to auto fee updates ---
+  useEffect(() => {
+    if (!ws) return;
+    if (form.autoFee && !autoFeeSubscribed.current) {
+      ws.send(JSON.stringify({ type: "SUBSCRIBE_AUTO_FEE" }));
+      autoFeeSubscribed.current = true;
+    } else if (!form.autoFee && autoFeeSubscribed.current) {
+      ws.send(JSON.stringify({ type: "UNSUBSCRIBE_AUTO_FEE" }));
+      autoFeeSubscribed.current = false;
+    }
+    // Unsubscribe on unmount
+    return () => {
+      if (autoFeeSubscribed.current && ws) {
+        ws.send(JSON.stringify({ type: "UNSUBSCRIBE_AUTO_FEE" }));
+        autoFeeSubscribed.current = false;
+      }
+    };
+    // eslint-disable-next-line
+  }, [form.autoFee, ws]);
+
+  // 2. Jab bhi form.priorityFee ya form.bribeAmount change ho, backend ko update bhejo
+  useEffect(() => {
+    if (!ws) return;
+    if (!form.autoFee) return;
+    // Only send if both values are present
+    if (form.priorityFee && form.bribeAmount) {
+      ws.send(JSON.stringify({
+        type: "UPDATE_PRESET",
+        mode,
+        presetIndex: mode === 'buy' ? activeBuyPreset : activeSellPreset,
+        settings: {
+          priorityFee: form.priorityFee,
+          bribeAmount: form.bribeAmount,
+        }
+      }));
+    }
+    // Jab bhi mode ya preset index change ho, backend ko update bhejo
+  }, [form.priorityFee, form.bribeAmount, form.autoFee, ws, mode, activeBuyPreset, activeSellPreset]);
 
   const handlePresetChange = (event: React.MouseEvent<HTMLElement>, newPreset: number) => {
     if (newPreset !== null) {
       if (mode === 'buy') setActiveBuyPreset(newPreset);
       else setActiveSellPreset(newPreset);
-      if (ws) ws.send(JSON.stringify({ type: "APPLY_PRESET", mode, presetIndex: newPreset }));
+      if (ws) {
+        ws.send(JSON.stringify({ type: "APPLY_PRESET", mode, presetIndex: newPreset }));
+        ws.send(JSON.stringify({ type: "GET_PRESETS" }));
+      }
     }
   };
 
@@ -61,7 +126,6 @@ const PresetModal: React.FC<PresetModalProps> = ({
     };
     setForm(newForm);
 
-    // Auto-save to backend (send full form)
     if (ws) {
       ws.send(JSON.stringify({
         type: "UPDATE_PRESET",
@@ -228,15 +292,25 @@ const PresetModal: React.FC<PresetModalProps> = ({
               name="priorityFee"
               value={form.priorityFee || ""}
               onChange={handleChange}
+              disabled={!!form.autoFee}
               InputProps={{
                 startAdornment: <span style={{ opacity: 0.6 }}>🏷️</span>,
-                style: { color: "#fff" }
+                style: { color: !!form.autoFee ? "#aaa" : "#fff" }
               }}
-              inputProps={{ style: { color: "#fff" } }}
+              inputProps={{ style: { color: !!form.autoFee ? "#aaa" : "#fff" } }}
               InputLabelProps={{ style: { color: "#fff" } }}
               fullWidth
               size="small"
-              sx={{ bgcolor: "#23242a", borderRadius: 1, color: "#fff" }}
+              sx={{
+                bgcolor: "#23242a",
+                borderRadius: 1,
+                color: "#fff",
+                '& .MuiInputBase-input.Mui-disabled': {
+                  color: '#aaa !important',
+                  WebkitTextFillColor: '#aaa !important',
+                  opacity: 1,
+                }
+              }}
             />
             <Typography variant="caption" sx={{ color: "#fff" }}>PRIORITY</Typography>
           </Box>
@@ -246,15 +320,25 @@ const PresetModal: React.FC<PresetModalProps> = ({
               name="bribeAmount"
               value={form.bribeAmount || ""}
               onChange={handleChange}
+              disabled={!!form.autoFee}
               InputProps={{
                 startAdornment: <span style={{ opacity: 0.6 }}>💸</span>,
-                style: { color: "#fff" }
+                style: { color: !!form.autoFee ? "#aaa" : "#fff" }
               }}
-              inputProps={{ style: { color: "#fff" } }}
+              inputProps={{ style: { color: !!form.autoFee ? "#aaa" : "#fff" } }}
               InputLabelProps={{ style: { color: "#fff" } }}
               fullWidth
               size="small"
-              sx={{ bgcolor: "#23242a", borderRadius: 1, color: "#fff" }}
+              sx={{
+                bgcolor: "#23242a",
+                borderRadius: 1,
+                color: "#fff",
+                '& .MuiInputBase-input.Mui-disabled': {
+                  color: '#aaa !important',
+                  WebkitTextFillColor: '#aaa !important',
+                  opacity: 1,
+                }
+              }}
             />
             <Typography variant="caption" sx={{ color: "#fff" }}>BRIBE</Typography>
           </Box>
@@ -279,13 +363,26 @@ const PresetModal: React.FC<PresetModalProps> = ({
             name="maxFee"
             value={form.maxFee || ""}
             onChange={handleChange}
-            disabled={!!form.autoFee}
-            InputProps={{ style: { color: "#fff" } }}
-            inputProps={{ style: { color: "#fff" } }}
+            disabled={!form.autoFee}
+            InputProps={{
+              style: { color: !form.autoFee ? "#aaa" : "#fff" }
+            }}
+            inputProps={{
+              style: { color: !form.autoFee ? "#aaa" : "#fff" }
+            }}
             InputLabelProps={{ style: { color: "#fff" } }}
             fullWidth
             size="small"
-            sx={{ bgcolor: "#23242a", borderRadius: 1, color: "#fff" }}
+            sx={{
+              bgcolor: "#23242a",
+              borderRadius: 1,
+              color: "#fff",
+              '& .MuiInputBase-input.Mui-disabled': {
+                color: '#aaa !important',
+                WebkitTextFillColor: '#aaa !important',
+                opacity: 1,
+              }
+            }}
           />
           <Typography variant="caption" sx={{ color: "#fff", ml: 1 }}>MAX FEE</Typography>
         </Box>

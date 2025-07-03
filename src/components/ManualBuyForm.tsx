@@ -7,10 +7,18 @@ import {
   Paper,
   Alert,
   CircularProgress,
+  FormControlLabel,
+  Switch,
 } from "@mui/material";
 import { useWebSocket } from "../context/webSocketContext";
+//import { useAppContext } from "../context/AppContext";
 
-export const ManualBuyForm: React.FC = () => {
+interface ManualBuyFormProps {
+  activeBuyPreset: number;
+  buyPresets: any[];
+}
+
+export const ManualBuyForm: React.FC<ManualBuyFormProps> = ({ activeBuyPreset, buyPresets }) => {
   const { ws, status, sendMessage } = useWebSocket();
   const [mintAddress, setMintAddress] = useState("");
   const [amount, setAmount] = useState("");
@@ -22,17 +30,12 @@ export const ManualBuyForm: React.FC = () => {
   const [slippage, setSlippage] = useState("1"); // Default 1%
   const [priorityFee, setPriorityFee] = useState("0.001"); // Default 0.001 SOL
   const [bribeAmount, setBribeAmount] = useState("0"); // Default 0 SOL
+  const [usePreset, setUsePreset] = useState(true); // default: use preset values
+  const [buyAmount, setBuyAmount] = useState("0.00001"); // default value
+
+  const preset = buyPresets?.[activeBuyPreset] || {};
 
   useEffect(() => {
-    const storedWalletAddress = import.meta.env.VITE_BUYER_PUBLIC_KEY || "";
-    if (!storedWalletAddress) {
-      setError(
-        "Wallet address not found in environment variables. Cannot perform buy."
-      );
-      return;
-    }
-    setWalletAddress(storedWalletAddress);
-
     const handleMessage = (event: MessageEvent) => {
       try {
         const response = JSON.parse(event.data);
@@ -45,6 +48,7 @@ export const ManualBuyForm: React.FC = () => {
           setMintAddress("");
           setAmount("");
           setPrivateKey("");
+          setBuyAmount("0.00001");
         } else if (response.type === "MANUAL_BUY_ERROR") {
           setError(response.error || "Transaction failed");
         }
@@ -88,10 +92,27 @@ export const ManualBuyForm: React.FC = () => {
       return;
     }
 
-    if (!mintAddress || !amount /* || !privateKey */ || !walletAddress) {
-      setError(
-        "All fields are required, including the wallet address from environment."
-      );
+    // Use preset values if usePreset is ON
+    const selectedPreset = usePreset ? preset : {};
+
+    const amountToSend = usePreset
+      ? selectedPreset.buyAmount || buyAmount
+      : buyAmount;
+
+    const slippageToSend = usePreset
+      ? selectedPreset.slippage || slippage
+      : slippage;
+
+    const priorityFeeToSend = usePreset
+      ? selectedPreset.priorityFee || priorityFee
+      : priorityFee;
+
+    const bribeAmountToSend = usePreset
+      ? selectedPreset.bribeAmount || bribeAmount
+      : bribeAmount;
+
+    if (!mintAddress || !amountToSend) {
+      setError("All fields are required.");
       setLoading(false);
       return;
     }
@@ -99,11 +120,11 @@ export const ManualBuyForm: React.FC = () => {
     try {
       const messageToSend = {
         type: "MANUAL_BUY",
-        mintAddress, // string
-        amount: Math.floor(Number(amount) * 1_000_000_000), // lamports (number)
-        slippage: Number(slippage),
-        priorityFee: Math.floor(Number(priorityFee) * 1_000_000_000),
-        bribeAmount: Math.floor(Number(bribeAmount) * 1_000_000_000),
+        mintAddress,
+        amount: Math.floor(Number(amountToSend) * 1_000_000_000),
+        slippage: Number(slippageToSend),
+        priorityFee: Math.floor(Number(priorityFeeToSend) * 1_000_000_000),
+        bribeAmount: Math.floor(Number(bribeAmountToSend) * 1_000_000_000),
       };
 
       console.log("ManualBuyForm: Sending MANUAL_BUY message:", messageToSend);
@@ -156,14 +177,14 @@ export const ManualBuyForm: React.FC = () => {
           <TextField
             label="Amount (SOL)"
             type="number"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            value={buyAmount}
+            onChange={(e) => setBuyAmount(e.target.value)}
             required
             fullWidth
             variant="outlined"
             inputProps={{
-              min: "0.1",
-              step: "0.1",
+              min: "0.00001",
+              step: "0.00001",
               pattern: "^[0-9]*[.]?[0-9]*$",
             }}
             sx={{
@@ -199,8 +220,9 @@ export const ManualBuyForm: React.FC = () => {
           <TextField
             label="Slippage (%)"
             type="number"
-            value={slippage}
+            value={usePreset ? preset.slippage || "" : slippage}
             onChange={(e) => setSlippage(e.target.value)}
+            disabled={usePreset}
             required
             fullWidth
             variant="outlined"
@@ -223,8 +245,9 @@ export const ManualBuyForm: React.FC = () => {
           <TextField
             label="Priority Fee (SOL)"
             type="number"
-            value={priorityFee}
+            value={usePreset ? preset.priorityFee || "" : priorityFee}
             onChange={(e) => setPriorityFee(e.target.value)}
+            disabled={usePreset}
             required
             fullWidth
             variant="outlined"
@@ -246,8 +269,9 @@ export const ManualBuyForm: React.FC = () => {
           <TextField
             label="Bribe Amount (SOL)"
             type="number"
-            value={bribeAmount}
+            value={usePreset ? preset.bribeAmount || "" : bribeAmount}
             onChange={(e) => setBribeAmount(e.target.value)}
+            disabled={usePreset}
             required
             fullWidth
             variant="outlined"
@@ -264,6 +288,17 @@ export const ManualBuyForm: React.FC = () => {
                 "&.Mui-focused fieldset": { borderColor: "white" },
               },
             }}
+          />
+
+          <FormControlLabel
+            control={
+              <Switch
+                checked={usePreset}
+                onChange={() => setUsePreset((prev) => !prev)}
+                color="primary"
+              />
+            }
+            label="Use Active Preset Values"
           />
 
           <Button

@@ -9,12 +9,13 @@ import { ManualSellList } from './components/ManualSellList';
 import { WebSocketProvider, useWebSocket } from './context/webSocketContext';
 import { AutomaticSellDashboard } from './components/AutomaticSellDashboard';
 import LoginPage from './components/LoginPage';
-import WalletInfo from './components/walletInfo';
+//import WalletInfo from './components/walletInfo';
 import WalletButton from './components/walletButton';
 import { Typography } from '@mui/material';
+import ActivePresetBar from "./components/ActivePresetBar";
 // import { AutomaticSellDashboard } from './components/AutomaticSellDashboard'; // Uncomment if needed
 
-function sendSetMode(ws: WebSocket | null, mode: 'manual' | 'automatic') {
+/*function sendSetMode(ws: WebSocket | null, mode: 'manual' | 'automatic') {
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: 'SET_MODE', mode }));
   } else if (ws) {
@@ -23,7 +24,7 @@ function sendSetMode(ws: WebSocket | null, mode: 'manual' | 'automatic') {
       ws.removeEventListener('open', handler);
     });
   }
-}
+}*/
 
 // Create a new component that uses useWebSocket
 const AppContent = () => {
@@ -42,6 +43,11 @@ const AppContent = () => {
   const { ws, isAuthenticated, authenticate, status } = useWebSocket();
   const token = localStorage.getItem('token');
   const [isLoggedIn, setIsLoggedIn] = useState(!!token);
+
+  const [buyPresets, setBuyPresets] = useState<any[]>([]);
+  const [sellPresets, setSellPresets] = useState<any[]>([]);
+  const [activeBuyPreset, setActiveBuyPreset] = useState<number>(0);
+  const [activeSellPreset, setActiveSellPreset] = useState<number>(0);
 
   const handleModeSelect = (mode: 'manual' | 'automatic') => {
     if (ws && isAuthenticated) {
@@ -112,16 +118,52 @@ const AppContent = () => {
     if (!token) setIsLoggedIn(false);
   }, [token]);
 
+  useEffect(() => {
+    if (!ws || !isAuthenticated) return;
+
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "PRESETS") {
+          setBuyPresets(data.buyPresets);
+          setSellPresets(data.sellPresets);
+          setActiveBuyPreset(data.activeBuyPreset);
+          setActiveSellPreset(data.activeSellPreset);
+        }
+        if (data.type === "PRESET_UPDATED") {
+          if (data.mode === "buy") {
+            setBuyPresets(prev => {
+              const updated = [...prev];
+              updated[data.presetIndex] = { ...updated[data.presetIndex], ...data.settings };
+              return updated;
+            });
+          } else if (data.mode === "sell") {
+            setSellPresets(prev => {
+              const updated = [...prev];
+              updated[data.presetIndex] = { ...updated[data.presetIndex], ...data.settings };
+              return updated;
+            });
+          }
+          ws.send(JSON.stringify({ type: "GET_PRESETS" }));
+        }
+      } catch {}
+    };
+
+    ws.addEventListener("message", handleMessage);
+    return () => ws.removeEventListener("message", handleMessage);
+  }, [ws, isAuthenticated]);
+
   return (
     <BotProvider>
       <div
         style={{
           minHeight: '100vh',
           minWidth: '100vw',
-          display: 'flex',
+          display: 'flex', 
           alignItems: 'center',
           justifyContent: 'center',
           background: '#1a1a1a',
+          paddingTop: '40px',
         }}
       >
         {!token ? (
@@ -130,6 +172,17 @@ const AppContent = () => {
           <div>Loading...</div>
         ) : (
           <>
+            <ActivePresetBar
+              activeBuyPreset={activeBuyPreset}
+              activeSellPreset={activeSellPreset}
+              buyPresets={buyPresets}
+              sellPresets={sellPresets}
+              setActiveBuyPreset={setActiveBuyPreset}
+              setActiveSellPreset={setActiveSellPreset}
+              showBuyPresetButtons={currentView === 'manual' || currentView === 'automatic'}
+              showSellPresetButtons={currentView === 'manualSell' || currentView === 'automaticSell'}
+              ws={ws}
+            />
             {currentView === 'landing' && (
               <div>
                 <WalletButton onLogout={handleLogout} />
@@ -192,7 +245,11 @@ const AppContent = () => {
             {currentView === 'automatic' && (
               <div>
                 <WalletButton onLogout={handleLogout} />
-                <Dashboard onBackHome={handleBackHome} />
+                <Dashboard
+                  onBackHome={handleBackHome}
+                  activeBuyPreset={activeBuyPreset}
+                  buyPresets={buyPresets}
+                />
               </div>
             )}
 
@@ -217,7 +274,10 @@ const AppContent = () => {
                     Back to Home
                   </Button>
                 </div>
-                <ManualBuyForm />
+                <ManualBuyForm
+                  activeBuyPreset={activeBuyPreset}
+                  buyPresets={buyPresets}
+                />
               </div>
             )}
 
@@ -249,7 +309,11 @@ const AppContent = () => {
             {currentView === 'automaticSell' && (
               <div>
                 <WalletButton onLogout={handleLogout} />
-                <AutomaticSellDashboard onBackHome={handleBackHome} />
+                <AutomaticSellDashboard
+                  onBackHome={handleBackHome}
+                  activeSellPreset={activeSellPreset}
+                  sellPresets={sellPresets}
+                />
               </div>
             )}
 
