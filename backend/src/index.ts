@@ -8,6 +8,7 @@ import http from 'http';
 import { WebSocketServer } from 'ws';
 import authRoutes from './routes/authRoutes'; 
 import botRoutes from './routes/botRoutes';
+import tokenRoutes from './routes/tokenRoutes';
 
 // --- Existing Bot Imports ---
 import { connectDatabase } from "./config/database";
@@ -17,6 +18,7 @@ import { startWalletSyncWatcher } from "../src/helper-functions/wallet-token-wat
 import { startPriceUpdateService } from '../src/helper-functions/priceUpdateService';
 import { checkAndExecuteAllAutoSells } from './helper-functions/autosellworker';
 import { createWebSocketServer, setupWebSocketHandlers } from './trade-bot/tokenListner';
+import { startMemeHomeTokenWorker } from './helper-functions/memeHomeTokenWorker';
 
 // import { startDbStatsBroadcaster } from './helper-functions/dbStatsBroadcaster';
 
@@ -38,6 +40,7 @@ async function main() {
   app.use(express.json()); // Enable JSON body parsing
   app.use('/api/auth', authRoutes); // Register authentication routes
   app.use('/api/bot', botRoutes);
+  app.use('/api/tokens', tokenRoutes);
 
   app.get('/', (req, res) => {
     res.send('Bot and API server is running!');
@@ -58,6 +61,9 @@ async function main() {
 
   // Start global auto-sell worker
   setInterval(() => checkAndExecuteAllAutoSells(connection), 5000);
+
+  // Start MemeHome token worker
+  startMemeHomeTokenWorker(wss);
 
   // REMOVE or COMMENT OUT these lines:
   // console.log("Wallet watcher Activated");

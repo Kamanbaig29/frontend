@@ -14,8 +14,6 @@ interface PresetModalProps {
   activeSellPreset: number;
   setActiveBuyPreset: (idx: number) => void;
   setActiveSellPreset: (idx: number) => void;
-  setBuyPresets: (presets: any[]) => void;
-  setSellPresets: (presets: any[]) => void;
 }
 
 const mevModes = [
@@ -26,7 +24,7 @@ const mevModes = [
 
 const PresetModal: React.FC<PresetModalProps> = ({
   open, onClose, buyPresets, sellPresets, activeBuyPreset, activeSellPreset,
-  setActiveBuyPreset, setActiveSellPreset, setBuyPresets, setSellPresets
+  setActiveBuyPreset, setActiveSellPreset
 }) => {
   const [mode, setMode] = useState<'buy' | 'sell'>('buy');
   const [form, setForm] = useState<any>({});
@@ -153,18 +151,6 @@ const PresetModal: React.FC<PresetModalProps> = ({
   };
 
   const handleSave = () => {
-    // Update local state
-    const updatedPresets = { buyPresets, sellPresets };
-    if (mode === 'buy') {
-      updatedPresets.buyPresets = [...buyPresets];
-      updatedPresets.buyPresets[activeBuyPreset] = { ...form };
-    } else {
-      updatedPresets.sellPresets = [...sellPresets];
-      updatedPresets.sellPresets[activeSellPreset] = { ...form };
-    }
-    setBuyPresets(updatedPresets.buyPresets);
-    setSellPresets(updatedPresets.sellPresets);
-
     // Send update to backend
     if (ws) {
       ws.send(JSON.stringify({

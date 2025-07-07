@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Button } from '@mui/material';
+import { Button, ToggleButton, ToggleButtonGroup } from '@mui/material';
 import { BotProvider } from './context/BotContext';
 import { LandingPage } from './components/LandingPage';
 import { Dashboard } from './components/Dashboard';
@@ -9,11 +9,10 @@ import { ManualSellList } from './components/ManualSellList';
 import { WebSocketProvider, useWebSocket } from './context/webSocketContext';
 import { AutomaticSellDashboard } from './components/AutomaticSellDashboard';
 import LoginPage from './components/LoginPage';
-//import WalletInfo from './components/walletInfo';
-import WalletButton from './components/walletButton';
+import TokenListWithAge from './components/TokenListWIthAge';
 import { Typography } from '@mui/material';
 import ActivePresetBar from "./components/ActivePresetBar";
-// import { AutomaticSellDashboard } from './components/AutomaticSellDashboard'; // Uncomment if needed
+import PresetModal from "./components/PresetModal";
 
 /*function sendSetMode(ws: WebSocket | null, mode: 'manual' | 'automatic') {
   if (ws && ws.readyState === WebSocket.OPEN) {
@@ -30,6 +29,7 @@ import ActivePresetBar from "./components/ActivePresetBar";
 const AppContent = () => {
   const [currentView, setCurrentView] = useState<
     | 'login'
+    | 'tokenList'
     | 'landing'
     | 'selectBuyMode'
     | 'selectSellMode'
@@ -48,6 +48,12 @@ const AppContent = () => {
   const [sellPresets, setSellPresets] = useState<any[]>([]);
   const [activeBuyPreset, setActiveBuyPreset] = useState<number>(0);
   const [activeSellPreset, setActiveSellPreset] = useState<number>(0);
+  const [presetModalOpen, setPresetModalOpen] = useState(false);
+
+  const [walletAddress, setWalletAddress] = useState<string | undefined>(undefined);
+  const [solBalance, setSolBalance] = useState<number | undefined>(undefined);
+
+  const [presetMode, setPresetMode] = useState<'buy' | 'sell'>('buy');
 
   const handleModeSelect = (mode: 'manual' | 'automatic') => {
     if (ws && isAuthenticated) {
@@ -65,6 +71,7 @@ const AppContent = () => {
   const handleManualSell = () => setCurrentView('manualSell');
   const handleAutomaticSell = () => setCurrentView('automaticSell');
   const handleBackHome = () => setCurrentView('landing');
+  const handleViewTokenList = () => setCurrentView('tokenList');
 
   const handleLoginSuccess = () => {
     const token = localStorage.getItem('token');
@@ -110,7 +117,8 @@ const AppContent = () => {
 
   useEffect(() => {
     if (isLoggedIn && isAuthenticated) {
-      setCurrentView('landing');
+      // Show token list as the first page after login
+      setCurrentView('tokenList');
     }
   }, [isLoggedIn, isAuthenticated]);
 
@@ -153,6 +161,28 @@ const AppContent = () => {
     return () => ws.removeEventListener("message", handleMessage);
   }, [ws, isAuthenticated]);
 
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    const fetchWalletInfo = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        const response = await fetch('http://localhost:4000/api/auth/wallet-info', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setWalletAddress(data.walletAddress);
+          setSolBalance(Number(data.balance));
+        }
+      } catch (err) {
+        setWalletAddress(undefined);
+        setSolBalance(undefined);
+      }
+    };
+    fetchWalletInfo();
+  }, [isLoggedIn]);
+
   return (
     <BotProvider>
       <div
@@ -169,7 +199,7 @@ const AppContent = () => {
         {!token ? (
           <LoginPage onLoginSuccess={() => setIsLoggedIn(true)} />
         ) : !isAuthenticated || status !== "connected" ? (
-          <div>Loading...</div>
+          <div style={{ color: 'white' }}>Loading...</div>
         ) : (
           <>
             <ActivePresetBar
@@ -179,17 +209,37 @@ const AppContent = () => {
               sellPresets={sellPresets}
               setActiveBuyPreset={setActiveBuyPreset}
               setActiveSellPreset={setActiveSellPreset}
-              showBuyPresetButtons={currentView === 'manual' || currentView === 'automatic'}
-              showSellPresetButtons={currentView === 'manualSell' || currentView === 'automaticSell'}
-              ws={ws}
+              onOpenSettings={() => setPresetModalOpen(true)}
+              walletAddress={walletAddress}
+              solBalance={solBalance}
+              onLogout={handleLogout}
             />
+            <PresetModal
+              open={presetModalOpen}
+              onClose={() => setPresetModalOpen(false)}
+              buyPresets={buyPresets}
+              sellPresets={sellPresets}
+              activeBuyPreset={activeBuyPreset}
+              activeSellPreset={activeSellPreset}
+              setActiveBuyPreset={setActiveBuyPreset}
+              setActiveSellPreset={setActiveSellPreset}
+            />
+            
+            {currentView === 'tokenList' && (
+              <div style={{ width: '100%' }}>
+                <TokenListWithAge 
+                  onBackHome={handleBackHome} 
+                />
+              </div>
+            )}
+
             {currentView === 'landing' && (
               <div>
-                <WalletButton onLogout={handleLogout} />
                 <LandingPage
                   onBuyClick={handleGoToBuySelection}
                   onSellClick={() => setCurrentView('automaticSell')}
                   onViewStats={handleViewStats}
+                  onViewTokenList={handleViewTokenList}
                 />
               </div>
             )}
@@ -244,18 +294,14 @@ const AppContent = () => {
 
             {currentView === 'automatic' && (
               <div>
-                <WalletButton onLogout={handleLogout} />
                 <Dashboard
                   onBackHome={handleBackHome}
-                  activeBuyPreset={activeBuyPreset}
-                  buyPresets={buyPresets}
                 />
               </div>
             )}
 
             {currentView === 'manual' && (
               <div className="container mx-auto p-4">
-                <WalletButton onLogout={handleLogout} />
                 <div className="flex justify-between items-center mb-6">
                   <div>
                     <h1 className="text-2xl font-bold text-white">Manual Trading</h1>
@@ -275,15 +321,12 @@ const AppContent = () => {
                   </Button>
                 </div>
                 <ManualBuyForm
-                  activeBuyPreset={activeBuyPreset}
-                  buyPresets={buyPresets}
                 />
               </div>
             )}
 
             {currentView === 'manualSell' && (
               <div className="container mx-auto p-4">
-                <WalletButton onLogout={handleLogout} />
                 <div className="flex justify-between items-center mb-6">
                   <div>
                     <h1 className="text-2xl font-bold text-white">Manual Sell</h1>
@@ -308,18 +351,14 @@ const AppContent = () => {
 
             {currentView === 'automaticSell' && (
               <div>
-                <WalletButton onLogout={handleLogout} />
                 <AutomaticSellDashboard
                   onBackHome={handleBackHome}
-                  activeSellPreset={activeSellPreset}
-                  sellPresets={sellPresets}
                 />
               </div>
             )}
 
             {currentView === 'stats' && (
               <div>
-                <WalletButton onLogout={handleLogout} />
                 <Stats onBackHome={handleBackHome} />
               </div>
             )}
@@ -333,7 +372,6 @@ const AppContent = () => {
 // Main App component that provides the WebSocket context
 export const App = () => {
   return (
-    
     <WebSocketProvider>
       <AppContent />
     </WebSocketProvider>

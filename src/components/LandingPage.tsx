@@ -8,89 +8,27 @@ declare global {
 import React, { useState, useEffect } from 'react';
 import { Box, Button, Paper, Typography } from '@mui/material';
 import AutoModeIcon from '@mui/icons-material/AutoMode';
-import ManageSearchIcon from '@mui/icons-material/ManageSearch';
+//import ManageSearchIcon from '@mui/icons-material/ManageSearch';
 import SellIcon from '@mui/icons-material/Sell';
-import SettingsIcon from '@mui/icons-material/Settings';
-import PresetModal from './PresetModal';
+//import SettingsIcon from '@mui/icons-material/Settings';
+//import PresetModal from './PresetModal';
 import { useWebSocket } from '../context/webSocketContext';
 
 interface LandingPageProps {
   onBuyClick: () => void;
   onSellClick: () => void;
   onViewStats: () => void;
+  onViewTokenList: () => void;
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({ onBuyClick, onSellClick, onViewStats }) => {
-  const [openPresetModal, setOpenPresetModal] = useState(false);
-  const [presets, setPresets] = useState<any[]>([]);
-  const [activePreset, setActivePreset] = useState<number>(0);
-  const [buyPresets, setBuyPresets] = useState<any[]>([]);
-  const [sellPresets, setSellPresets] = useState<any[]>([]);
-  const [activeBuyPreset, setActiveBuyPreset] = useState<number>(0);
-  const [activeSellPreset, setActiveSellPreset] = useState<number>(0);
-  const { ws, isAuthenticated } = useWebSocket();
-
-  useEffect(() => {
-    console.log("LandingPage useEffect: ws", ws, "isAuthenticated", isAuthenticated);
-    if (ws && isAuthenticated) {
-      if (ws.readyState === 1) {
-        console.log("Sending GET_PRESETS");
-        ws.send(JSON.stringify({ type: "GET_PRESETS" }));
-      } else {
-        ws.addEventListener("open", () => {
-          console.log("WebSocket opened, sending GET_PRESETS");
-          ws.send(JSON.stringify({ type: "GET_PRESETS" }));
-        }, { once: true });
-      }
-
-      const handleMessage = (event: MessageEvent) => {
-        const data = JSON.parse(event.data);
-
-        if (
-          data.type === "AUTH_ERROR" ||
-          (data.type === "ERROR" && data.error && data.error.toLowerCase().includes("token"))
-        ) {
-          localStorage.removeItem("token");
-          window.location.href = "/"; // or your login route
-          return;
-        }
-
-        if (data.type === "PRESETS") {
-          setBuyPresets(data.buyPresets);
-          setSellPresets(data.sellPresets);
-          setActiveBuyPreset(data.activeBuyPreset);
-          setActiveSellPreset(data.activeSellPreset);
-        }
-        if (data.type === "ACTIVE_PRESET_UPDATED") {
-           console.log("ACTIVE_PRESET_UPDATED", data);
-          if (data.mode?.toLowerCase() === "buy") setActiveBuyPreset(data.presetIndex);
-          else if (data.mode?.toLowerCase() === "sell") setActiveSellPreset(data.presetIndex);
-        }
-        if (data.type === "PRESET_UPDATED") {
-          if (data.mode === "buy") {
-            setBuyPresets((prev) => {
-              const updated = [...prev];
-              updated[data.presetIndex] = { ...updated[data.presetIndex], ...data.settings };
-              return updated;
-            });
-          } else {
-            setSellPresets((prev) => {
-              const updated = [...prev];
-              updated[data.presetIndex] = { ...updated[data.presetIndex], ...data.settings };
-              return updated;
-            });
-          }
-        }
-      };
-
-      ws.addEventListener("message", handleMessage);
-
-      // Cleanup on unmount
-      return () => {
-        ws.removeEventListener("message", handleMessage);
-      };
-    }
-  }, [ws, isAuthenticated]);
+export const LandingPage: React.FC<LandingPageProps> = ({ onBuyClick, onSellClick, onViewStats, onViewTokenList }) => {
+  //const [openPresetModal, setOpenPresetModal] = useState(false);
+  const {
+    //buyPresets, sellPresets,
+    activeBuyPreset, activeSellPreset,
+    //setActiveBuyPreset, setActiveSellPreset,
+    ws
+  } = useWebSocket();
 
   const applyPreset = (mode: 'buy' | 'sell', presetIndex: number) => {
     if (ws) {
@@ -114,29 +52,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onBuyClick, onSellClic
         position: 'relative'
       }}
     >
-      {/* Settings Icon */}
-      <Button
-        sx={{ position: 'absolute', top: 24, right: 32, minWidth: 0, p: 1, bgcolor: '#fff2', borderRadius: '50%' }}
-        onClick={() => setOpenPresetModal(true)}
-      >
-        <SettingsIcon sx={{ color: 'white', fontSize: 32 }} />
-      </Button>
-
-      {/* Preset Modal */}
-      <PresetModal
-        open={openPresetModal}
-        onClose={() => setOpenPresetModal(false)}
-        buyPresets={buyPresets}
-        sellPresets={sellPresets}
-        activeBuyPreset={activeBuyPreset}
-        activeSellPreset={activeSellPreset}
-        setActiveBuyPreset={setActiveBuyPreset}
-        setActiveSellPreset={setActiveSellPreset}
-        setBuyPresets={setBuyPresets}
-        setSellPresets={setSellPresets}
-        // ws prop agar chahiye to
-      />
-
       <Paper 
         sx={{ 
           p: 4, 
@@ -194,13 +109,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onBuyClick, onSellClic
             Sell
           </Button>
         </Box>
-        {/*<Button
-          variant="outlined"
-          onClick={onViewStats}
-          sx={{ borderColor: '#483D8B', color: '#483D8B', '&:hover': { borderColor: '#372B7A', bgcolor: 'rgba(72, 61, 139, 0.1)' } }}
+        <Button
+          onClick={onViewTokenList}
+          className="w-64 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
         >
-          View Wallet Stats
-        </Button>*/}
+          View All Tokens
+        </Button>
+        <Button
+          onClick={onViewStats}
+          className="w-64 px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+        >
+          View Statistics
+        </Button>
       </Paper>
     </Box>
   );

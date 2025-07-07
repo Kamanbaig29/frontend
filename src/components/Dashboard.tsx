@@ -23,8 +23,6 @@ import {
 
 interface DashboardProps {
   onBackHome: () => void;
-  activeBuyPreset: number;
-  buyPresets: any[];
 }
 
 interface AutoSnipeSettings {
@@ -50,9 +48,9 @@ const getStatusColor = (status: string): StatusColor => {
   }
 };
 
-export const Dashboard: React.FC<DashboardProps> = ({ onBackHome, activeBuyPreset, buyPresets }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ onBackHome }) => {
   const { state, dispatch } = useBot();
-  const { ws, status: wsStatus, sendMessage } = useWebSocket();
+  const { ws, status: wsStatus, sendMessage, buyPresets, activeBuyPreset } = useWebSocket();
   const [status, setStatus] = useState('Initializing...');
   const activePreset = buyPresets[activeBuyPreset] || {};
   const [settings, setSettings] = useState<AutoSnipeSettings>({

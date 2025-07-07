@@ -13,13 +13,10 @@ import {
 import { useWebSocket } from "../context/webSocketContext";
 //import { useAppContext } from "../context/AppContext";
 
-interface ManualBuyFormProps {
-  activeBuyPreset: number;
-  buyPresets: any[];
-}
+interface ManualBuyFormProps {}
 
-export const ManualBuyForm: React.FC<ManualBuyFormProps> = ({ activeBuyPreset, buyPresets }) => {
-  const { ws, status, sendMessage } = useWebSocket();
+export const ManualBuyForm: React.FC<ManualBuyFormProps> = () => {
+  const { ws, status, sendMessage, buyPresets, activeBuyPreset } = useWebSocket();
   const [mintAddress, setMintAddress] = useState("");
   const [amount, setAmount] = useState("");
   const [privateKey, setPrivateKey] = useState("");

@@ -17,12 +17,10 @@ function getCurrentUserId(): string | null {
 
 interface AutomaticSellDashboardProps {
   onBackHome: () => void;
-  activeSellPreset: number;
-  sellPresets: any[];
 }
 
-export const AutomaticSellDashboard: React.FC<AutomaticSellDashboardProps> = ({ onBackHome, activeSellPreset, sellPresets }) => {
-    const { ws, sendMessage } = useWebSocket();
+export const AutomaticSellDashboard: React.FC<AutomaticSellDashboardProps> = ({ onBackHome }) => {
+    const { ws, sendMessage, sellPresets, activeSellPreset } = useWebSocket();
     const [tokens, setTokens] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -116,21 +114,16 @@ export const AutomaticSellDashboard: React.FC<AutomaticSellDashboardProps> = ({ 
             console.error('Invalid token:', token);
             return;
         }
-        if (!Array.isArray(sellPresets) || typeof activeSellPreset !== 'number' || !sellPresets[activeSellPreset]) {
-            console.error('Invalid sellPresets or activeSellPreset:', { sellPresets, activeSellPreset });
-            return;
-        }
         const settings = tokenSettings[token._id];
-        const preset = sellPresets[activeSellPreset];
-        if (ws && settings && preset) {
+        if (ws && settings) {
             ws.send(JSON.stringify({
                 type: 'MANUAL_SELL',
                 mint: token.mint,
                 percent: Number(settings?.sellPercentage || 100),
                 walletAddress: token.userPublicKey,
-                slippage: Number(preset.slippage || 1),
-                priorityFee: Number(preset.priorityFee || 0.001),
-                bribeAmount: Number(preset.bribeAmount || 0)
+                slippage: Number(sellPresets[activeSellPreset].slippage || 1),
+                priorityFee: Number(sellPresets[activeSellPreset].priorityFee || 0.001),
+                bribeAmount: Number(sellPresets[activeSellPreset].bribeAmount || 0)
             }));
         }
     };

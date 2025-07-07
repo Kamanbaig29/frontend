@@ -8,6 +8,12 @@ export interface WebSocketContextType {
   isAuthenticated: boolean;
   authenticate: (token: string) => void;
   walletAddress?: string; // <-- add this
+  buyPresets: any[];
+  sellPresets: any[];
+  activeBuyPreset: number;
+  activeSellPreset: number;
+  setActiveBuyPreset: (idx: number) => void;
+  setActiveSellPreset: (idx: number) => void;
 }
 
 // Create the context with a default value
@@ -17,6 +23,12 @@ const WebSocketContext = createContext<WebSocketContextType>({
   sendMessage: () => console.error('sendMessage function not ready'),
   isAuthenticated: false,
   authenticate: () => {},
+  buyPresets: [],
+  sellPresets: [],
+  activeBuyPreset: 0,
+  activeSellPreset: 0,
+  setActiveBuyPreset: () => {},
+  setActiveSellPreset: () => {},
 });
 
 // Custom hook to use the WebSocket context
@@ -36,6 +48,10 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [token, setToken] = useState<string | null>(() => localStorage.getItem("token"));
   const [walletAddress, setWalletAddress] = useState<string | undefined>(undefined);
+  const [buyPresets, setBuyPresets] = useState<any[]>([]);
+  const [sellPresets, setSellPresets] = useState<any[]>([]);
+  const [activeBuyPreset, setActiveBuyPreset] = useState<number>(0);
+  const [activeSellPreset, setActiveSellPreset] = useState<number>(0);
 
   // Helper to send messages
   const sendMessage = (data: any) => {
@@ -134,8 +150,16 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
       isAuthenticated,
       authenticate,
       walletAddress, // <-- add this
+      buyPresets,
+      sellPresets,
+      activeBuyPreset,
+      activeSellPreset,
+      setActiveBuyPreset,
+      setActiveSellPreset,
     }}>
       {children}
     </WebSocketContext.Provider>
   );
 };
+
+export { WebSocketContext };
