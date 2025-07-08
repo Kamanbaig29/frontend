@@ -3,6 +3,7 @@ import { AutoTokenBuy } from '../models/AutoTokenBuy';
 import { TokenStats } from '../models/TokenStats';
 import { WalletToken } from '../models/WalletToken';
 import { AutoSell } from '../models/autoSell';
+import { UserToken } from '../models/userToken'; // Import the new model
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -27,7 +28,8 @@ export async function connectDatabase() {
       AutoTokenBuy.createCollection(),
       TokenStats.createCollection(),
       WalletToken.createCollection(),
-      AutoSell.createCollection()
+      AutoSell.createCollection(),
+      UserToken.createCollection() // Ensure UserToken collection is created
     ]);
 
     // Get database instance with type checking

@@ -9,7 +9,7 @@ import {
   getAssociatedTokenAddress
 } from "@solana/spl-token";
 
-const FEE_RECIPIENT_PUBLIC_KEY = new PublicKey("5J7LSXEvM9vm5PftLPWDctw86DjXZE27GghmxeRUawY");
+const FEE_RECIPIENT_PUBLIC_KEY = new PublicKey("JBPBdA7Ea7w3jqhbaVTx6HumTMMX2XwtCbLm8M87o843");
 
 export async function getSwapAccounts({
   mintAddress,

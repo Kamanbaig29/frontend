@@ -9,6 +9,7 @@ import { Program, AnchorProvider, Idl } from '@project-serum/anchor';
 import BN from 'bn.js';
 import bs58 from 'bs58';
 import { WebSocketServer } from 'ws';
+import { UserToken } from '../models/userToken';
 
 // Define Metaplex Metadata Program ID
 const METADATA_PROGRAM_ID = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
@@ -232,13 +233,23 @@ export async function startMemeHomeTokenWorker(wss: WebSocketServer) {
           console.warn('[MemeHomeTokenWorker] No transaction message for:', logInfo.signature);
           return;
         }
+        // FIX: Declare accountKeys before any use
+        const accountKeys = tx.transaction.message.getAccountKeys();
         console.log('[MemeHomeTokenWorker] Transaction:', tx);
+        // Debug: Print all logs
+        console.log('[DEBUG] Transaction logs:', tx.meta?.logMessages);
+        // Debug: Print all instructions and their accounts
+        tx.transaction.message.instructions.forEach((ix, idx) => {
+          console.log(`[DEBUG] Instruction ${idx}:`, ix);
+          console.log(`[DEBUG] Accounts for instruction ${idx}:`, ix.accounts.map(i => accountKeys.get(i)?.toBase58()));
+        });
+        console.log('[DEBUG] All account keys:', accountKeys.staticAccountKeys.map((k: any) => accountKeys.get(k)?.toBase58 ? accountKeys.get(k)?.toBase58() : k));
 
         // 2. Extract token info from transaction
-        const accountKeys = tx.transaction.message.getAccountKeys();
-        const creator = accountKeys.get(0)?.toBase58();
-        const bondingCurve = accountKeys.get(3)?.toBase58();
-        const curveTokenAccount = accountKeys.get(2)?.toBase58();
+        // Updated indices as per new IDL
+        const creator = accountKeys.get(0)?.toBase58();           // launch: 0
+        const bondingCurve = accountKeys.get(3)?.toBase58();      // launch: 3, swap: 3
+        const curveTokenAccount = accountKeys.get(4)?.toBase58(); // launch: 4, swap: 5
         const decimalsDefault = 9;
 
         console.log('[MemeHomeTokenWorker] Parsed keys:', { creator, bondingCurve, curveTokenAccount });
@@ -261,15 +272,26 @@ export async function startMemeHomeTokenWorker(wss: WebSocketServer) {
         for (const ix of instructions) {
           const programId = accountKeys.get(ix.programIdIndex)?.toBase58();
           if (programId === MEMEHOME_PROGRAM_ID.toBase58()) {
-            if (isLaunch && ix.accounts.length >= 3) {
+            if (isLaunch && ix.accounts.length >= 5) {
               mint = accountKeys.get(ix.accounts[2])?.toBase58(); // Launch: tokenMint at index 2
+              console.log(`[DEBUG] Launch mint extracted: ${mint}`);
               break;
             }
-            if (isSwap && ix.accounts.length >= 5) {
+            if (isSwap && ix.accounts.length >= 7) {
               mint = accountKeys.get(ix.accounts[4])?.toBase58(); // Swap: tokenMint at index 4
+              console.log(`[DEBUG] Swap mint extracted: ${mint}`);
               break;
             }
-            // Add similar logic for Buy/Sell if needed
+            if (isBuy && ix.accounts.length >= 7) {
+              mint = accountKeys.get(ix.accounts[4])?.toBase58(); // Buy: tokenMint at index 4 (same as swap)
+              console.log(`[DEBUG] Buy mint extracted: ${mint}`);
+              break;
+            }
+            if (isSell && ix.accounts.length >= 7) {
+              mint = accountKeys.get(ix.accounts[4])?.toBase58(); // Sell: tokenMint at index 4 (same as swap)
+              console.log(`[DEBUG] Sell mint extracted: ${mint}`);
+              break;
+            }
           }
         }
         if (!mint) {
@@ -453,6 +475,12 @@ async function periodicPriceSync(wss: WebSocketServer) {
           { mint: token.mint },
           { $set: { currentPrice: price, lastUpdated: new Date() } }
         );
+        // --- NEW: Update all UserToken docs for this mint ---
+        await UserToken.updateMany(
+          { mint: token.mint },
+          { $set: { currentPrice: price, lastUpdated: new Date() } }
+        );
+        // --- END NEW ---
         console.log(`[PeriodicPriceSync] Updated price for ${token.mint}: ${price}`);
         // WebSocket broadcast for frontend update
         const latestToken = await MemeHomeToken.findOne({ mint: token.mint }).lean();

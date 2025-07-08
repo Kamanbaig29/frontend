@@ -118,6 +118,14 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
         logout();
         window.location.href = "/"; // or your login route
       }
+
+      if (data.type === "PRESETS") {
+        console.log("Received PRESETS from backend:", data);
+        setBuyPresets(data.buyPresets || []);
+        setSellPresets(data.sellPresets || []);
+        setActiveBuyPreset(data.activeBuyPreset || 0);
+        setActiveSellPreset(data.activeSellPreset || 0);
+      }
     };
 
     socket.onclose = () => {

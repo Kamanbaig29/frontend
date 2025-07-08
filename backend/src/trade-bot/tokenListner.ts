@@ -58,6 +58,7 @@ import { Server as HttpServer } from "http";
 //import crypto from 'crypto';
 //import { startAutoSellWorker } from '../helper-functions/autosellworker';
 import UserPreset from '../models/userPreset';
+import { UserToken } from "../models/userToken";
 
 const MEMEHOME_PROGRAM_ID = new PublicKey(process.env.MEMEHOME_PROGRAM_ID!);
 
@@ -522,12 +523,12 @@ const handleAutoSnipe = async (
 
         console.log(`💰 Token detection price: ${detectionPrice} SOL`);
 
-        await addOrUpdateTokenFromBuy({
-          mint: mintAddress,
-          buyPrice: buyPriceAtDetection,
-          amount: tokensReceived.toString(),
-          userPublicKey: userPublicKey.toBase58(),
-        });
+        //await addOrUpdateTokenFromBuy({
+          //mint: mintAddress,
+          //buyPrice: buyPriceAtDetection,
+          //amount: tokensReceived.toString(),
+          //userPublicKey: userPublicKey.toBase58(),
+        //});
       }
     } catch (error) {
       console.error("❌ [DEBUG] CRASH POINT? Buy transaction failed:", error);
@@ -642,6 +643,11 @@ wss.on("connection", (ws: WSWithUser) => {
               walletAddress: decoded.walletAddress, // <-- add this
             })
           );
+          const userTokens = await UserToken.find({ userId: ws.userId });
+          ws.send(JSON.stringify({
+            type: "USER_TOKENS",
+            tokens: userTokens
+          }));
           break;
         }
 
@@ -799,6 +805,8 @@ wss.on("connection", (ws: WSWithUser) => {
                 buyPrice: result.details?.price ?? 0, // Use token price, not SOL
                 amount: (result.details?.amount ?? 0).toString(),  // <-- Convert to string
                 userPublicKey: userKeypair.publicKey.toBase58(),
+                signature: result.signature,
+                userID: ws.userId,
               });
 
               // 2. Client ko success bhejo
@@ -809,6 +817,11 @@ wss.on("connection", (ws: WSWithUser) => {
                   details: result,
                 })
               );
+              const userTokens = await UserToken.find({ userId: ws.userId });
+              ws.send(JSON.stringify({
+                type: "USER_TOKENS",
+                tokens: userTokens
+              }));
             } else {
               console.error("[DEBUG] Manual buy failed, result:", result); // <-- Add this line
               ws.send(
@@ -872,12 +885,15 @@ wss.on("connection", (ws: WSWithUser) => {
                 return;
             }
 
-            const token = await WalletToken.findOne({ mint, userPublicKey: walletAddress });
+            // Get decimals (prefer chain, fallback to UserToken)
+            const token = await UserToken.findOne({ mint, walletAddress });
             const decimals = token?.decimals ?? 6;
-            const tokenAmount = Number(tokenAccountInfo.amount) / Math.pow(10, decimals);
 
-            // 3. Calculate sell amounts
-            let sellAmount = (tokenAmount * percent) / 100;
+            // Get live balance from chain
+            const chainBalance = Number(tokenAccountInfo.amount) / Math.pow(10, decimals);
+
+            // Calculate sell amount as % of live balance
+            let sellAmount = (chainBalance * percent) / 100;
             let sellAmountInSmallestUnit = Math.floor(sellAmount * Math.pow(10, decimals));
 
             if (sellAmountInSmallestUnit <= 0) {
@@ -891,7 +907,7 @@ wss.on("connection", (ws: WSWithUser) => {
             console.log("User PublicKey:", userKeypair.publicKey.toBase58());
             console.log("Token Mint:", mint);
             console.log("Sell Percentage:", percent + "%");
-            console.log("Token Amount:", tokenAmount);
+            console.log("Token Amount:", chainBalance);
             console.log("Decimals:", decimals);
             console.log("Sell Amount:", sellAmount);
             console.log("Sell Amount (smallest unit):", sellAmountInSmallestUnit);
@@ -927,9 +943,9 @@ wss.on("connection", (ws: WSWithUser) => {
             console.log("Expected SOL Output (before slippage):", Number(expectedSolOut) / 1e9, "SOL");
 
             // 9. Prepare sell parameters
-            const slippageValue = typeof slippage === "number" ? slippage : 0;
-            const priorityFeeValue = typeof priorityFee === "number" ? priorityFee : 0;
-            const bribeAmountValue = typeof bribeAmount === "number" ? bribeAmount : 0;
+            const slippageValue = Number(slippage) || 0;
+            const priorityFeeValue = Number(priorityFee) || 0;
+            const bribeAmountValue = Number(bribeAmount) || 0;
 
             // 10. Execute sell
             try {
@@ -978,11 +994,31 @@ wss.on("connection", (ws: WSWithUser) => {
                 const postBalance = await connection.getBalance(userKeypair.publicKey);
                 const actualSolReceived = (postBalance - preBalance) / 1e9;
 
+                // After sell transaction is confirmed
+                let updatedChainBalance = 0;
+                try {
+                  const updatedTokenAccountInfo = await getAccount(connection, userTokenAccount);
+                  updatedChainBalance = Number(updatedTokenAccountInfo.amount) / Math.pow(10, decimals);
+                } catch (e) {
+                  updatedChainBalance = 0; // If account is closed, treat as zero
+                }
+
+                // Update or remove UserToken in DB
+                if (updatedChainBalance <= 0 || Math.abs(updatedChainBalance) < 1e-6) {
+                  await UserToken.deleteOne({ mint, walletAddress });
+                  // ...delete TokenPrice, AutoSell if needed...
+                } else {
+                  await UserToken.findOneAndUpdate(
+                    { mint, walletAddress },
+                    { $set: { balance: updatedChainBalance } }
+                  );
+                }
+
                 // 11. Log transaction summary
                 console.log("\n=== MANUAL SELL SUMMARY ===");
                 console.log(`User: ${walletAddress} (${userKeypair.publicKey.toBase58()})`);
                 console.log(`Tokens Sold: ${sellAmount} (${sellAmountInSmallestUnit} in smallest unit)`);
-                const remainingAmount = tokenAmount - sellAmount;
+                const remainingAmount = chainBalance - sellAmount; // Calculate remaining
                 console.log("Remaining Amount:", remainingAmount);
                 console.log(`Expected SOL Output (before slippage): ${Number(expectedSolOut) / 1e9} SOL`);
                 const expectedSolOutWithSlippage = (Number(expectedSolOut) * (1 - slippageValue / 100)) / 1e9;
@@ -998,6 +1034,7 @@ wss.on("connection", (ws: WSWithUser) => {
                     mint,
                     userPublicKey: walletAddress,
                     remainingAmount: remainingAmount.toString(),
+                    signature: txSignature || "",
                 });
 
                 // 13. Send success response
@@ -1038,8 +1075,9 @@ wss.on("connection", (ws: WSWithUser) => {
                 ws.send(JSON.stringify({ type: "ERROR", error: "User not authenticated" }));
                 break;
             }
-            const userTokens = await WalletToken.find({ userPublicKey: ws.walletAddress });
-            console.log("[WS] WalletToken.find result:", userTokens.length, "tokens");
+            const userTokens = await UserToken.find({ userId: ws.userId });
+            console.log("[WS] userId for USER_TOKENS:", ws.userId);
+            console.log("[WS] Tokens found:", userTokens);
             ws.send(JSON.stringify({ type: "USER_TOKENS", tokens: userTokens }));
             break;
           }
@@ -1064,7 +1102,7 @@ wss.on("connection", (ws: WSWithUser) => {
                 ws.send(JSON.stringify({ type: "ERROR", error: "User not authenticated" }));
                 break;
             }
-            const userTokens = await WalletToken.find({ userPublicKey: ws.walletAddress });
+            const userTokens = await UserToken.find({ userPublicKey: ws.walletAddress });
             console.log("[WS] WalletToken.find result (AUTO_SELL_CONNECT):", userTokens.length, "tokens");
             ws.send(JSON.stringify({ type: "USER_TOKENS", tokens: userTokens }));
             break;
