@@ -8,7 +8,7 @@ import { PublicKey } from '@solana/web3.js';
 import * as ed25519 from '@noble/ed25519';
 import { generateBotWallet } from '../utils/walletUtils';
 import bs58 from 'bs58';
-import {WalletToken} from '../models/WalletToken';
+//import {WalletToken} from '../models/WalletToken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'default_secret';
 
@@ -134,6 +134,7 @@ export const login: RequestHandler = async (req, res) => {
     res.json({
       message: 'Login successful',
       token,
+      userId: user._id,
       user: {
         id: user._id,
         email: user.email,
@@ -202,6 +203,7 @@ export const phantomLogin: RequestHandler = async (req, res) => {
     res.json({
       message: 'Phantom login successful',
       token,
+      userId: user._id,
       user: {
         id: user._id,
         email: user.email,

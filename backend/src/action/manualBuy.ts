@@ -19,7 +19,7 @@ export interface ManualBuyResult {
   error?: string;
   details?: {
     mintAddress: string;
-    amount: number;
+    amount: string; // <-- Change this line
     price: number;
     timestamp: number;
     transactionFee?: number;
@@ -240,8 +240,24 @@ export async function handleManualBuy(
         )?.uiTokenAmount.uiAmount || 0;
 
       const tokensReceived = postTokenBalance - preTokenBalance;
-      const total_token = postTokenBalance + preTokenBalance;
+      // const total_token = postTokenBalance + preTokenBalance; // ❌ isko hata do
       // Calculate buy price per token (SOL per token)
+      // Get decimals for the mint
+      let decimals = 9; // default
+      try {
+        const mintInfo = await connection.getParsedAccountInfo(new PublicKey(mintAddress));
+        if (
+          mintInfo.value &&
+          typeof mintInfo.value.data === "object" &&
+          "parsed" in mintInfo.value.data &&
+          mintInfo.value.data.parsed.info &&
+          mintInfo.value.data.parsed.info.decimals !== undefined
+        ) {
+          decimals = mintInfo.value.data.parsed.info.decimals;
+        }
+      } catch {}
+      const tokenAccountInfo = await connection.getTokenAccountBalance(userTokenAccount);
+      const liveBalanceRaw = tokenAccountInfo.value.amount; // RAW, string
 
       return {
         signature,
@@ -249,7 +265,7 @@ export async function handleManualBuy(
         buyPrice: buyPricePerToken,  // price per token (SOL per token)
         details: {
           mintAddress,
-          amount: total_token,     // tokens
+          amount: liveBalanceRaw, // ✅ Yeh raw value hai (e.g. "17590167065574")
           price: buyPricePerToken,    // SOL per token
           timestamp: Date.now(),
           transactionFee: txDetails.meta?.fee,

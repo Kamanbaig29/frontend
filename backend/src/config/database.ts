@@ -1,8 +1,8 @@
 import mongoose from 'mongoose';
-import { AutoTokenBuy } from '../models/AutoTokenBuy';
-import { TokenStats } from '../models/TokenStats';
-import { WalletToken } from '../models/WalletToken';
-import { AutoSell } from '../models/autoSell';
+//import { AutoTokenBuy } from '../models/AutoTokenBuy';
+//import { TokenStats } from '../models/TokenStats';
+//import { WalletToken } from '../models/WalletToken';
+//import { AutoSell } from '../models/autoSell';
 import { UserToken } from '../models/userToken'; // Import the new model
 import dotenv from 'dotenv';
 
@@ -25,10 +25,10 @@ export async function connectDatabase() {
 
     // Test collection creation
     await Promise.all([
-      AutoTokenBuy.createCollection(),
-      TokenStats.createCollection(),
-      WalletToken.createCollection(),
-      AutoSell.createCollection(),
+      //AutoTokenBuy.createCollection(),
+      //TokenStats.createCollection(),
+      //WalletToken.createCollection(),
+      //AutoSell.createCollection(),
       UserToken.createCollection() // Ensure UserToken collection is created
     ]);
 

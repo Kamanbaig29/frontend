@@ -48,6 +48,9 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       
       setMessage(data.message || successMessage);
       localStorage.setItem('token', data.token);
+      if (data.userId) {
+        localStorage.setItem('userId', data.userId); // <-- YEH LINE ADD KARO
+      }
       window.location.reload();
       return data;
 
@@ -126,6 +129,9 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       const data = await response.json();
       if (data.token) {
         localStorage.setItem('token', data.token);
+        if (data.userId) {
+          localStorage.setItem('userId', data.userId); // <-- YEH LINE ADD KARO
+        }
         window.location.reload();
       } else {
         alert(data.message || 'Phantom login failed');

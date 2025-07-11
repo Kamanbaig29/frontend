@@ -132,6 +132,12 @@ const AppContent = () => {
     const handleMessage = (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
+        
+        // ADD THIS: Handle SOL balance updates
+        if (data.type === "SOL_BALANCE_UPDATE") {
+          setSolBalance(data.balance);
+        }
+        
         if (data.type === "PRESETS") {
           setBuyPresets(data.buyPresets);
           setSellPresets(data.sellPresets);

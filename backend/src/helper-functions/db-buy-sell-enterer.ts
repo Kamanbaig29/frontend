@@ -2,8 +2,8 @@ import { Connection, PublicKey } from "@solana/web3.js";
 import { Metaplex } from "@metaplex-foundation/js";
 import { MemeHomeToken } from "../models/MemeHomeToken";
 import { UserToken } from "../models/userToken";
-import { TokenPrice } from "../models/TokenPrice";
-import { AutoSell } from "../models/autoSell";
+//import { TokenPrice } from "../models/TokenPrice";
+//import { AutoSell } from "../models/autoSell";
 import { getConnection } from "../utils/getProvider";
 import { getCurrentPrice } from "./getCurrentPrice";
 
@@ -81,7 +81,8 @@ export async function addOrUpdateTokenFromBuy({
   }
 
   // Get balance as number
-  const balance = parseFloat(amount);
+  // Save as raw string or integer, no parseFloat
+  const balance = amount; // amount should be raw string (e.g. "17590167065574")
 
 
   currentPrice =  await getCurrentPrice(connection, mint, new PublicKey(userPublicKey));
@@ -119,50 +120,7 @@ export async function addOrUpdateTokenFromBuy({
   }
 }
 
-// Separate function for TokenPrice update
-async function updateTokenPriceBuy(mint: string, buyPrice: number, userPublicKey: string) {
-  try {
-    const connection = getConnection();
-    const currentPrice = await getCurrentPrice(connection, mint, new PublicKey(userPublicKey));
-    
-    //if (currentPrice > 0) {
-      await TokenPrice.findOneAndUpdate(
-        { mint, userPublicKey },
-        { $set: { mint, userPublicKey, currentPrice, lastUpdated: new Date(), buyPrice } },
-        { upsert: true }
-      );
 
-      await AutoSell.findOneAndUpdate(
-        { mint, userPublicKey },
-        { $set: { mint, userPublicKey, buyPrice } },
-        { upsert: true }
-      );
-      
-      console.log(` TokenPrice updated for ${mint}: ${currentPrice}`);
-    //}
-  } catch (error) {
-    console.error(`❌ Error updating TokenPrice for mint ${mint}:`, error);
-  }
-}
-
-
-async function updateTokenPriceSell(mint: string, userPublicKey: string) {
-  try {
-    const connection = getConnection();
-    const currentPrice = await getCurrentPrice(connection, mint, new PublicKey(userPublicKey));
-    
-    //if (currentPrice > 0) {
-      await TokenPrice.findOneAndUpdate(
-        { mint, userPublicKey },
-        { $set: { mint, userPublicKey, currentPrice, lastUpdated: new Date()} },
-        { upsert: true }
-      );
-      console.log(` TokenPrice updated for ${mint}: ${currentPrice}`);
-    //}
-  } catch (error) {
-    console.error(`❌ Error updating TokenPrice for mint ${mint}:`, error);
-  }
-}
 
 export async function updateOrRemoveTokenAfterSell({
   mint,
@@ -177,13 +135,13 @@ export async function updateOrRemoveTokenAfterSell({
 }) {
   // Treat very small balances as zero (floating point safety)
   const remaining = parseFloat(remainingAmount);
-  if (remaining <= 0 || Math.abs(remaining) < 1e-6) {
+  //if (remaining <= 0 || Math.abs(remaining) < 1e-6) {
     // Remove UserToken if balance is zero
-    await UserToken.deleteOne({ mint, walletAddress: userPublicKey });
+    //await UserToken.deleteOne({ mint, walletAddress: userPublicKey });
     //await TokenPrice.deleteOne({ mint, userPublicKey });
     //await AutoSell.deleteOne({ mint, userPublicKey });
-    console.log(`🗑️ Token ${mint} removed from DB (sold 100%)`);
-  } else {
+    //console.log(`🗑️ Token ${mint} removed from DB (sold 100%)`);
+  //} else {
     // Update UserToken balance
     await UserToken.findOneAndUpdate(
       { mint, walletAddress: userPublicKey },
@@ -191,5 +149,5 @@ export async function updateOrRemoveTokenAfterSell({
     );
     console.log(`✏️ Token ${mint} amount updated to ${remaining}`);
     //updateTokenPriceSell(mint, userPublicKey);
-  }
+  //}
 }

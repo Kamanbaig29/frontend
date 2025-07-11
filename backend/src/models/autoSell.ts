@@ -1,31 +1,23 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import mongoose from 'mongoose';
 
-export interface IAutoSell extends Document {
-  mint: string;
-  userPublicKey: string;
-  autoSellEnabled: boolean;
-  takeProfitPercent: number;
-  stopLossPercent: number;
-  sellPercentage: number;
-  buyPrice: number;
-  slippage: number;
-  priorityFee: number; // Stored in SOL
-  bribeAmount: number; // Stored in SOL
-}
-
-const AutoSellSchema: Schema = new Schema({
-  mint: { type: String, required: true },
-  userPublicKey: { type: String, required: true },
-  autoSellEnabled: { type: Boolean, default: false },
-  takeProfitPercent: { type: Number, default: 0 },
-  stopLossPercent: { type: Number, default: 0 },
-  sellPercentage: { type: Number, default: 100 },
+const AutoSellSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  walletAddress: { type: String, required: true, index: true },
+  mint: { type: String, required: true, index: true },
   buyPrice: { type: Number, required: true },
+  takeProfit: { type: Number, required: false }, // e.g. 2.5 (SOL) or percent
+  stopLoss: { type: Number, required: false },   // e.g. 10 (%)
+  autoSellPercent: { type: Number, required: true }, // e.g. 100 for full, 50 for half
+  autoSellEnabled: { type: Boolean, default: false },
+  lastSellTime: { type: Date },
+  currentPrice: { type: Number },
+  tokenName: { type: String },
+  tokenSymbol: { type: String },
   slippage: { type: Number, default: 5 }, // Default 5%
   priorityFee: { type: Number, default: 0.001 }, // Default 0.001 SOL
   bribeAmount: { type: Number, default: 0 }, // Default 0 SOL
-});
+}, { timestamps: true }); // adds createdAt, updatedAt
 
-AutoSellSchema.index({ mint: 1, userPublicKey: 1 }, { unique: true });
+AutoSellSchema.index({ userId: 1, mint: 1 }, { unique: true }); // one config per user/token
 
-export const AutoSell = mongoose.model<IAutoSell>('AutoSell', AutoSellSchema);
+export default mongoose.model('AutoSell', AutoSellSchema);

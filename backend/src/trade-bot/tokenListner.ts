@@ -26,11 +26,11 @@ import WebSocket, { WebSocketServer } from "ws";
 //import bs58 from "bs58";
 //import { AutoTokenBuy } from "../models/AutoTokenBuy";
 //import { TokenStats } from "../models/TokenStats";
-import { WalletToken } from "../models/WalletToken";
+//import { WalletToken } from "../models/WalletToken";
 import { sellToken } from "../action/sell";
 import { TokenPrice } from "../models/TokenPrice";
 import { getCurrentPrice } from "../helper-functions/getCurrentPrice";
-import { AutoSell } from "../models/autoSell";
+//import { AutoSell } from "../models/autoSell";
 //import { sendFullStatsToClient } from "../helper-functions/dbStatsBroadcaster";
 // import { trackBuyTransaction } from "../helper-functions/wallet-token-watcher";
 
@@ -521,6 +521,13 @@ const handleAutoSnipe = async (
           })
         );
 
+        // ADD THIS: Send updated SOL balance
+        const updatedBalance = await connection.getBalance(userPublicKey);
+        userSession.ws.send(JSON.stringify({
+          type: "SOL_BALANCE_UPDATE",
+          balance: updatedBalance / 1e9,
+        }));
+
         console.log(`💰 Token detection price: ${detectionPrice} SOL`);
 
         //await addOrUpdateTokenFromBuy({
@@ -614,6 +621,19 @@ wss.on("connection", (ws: WSWithUser) => {
             ws.send(JSON.stringify({ type: "AUTH_ERROR", error: "No token provided" }));
             return;
           }
+          
+          // Special case for auto-sell worker
+          if (authToken === 'auto-sell-worker') {
+            ws.userId = 'auto-sell-worker';
+            ws.walletAddress = 'auto-sell-worker';
+            ws.send(JSON.stringify({
+              type: "AUTH_SUCCESS",
+              message: "Auto-sell worker authenticated successfully",
+              walletAddress: 'auto-sell-worker',
+            }));
+            return;
+          }
+          
           const decoded = verifyToken(authToken);
           if (!decoded) {
             ws.send(JSON.stringify({ type: "AUTH_ERROR", error: "Invalid token" }));
@@ -640,9 +660,18 @@ wss.on("connection", (ws: WSWithUser) => {
             JSON.stringify({
               type: "AUTH_SUCCESS",
               message: "WebSocket authenticated successfully",
-              walletAddress: decoded.walletAddress, // <-- add this
+              walletAddress: decoded.walletAddress,
             })
           );
+
+          // ADD THIS: Send initial SOL balance
+          const connection = getConnection();
+          const initialBalance = await connection.getBalance(userKeypair.publicKey);
+          ws.send(JSON.stringify({
+            type: "SOL_BALANCE_UPDATE",
+            balance: initialBalance / 1e9,
+          }));
+
           const userTokens = await UserToken.find({ userId: ws.userId });
           ws.send(JSON.stringify({
             type: "USER_TOKENS",
@@ -754,6 +783,35 @@ wss.on("connection", (ws: WSWithUser) => {
           );
           break;
 
+        case "AUTO_SELL_TRIGGERED":
+        case "AUTO_SELL_SUCCESS":
+        case "AUTO_SELL_DISABLED":
+          // Broadcast auto-sell notifications to all connected clients
+          wss.clients.forEach(client => {
+            if (client.readyState === 1) { // WebSocket.OPEN
+              client.send(JSON.stringify(data));
+            }
+          });
+          break;
+
+        case "SOL_BALANCE_UPDATE":
+          // Broadcast SOL balance updates to all connected clients
+          wss.clients.forEach(client => {
+            if (client.readyState === 1) { // WebSocket.OPEN
+              client.send(JSON.stringify(data));
+            }
+          });
+          break;
+
+        case "USER_TOKENS":
+          // Broadcast user tokens updates to all connected clients
+          wss.clients.forEach(client => {
+            if (client.readyState === 1) { // WebSocket.OPEN
+              client.send(JSON.stringify(data));
+            }
+          });
+          break;
+
         case "MANUAL_BUY":
           console.log("[DEBUG] MANUAL_BUY case started.");
 
@@ -817,6 +875,14 @@ wss.on("connection", (ws: WSWithUser) => {
                   details: result,
                 })
               );
+
+              // ADD THIS: Send updated SOL balance
+              const updatedBalance = await getConnection().getBalance(userKeypair.publicKey);
+              ws.send(JSON.stringify({
+                type: "SOL_BALANCE_UPDATE",
+                balance: updatedBalance / 1e9,
+              }));
+
               const userTokens = await UserToken.find({ userId: ws.userId });
               ws.send(JSON.stringify({
                 type: "USER_TOKENS",
@@ -849,13 +915,28 @@ wss.on("connection", (ws: WSWithUser) => {
             console.log("  ws.walletAddress:", ws.walletAddress);
             console.log("  Request walletAddress:", data.walletAddress);
 
+            // Accept both 'mint' and 'mintAddress' for compatibility
+            const mint = data.mint || data.mintAddress;
+            // Debug: Print all incoming values
+            console.log("[MANUAL_SELL] Incoming values:", {
+              mint,
+              percent: data.percent,
+              walletAddress: data.walletAddress,
+              slippage: data.slippage,
+              priorityFee: data.priorityFee,
+              bribeAmount: data.bribeAmount,
+              userId: ws.userId,
+              wsWalletAddress: ws.walletAddress,
+              rawData: data
+            });
+            // Now destructure
             const {
-                mint,
                 percent,
                 walletAddress,
                 slippage,
                 priorityFee,
                 bribeAmount,
+                amount,
             } = data;
 
             if (!mint || !percent || !walletAddress) {
@@ -866,7 +947,9 @@ wss.on("connection", (ws: WSWithUser) => {
             const connection = getConnection();
             let userKeypair;
             try {
+                console.log("Step 1: Getting userKeypair...");
                 userKeypair = await getUserKeypairByWallet(walletAddress);
+                console.log("Step 2: Got userKeypair:", userKeypair.publicKey.toBase58());
             } catch (e) {
                 ws.send(JSON.stringify({ type: "ERROR", error: "User wallet not found or decryption failed" }));
                 return;
@@ -875,26 +958,37 @@ wss.on("connection", (ws: WSWithUser) => {
 
             // Get user's token account address (ATA)
             const userTokenAccount = await getAssociatedTokenAddress(mintPubkey, userKeypair.publicKey);
+            console.log("Step 3: Getting userTokenAccount...");
+            console.log("Step 4: Got userTokenAccount:", userTokenAccount.toBase58());
 
             // Get live token account info from blockchain
             let tokenAccountInfo;
             try {
                 tokenAccountInfo = await getAccount(connection, userTokenAccount);
+                console.log("Step 5: Getting tokenAccountInfo...");
+                console.log("Step 6: Got tokenAccountInfo");
             } catch (e) {
                 ws.send(JSON.stringify({ type: "MANUAL_SELL_ERROR", error: "Token account not found in wallet" }));
                 return;
             }
 
             // Get decimals (prefer chain, fallback to UserToken)
-            const token = await UserToken.findOne({ mint, walletAddress });
-            const decimals = token?.decimals ?? 6;
-
-            // Get live balance from chain
-            const chainBalance = Number(tokenAccountInfo.amount) / Math.pow(10, decimals);
-
-            // Calculate sell amount as % of live balance
-            let sellAmount = (chainBalance * percent) / 100;
-            let sellAmountInSmallestUnit = Math.floor(sellAmount * Math.pow(10, decimals));
+            const userTokenForDebug = await UserToken.findOne({ mint, walletAddress });
+            const decimalsForDebug = userTokenForDebug?.decimals ?? 6;
+            // Get raw chain balance (no decimals division)
+            const chainBalanceRaw = Number(tokenAccountInfo.amount); // RAW
+            console.log("[DEBUG] Step 9: chainBalance (RAW):", chainBalanceRaw);
+            // Calculate sell amount as % of raw balance
+            let sellAmountInSmallestUnit;
+            if (typeof amount === 'number' && amount > 0) {
+              // If amount is provided, use it directly (already in smallest unit)
+              sellAmountInSmallestUnit = amount;
+            } else {
+              // Calculate based on percent of raw chain balance
+              let sellAmount = (chainBalanceRaw * percent) / 100;
+              sellAmountInSmallestUnit = Math.floor(sellAmount);
+            }
+            console.log("[DEBUG] Sell Amount Calculation: percent:", percent, "sellAmountInSmallestUnit:", sellAmountInSmallestUnit);
 
             if (sellAmountInSmallestUnit <= 0) {
                 ws.send(JSON.stringify({ type: "MANUAL_SELL_ERROR", error: "Sell amount too small" }));
@@ -907,10 +1001,9 @@ wss.on("connection", (ws: WSWithUser) => {
             console.log("User PublicKey:", userKeypair.publicKey.toBase58());
             console.log("Token Mint:", mint);
             console.log("Sell Percentage:", percent + "%");
-            console.log("Token Amount:", chainBalance);
-            console.log("Decimals:", decimals);
-            console.log("Sell Amount:", sellAmount);
-            console.log("Sell Amount (smallest unit):", sellAmountInSmallestUnit);
+            console.log("Token Amount:", chainBalanceRaw);
+            console.log("Decimals:", decimalsForDebug);
+            console.log("Sell Amount:", sellAmountInSmallestUnit);
 
             // 5. Prepare Solana connection and swap accounts
             const swapAccounts = await getSwapAccounts({
@@ -919,6 +1012,8 @@ wss.on("connection", (ws: WSWithUser) => {
                 connection,
               programId: MEMEHOME_PROGRAM_ID,
             });
+            console.log("Step 10: Getting swapAccounts...");
+            console.log("Step 11: Got swapAccounts");
 
             // 6. Get reserves for expected output calculation
             const tokenVaultInfo = await connection.getTokenAccountBalance(swapAccounts.curveTokenAccount);
@@ -929,6 +1024,10 @@ wss.on("connection", (ws: WSWithUser) => {
                 return;
             }
             const solReserve = BigInt(bondingCurveInfo.lamports);
+            console.log("Step 12: Getting tokenVaultInfo...");
+            console.log("Step 13: Got tokenVaultInfo");
+            console.log("Step 14: Getting bondingCurveInfo...");
+            console.log("Step 15: Got bondingCurveInfo");
 
             // 7. Calculate expected output
             const expectedSolOut = calculateAmountOut(
@@ -936,6 +1035,8 @@ wss.on("connection", (ws: WSWithUser) => {
                 tokenReserve,
                 solReserve
             );
+            console.log("Step 16: Calculating expectedSolOut...");
+            console.log("expectedSolOut:", expectedSolOut);
 
             // 8. Log reserves and expected output
             console.log("Token Reserve:", tokenReserve.toString());
@@ -965,6 +1066,8 @@ wss.on("connection", (ws: WSWithUser) => {
                         priorityFee: priorityFeeValue,
                         bribeAmount: bribeAmountValue,
                     });
+                    console.log("Step 17: Executing sellToken...");
+                    console.log("Step 18: Got txSignature:", txSignature);
                 } else {
                     // If the wallet address is different, we need to create a new transaction
                     const createAtaIx = createAssociatedTokenAccountInstruction(
@@ -995,31 +1098,34 @@ wss.on("connection", (ws: WSWithUser) => {
                 const actualSolReceived = (postBalance - preBalance) / 1e9;
 
                 // After sell transaction is confirmed
-                let updatedChainBalance = 0;
+                let updatedChainBalanceRaw = 0;
                 try {
                   const updatedTokenAccountInfo = await getAccount(connection, userTokenAccount);
-                  updatedChainBalance = Number(updatedTokenAccountInfo.amount) / Math.pow(10, decimals);
+                  console.log("[DEBUG] After Sell: updatedTokenAccountInfo.amount (raw):", updatedTokenAccountInfo.amount);
+                  updatedChainBalanceRaw = Number(updatedTokenAccountInfo.amount); // RAW
+                  console.log("[DEBUG] After Sell: updatedChainBalance (RAW):", updatedChainBalanceRaw);
                 } catch (e) {
-                  updatedChainBalance = 0; // If account is closed, treat as zero
+                  updatedChainBalanceRaw = 0; // If account is closed, treat as zero
                 }
-
-                // Update or remove UserToken in DB
-                if (updatedChainBalance <= 0 || Math.abs(updatedChainBalance) < 1e-6) {
+                // Update or remove UserToken in DB (RAW)
+                if (updatedChainBalanceRaw <= 0 || Math.abs(updatedChainBalanceRaw) < 1e-6) {
                   await UserToken.deleteOne({ mint, walletAddress });
-                  // ...delete TokenPrice, AutoSell if needed...
                 } else {
                   await UserToken.findOneAndUpdate(
                     { mint, walletAddress },
-                    { $set: { balance: updatedChainBalance } }
+                    { $set: { balance: updatedChainBalanceRaw } }
                   );
                 }
-
+                const userToken = await UserToken.findOne({ mint, walletAddress });
+                console.log("[DEBUG] DB UserToken after update (RAW):", userToken);
                 // 11. Log transaction summary
-                console.log("\n=== MANUAL SELL SUMMARY ===");
+                console.log("\n=== MANUAL SELL SUMMARY (RAW) ===");
                 console.log(`User: ${walletAddress} (${userKeypair.publicKey.toBase58()})`);
-                console.log(`Tokens Sold: ${sellAmount} (${sellAmountInSmallestUnit} in smallest unit)`);
-                const remainingAmount = chainBalance - sellAmount; // Calculate remaining
-                console.log("Remaining Amount:", remainingAmount);
+                console.log(`Tokens Sold: ${sellAmountInSmallestUnit} (RAW)`);
+                // FIX 1: Use actual updated chain balance (RAW)
+                const remainingAmount = updatedChainBalanceRaw; // RAW
+                console.log("Remaining Amount (RAW):", remainingAmount);
+
                 console.log(`Expected SOL Output (before slippage): ${Number(expectedSolOut) / 1e9} SOL`);
                 const expectedSolOutWithSlippage = (Number(expectedSolOut) * (1 - slippageValue / 100)) / 1e9;
                 console.log(`Expected SOL Output (after slippage): ${expectedSolOutWithSlippage} SOL`);
@@ -1029,28 +1135,78 @@ wss.on("connection", (ws: WSWithUser) => {
                 console.log(`Execution Time: ${manualSellEndTime - manualSellStartTime} ms`);
                 console.log("============================\n");
 
-                // 12. Update database
+                // FIX 2: Update database with actual remaining amount
                 await updateOrRemoveTokenAfterSell({
                     mint,
                     userPublicKey: walletAddress,
-                    remainingAmount: remainingAmount.toString(),
+                    remainingAmount: remainingAmount.toString(), // Use actual updatedChainBalance
                     signature: txSignature || "",
                 });
 
                 // 13. Send success response
-            ws.send(
-              JSON.stringify({
-                type: "MANUAL_SELL_SUCCESS",
-                        signature: txSignature,
-                        details: {
-                            mint,
-                            soldAmount: sellAmount.toString(),
-                            remainingAmount: remainingAmount.toString(),
-                            expectedSolOut: expectedSolOut.toString(),
-                            executionTimeMs: manualSellEndTime - manualSellStartTime,
-                        },
-              })
-            );
+                ws.send(
+                  JSON.stringify({
+                    type: "MANUAL_SELL_SUCCESS",
+                    signature: txSignature,
+                    details: {
+                      mint,
+                      soldAmount: sellAmountInSmallestUnit.toString(),
+                      remainingAmount: remainingAmount.toString(),
+                      expectedSolOut: expectedSolOut.toString(),
+                      executionTimeMs: manualSellEndTime - manualSellStartTime,
+                      isAutoSell: data.isAutoSell || false, // Pass through the auto-sell flag
+                    },
+                  })
+                );
+
+                // Send auto-sell success notification if this was an auto-sell
+                if (data.isAutoSell) {
+                  ws.send(JSON.stringify({
+                    type: "AUTO_SELL_SUCCESS",
+                    mint,
+                    signature: txSignature,
+                    soldAmount: sellAmountInSmallestUnit.toString(),
+                    remainingAmount: remainingAmount.toString(),
+                    actualSolReceived,
+                    executionTimeMs: manualSellEndTime - manualSellStartTime,
+                  }));
+                }
+
+                // ADD THIS: Send updated token list to frontend
+                const userTokens = await UserToken.find({ walletAddress });
+                console.log("[DEBUG] Sending USER_TOKENS to frontend:", userTokens);
+                ws.send(JSON.stringify({
+                  type: "USER_TOKENS",
+                  tokens: userTokens
+                }));
+
+                // ADD THIS: Send updated SOL balance
+                const updatedBalance = await getConnection().getBalance(userKeypair.publicKey);
+                ws.send(JSON.stringify({
+                  type: "SOL_BALANCE_UPDATE",
+                  balance: updatedBalance / 1e9,
+                }));
+
+                // --- NEW: Broadcast to all clients if auto-sell ---
+                if (data.isAutoSell) {
+                  wss.clients.forEach(client => {
+                    const wsClient = client as WSWithUser;
+                    if (
+                      client.readyState === 1 && // WebSocket.OPEN
+                      wsClient.walletAddress === walletAddress
+                    ) {
+                      wsClient.send(JSON.stringify({
+                        type: "USER_TOKENS",
+                        tokens: userTokens
+                      }));
+                      wsClient.send(JSON.stringify({
+                        type: "SOL_BALANCE_UPDATE",
+                        balance: updatedBalance / 1e9,
+                      }));
+                    }
+                  });
+                }
+
           } catch (error) {
                 console.error("❌ Manual sell failed:", error);
             ws.send(
@@ -1088,11 +1244,11 @@ wss.on("connection", (ws: WSWithUser) => {
               return;
             }
             // Update settings in DB for this user/token
-            await AutoSell.updateOne(
-              { mint: data.payload.mint, userPublicKey: ws.walletAddress },
-              { $set: data.payload },
-              { upsert: true }
-            );
+            //await AutoSell.updateOne(
+              //{ mint: data.payload.mint, userPublicKey: ws.walletAddress },
+              //{ $set: data.payload },
+              //{ upsert: true }
+            //);
             ws.send(JSON.stringify({ type: 'AUTO_SELL_SETTINGS_UPDATED', message: 'Settings updated!' }));
             break;
 
@@ -1124,8 +1280,8 @@ wss.on("connection", (ws: WSWithUser) => {
                 ws.send(JSON.stringify({ type: "ERROR", error: "User not authenticated" }));
                 break;
             }
-            const configs = await AutoSell.find({ userPublicKey: ws.walletAddress });
-            ws.send(JSON.stringify({ type: "USER_AUTOSELL_CONFIGS", configs }));
+            //const configs = await AutoSell.find({ userPublicKey: ws.walletAddress });
+            //ws.send(JSON.stringify({ type: "USER_AUTOSELL_CONFIGS", configs }));
             break;
           }
 

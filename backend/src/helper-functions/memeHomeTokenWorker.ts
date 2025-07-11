@@ -415,9 +415,14 @@ export async function startMemeHomeTokenWorker(wss: WebSocketServer) {
         // 10. WebSocket broadcast
         const latestToken = await MemeHomeToken.findOne({ mint }).lean();
         if (latestToken) {
+          let eventType = '';
+          if (isLaunch) eventType = 'launch';
+          else if (isSwap) eventType = 'swap';
+          else if (isBuy) eventType = 'buy';
+          else if (isSell) eventType = 'sell';
           wss.clients.forEach(client => {
             if (client.readyState === 1) {
-              client.send(JSON.stringify({ type: 'NEW_TOKEN', token: latestToken }));
+              client.send(JSON.stringify({ type: 'NEW_TOKEN', token: latestToken, eventType }));
             }
           });
         }

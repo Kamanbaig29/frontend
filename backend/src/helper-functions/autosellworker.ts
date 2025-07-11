@@ -1,174 +1,172 @@
-import { Connection, PublicKey, Keypair } from "@solana/web3.js";
-import { WalletToken } from "../models/WalletToken";
-import { AutoSell } from "../models/autoSell";
-import { sellToken } from "../action/sell";
-import { getSwapAccounts } from "../action/getSwapAccounts";
-import { getCurrentPrice } from "./getCurrentPrice";
-import { updateOrRemoveTokenAfterSell } from "./db-buy-sell-enterer";
-import { getUserKeypairByWallet } from "../utils/userWallet";
-import UserPreset from '../models/userPreset';
-import User from '../models/user_auth';
+import dotenv from 'dotenv';
+dotenv.config();
 
-// --- CONFIG & UTILS ---
-const MEMEHOME_PROGRAM_ID = new PublicKey(process.env.MEMEHOME_PROGRAM_ID!);
+import AutoSell from '../models/autoSell';
+import { getCurrentPrice } from './getCurrentPrice';
+import { getConnection } from '../utils/getProvider';
+import { getUserKeypairByWallet } from '../utils/userWallet';
+import WebSocket from 'ws';
 
-// Track which tokens are being processed to avoid double-sell
-const processingSells = new Set<string>();
+let autoSellWorkerInterval: NodeJS.Timeout | null = null;
+let ws: WebSocket | null = null;
 
-// --- GLOBAL AUTO-SELL WORKER ---
-export async function checkAndExecuteAllAutoSells(connection: Connection) {
-  //const cycleStart = new Date();
-  //console.log(`[AUTO-SELL][GLOBAL] 🚦 Auto-sell global worker cycle started at ${cycleStart.toISOString()}`);
+const apiLink = process.env.API_LINK;
+const wslink = process.env.WS_LINK;
+const port = process.env.API_PORT;
 
-  try {
-    // Get all enabled auto-sell configs for all users
-    const configsToSell = await AutoSell.find({ autoSellEnabled: true });
+// --- WebSocket Setup ---
+function getOrCreateWebSocket() {
+  if (ws && ws.readyState === WebSocket.OPEN) return ws;
+  if (ws && ws.readyState === WebSocket.CONNECTING) return ws;
 
-    if (configsToSell.length === 0) {
-      //console.log(`[AUTO-SELL][GLOBAL] No auto-sell configs enabled in this cycle.`);
+  ws = new WebSocket(`${wslink}:${port}`);
+  ws.on('open', () => {
+    console.log('[AutoSellWorker] WebSocket connected');
+    // Authenticate the WebSocket connection
+    if (ws) {
+      ws.send(JSON.stringify({
+        type: 'AUTHENTICATE',
+        token: process.env.BOT_AUTH_TOKEN || 'auto-sell-worker'
+      }));
     }
+  });
+  ws.on('close', () => {
+    console.log('[AutoSellWorker] WebSocket closed, will reconnect on next send');
+    ws = null;
+  });
+  ws.on('error', (err) => {
+    console.error('[AutoSellWorker] WebSocket error:', err);
+    ws = null;
+  });
 
-    for (const config of configsToSell) {
-      const { mint, userPublicKey, buyPrice, takeProfitPercent, stopLossPercent, sellPercentage, slippage, priorityFee, bribeAmount } = config;
-      const key = `${mint}_${userPublicKey}`;
-      if (processingSells.has(key)) continue;
-      processingSells.add(key);
-
-      try {
-        // Log config being processed
-        console.log(`\n[AUTO-SELL][${userPublicKey}] --- Processing token: ${mint} ---`);
-        console.log(`[AUTO-SELL][${userPublicKey}] Config:`, {
-          buyPrice, takeProfitPercent, stopLossPercent, sellPercentage
-        });
-
-        const token = await WalletToken.findOne({ mint, userPublicKey });
-        if (!token) {
-          console.log(`[AUTO-SELL][${userPublicKey}] No wallet token found for mint ${mint}, skipping.`);
-          continue;
-        }
-
-        let userKeypair: Keypair;
-        try {
-          userKeypair = await getUserKeypairByWallet(userPublicKey);
-        } catch (e) {
-          console.error(`[AUTO-SELL][${userPublicKey}] ❌ Could not get keypair:`, e);
-          continue;
-        }
-
-        const currentPrice = await getCurrentPrice(connection, mint, userKeypair.publicKey);
-        const buyPriceNum = Number(buyPrice) || 0;
-        if (!buyPriceNum || !currentPrice) {
-          console.log(`[AUTO-SELL][${userPublicKey}] Missing buyPrice or currentPrice for ${mint}, skipping.`);
-          continue;
-        }
-
-        // Calculate profit/loss
-        const profitLossPercent = ((currentPrice - buyPriceNum) / buyPriceNum) * 100;
-        console.log(`[AUTO-SELL][${userPublicKey}] buyPrice: ${buyPriceNum}, currentPrice: ${currentPrice}`);
-        console.log(`[AUTO-SELL][${userPublicKey}] Profit/Loss: ${profitLossPercent.toFixed(2)}%`);
-
-        const takeProfitPrice = buyPriceNum * (1 + (Number(takeProfitPercent) || 0) / 100);
-        const stopLossPrice = buyPriceNum * (1 - (Number(stopLossPercent) || 0) / 100);
-
-        console.log(`[AUTO-SELL][${userPublicKey}] takeProfitPrice: ${takeProfitPrice}, stopLossPrice: ${stopLossPrice}`);
-
-        let shouldSell = false;
-        let reason = "";
-
-        if (takeProfitPercent > 0 && currentPrice >= takeProfitPrice) {
-          shouldSell = true;
-          reason = "Take Profit";
-        } else if (stopLossPercent > 0 && currentPrice <= stopLossPrice) {
-          shouldSell = true;
-          reason = "Stop Loss";
-        }
-
-        if (shouldSell) {
-          console.log(`[AUTO-SELL][${userPublicKey}] 🎯 Sell triggered for ${mint} due to ${reason}.`);
-
-          const tokenAmount = parseFloat(token.amount);
-          const decimals = token.decimals || 6;
-          const sellAmount = (tokenAmount * (Number(sellPercentage) || 100)) / 100;
-          const remainingAmount = tokenAmount - sellAmount;
-          const sellAmountInSmallestUnit = Math.round(sellAmount * Math.pow(10, decimals));
-
-          console.log(`[AUTO-SELL][${userPublicKey}] tokenAmount: ${tokenAmount}, decimals: ${decimals}`);
-          console.log(`[AUTO-SELL][${userPublicKey}] sellAmount: ${sellAmount}, sellAmountInSmallestUnit: ${sellAmountInSmallestUnit}`);
-          console.log(`[AUTO-SELL][${userPublicKey}] remainingAmount: ${remainingAmount}`);
-
-          if (sellAmountInSmallestUnit > 0) {
-            // 1. Get userId from userPublicKey (if not in config)
-            const user = await User.findOne({ walletAddress: userPublicKey });
-            const userId = user?._id;
-
-            // 2. Get user's active sell preset
-            const userPreset = await UserPreset.findOne({ userId });
-            const activeSellPreset = (userPreset?.sellPresets?.[userPreset.activeSellPreset] || {}) as {
-              slippage?: number;
-              priorityFee?: number;
-              bribeAmount?: number;
-            };
-
-            console.log(`[AUTO-SELL][${userPublicKey}] activeSellPreset object:`, activeSellPreset);
-
-            if (
-              activeSellPreset.slippage === undefined ||
-              activeSellPreset.priorityFee === undefined ||
-              activeSellPreset.bribeAmount === undefined
-            ) {
-              console.warn(`[AUTO-SELL][${userPublicKey}] WARNING: activeSellPreset is missing fee fields, using defaults!`, activeSellPreset);
-            }
-
-            const swapAccounts = await getSwapAccounts({
-              mintAddress: mint,
-              buyer: userKeypair.publicKey,
-              connection,
-              programId: MEMEHOME_PROGRAM_ID,
-            });
-
-            // 3. Log the fee parameters before selling
-            console.log(`[AUTO-SELL][${userPublicKey}] Using sell params for ${mint}:`);
-            console.log(`  Slippage: ${Number(activeSellPreset.slippage) || 5}`);
-            console.log(`  Priority Fee: ${Number(activeSellPreset.priorityFee) || 0.001}`);
-            console.log(`  Bribe Amount: ${Number(activeSellPreset.bribeAmount) || 0}`);
-
-            // 4. Use these in sellToken
-            const txSignature = await sellToken({
-              connection,
-              userKeypair,
-              programId: MEMEHOME_PROGRAM_ID,
-              amount: BigInt(sellAmountInSmallestUnit),
-              minOut: BigInt(1),
-              swapAccounts,
-              slippage: Number(activeSellPreset.slippage) || 5,
-              priorityFee: Number(activeSellPreset.priorityFee) || 0.001,
-              bribeAmount: Number(activeSellPreset.bribeAmount) || 0,
-            });
-
-            if (txSignature) {
-              console.log(`[AUTO-SELL][${userPublicKey}] ✅ Sold ${sellAmount} of ${mint}. Tx: ${txSignature}`);
-              await updateOrRemoveTokenAfterSell({ mint, userPublicKey, remainingAmount: remainingAmount.toString() });
-              await AutoSell.updateOne({ mint, userPublicKey }, { $set: { autoSellEnabled: false } });
-            } else {
-              console.error(`[AUTO-SELL][${userPublicKey}] ❌ Sell transaction failed for ${mint}.`);
-            }
-          } else {
-            console.log(`[AUTO-SELL][${userPublicKey}] Sell amount too small for ${mint}, skipping.`);
-          }
-        } else {
-          console.log(`[AUTO-SELL][${userPublicKey}] No sell condition met for ${mint}.`);
-        }
-      } catch (error) {
-        console.error(`[AUTO-SELL][${userPublicKey}] ❌ Error processing ${mint}:`, error);
-      } finally {
-        processingSells.delete(key);
+  // Listen for MANUAL_SELL_SUCCESS to disable autoSellEnabled
+  ws.on('message', async (msg) => {
+    try {
+      const data = JSON.parse(msg.toString());
+      if (data.type === 'MANUAL_SELL_SUCCESS' && data.mint && data.walletAddress) {
+        // Disable autoSellEnabled for this config
+        await AutoSell.updateOne(
+          { mint: data.mint, walletAddress: data.walletAddress },
+          { $set: { autoSellEnabled: false } }
+        );
+        console.log(`[AutoSellWorker] AutoSell disabled for mint: ${data.mint}, wallet: ${data.walletAddress}`);
       }
+    } catch (err) {
+      console.error('[AutoSellWorker] Error processing WS message:', err);
     }
-  } catch (error) {
-    console.error(`[AUTO-SELL][GLOBAL] ❌ Error in main sell check loop:`, error);
-  }
+  });
 
-  //const cycleEnd = new Date();
-  //console.log(`[AUTO-SELL][GLOBAL] 🏁 Auto-sell global worker cycle ended at ${cycleEnd.toISOString()}`);
+  return ws;
 }
 
+function sendManualSellMessage(data: any) {
+  const ws = getOrCreateWebSocket();
+  const payload = { type: 'MANUAL_SELL', ...data };
+  if (ws.readyState === WebSocket.OPEN) {
+    try {
+      ws.send(JSON.stringify(payload));
+      console.log('[AutoSellWorker] MANUAL_SELL sent:', payload);
+    } catch (err) {
+      console.error('[AutoSellWorker] MANUAL_SELL send error:', err);
+    }
+  } else {
+    ws.once('open', () => {
+      try {
+        ws.send(JSON.stringify(payload));
+        console.log('[AutoSellWorker] MANUAL_SELL sent after open:', payload);
+      } catch (err) {
+        console.error('[AutoSellWorker] MANUAL_SELL send error after open:', err);
+      }
+    });
+  }
+}
+
+export async function checkAndExecuteAllAutoSells() {
+  const autoSells = await AutoSell.find({ autoSellEnabled: true });
+  const connection = getConnection();
+
+  for (const config of autoSells) {
+    try {
+      // Get userKeypair for price fetch
+      const userKeypair = await getUserKeypairByWallet(config.walletAddress);
+      if (!userKeypair) continue;
+
+      // Get current price and calculate P/L
+      const currentPrice = await getCurrentPrice(connection, config.mint, userKeypair.publicKey);
+      const buyPrice = config.buyPrice;
+      if (!buyPrice || !currentPrice) continue;
+      const profitLossPercent = ((currentPrice - buyPrice) / buyPrice) * 100;
+
+      // Check takeProfit/stopLoss
+      let shouldSell = false;
+      if (typeof config.takeProfit === 'number' && profitLossPercent >= config.takeProfit) {
+        shouldSell = true;
+      }
+      if (typeof config.stopLoss === 'number' && profitLossPercent <= -Math.abs(config.stopLoss)) {
+        shouldSell = true;
+      }
+
+      if (shouldSell) {
+        console.log(
+          `🔔 AutoSell triggered for user: ${config.userId}, token: ${config.mint}, P/L: ${profitLossPercent.toFixed(2)}%`
+        );
+        
+        // Send auto-sell notification to frontend
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: "AUTO_SELL_TRIGGERED",
+            mint: config.mint,
+            walletAddress: config.walletAddress,
+            percent: config.autoSellPercent,
+            profitLoss: profitLossPercent,
+            tokenName: config.tokenName || 'Unknown Token'
+          }));
+        }
+        
+        sendManualSellMessage({
+          mint: config.mint,
+          percent: config.autoSellPercent,
+          walletAddress: config.walletAddress,
+          slippage: config.slippage,
+          priorityFee: config.priorityFee,
+          bribeAmount: config.bribeAmount,
+          isAutoSell: true, // Add flag to identify auto-sells
+        });
+        // Immediately disable autoSellEnabled to prevent repeated sells
+        await AutoSell.updateOne(
+          { mint: config.mint, walletAddress: config.walletAddress },
+          { $set: { autoSellEnabled: false } }
+        );
+        console.log(`[AutoSellWorker] AutoSell immediately disabled for mint: ${config.mint}, wallet: ${config.walletAddress}`);
+
+        // Send auto-sell disabled notification
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: "AUTO_SELL_DISABLED",
+            mint: config.mint,
+            walletAddress: config.walletAddress,
+            tokenName: config.tokenName || 'Unknown Token'
+          }));
+        }
+
+        // REMOVE THIS: Don't send SOL balance update here - wait for actual sell transaction
+        // The balance update will be sent by the manual sell handler after transaction confirmation
+      }
+    } catch (err) {
+      console.error('AutoSell worker error:', err);
+    }
+  }
+}
+
+export function startAutoSellWorker() {
+  console.log('🚀 AutoSell worker started');
+  autoSellWorkerInterval = setInterval(checkAndExecuteAllAutoSells, 5000);
+}
+
+export function stopAutoSellWorker() {
+  if (autoSellWorkerInterval) {
+    clearInterval(autoSellWorkerInterval);
+    autoSellWorkerInterval = null;
+    console.log('🛑 AutoSell worker stopped');
+  }
+}

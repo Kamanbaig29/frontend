@@ -9,6 +9,7 @@ import { WebSocketServer } from 'ws';
 import authRoutes from './routes/authRoutes'; 
 import botRoutes from './routes/botRoutes';
 import tokenRoutes from './routes/tokenRoutes';
+import autoSellRoutes from './routes/autoSellRoutes';
 
 // --- Existing Bot Imports ---
 import { connectDatabase } from "./config/database";
@@ -16,9 +17,10 @@ import { connectDatabase } from "./config/database";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { startWalletSyncWatcher } from "../src/helper-functions/wallet-token-watcher";
 import { startPriceUpdateService } from '../src/helper-functions/priceUpdateService';
-import { checkAndExecuteAllAutoSells } from './helper-functions/autosellworker';
+//import { checkAndExecuteAllAutoSells } from './helper-functions/autosellworker';
 import { createWebSocketServer, setupWebSocketHandlers } from './trade-bot/tokenListner';
 import { startMemeHomeTokenWorker } from './helper-functions/memeHomeTokenWorker';
+import { startAutoSellWorker, stopAutoSellWorker } from './helper-functions/autosellworker';
 
 // import { startDbStatsBroadcaster } from './helper-functions/dbStatsBroadcaster';
 
@@ -35,12 +37,14 @@ async function main() {
   // --- 2. Setup and Start Express API Server ---
   const app = express();
   const PORT = Number(process.env.API_PORT) || 4000;
+  const apiLink = process.env.API_LINK;
 
   app.use(cors()); // Enable CORS for frontend
   app.use(express.json()); // Enable JSON body parsing
   app.use('/api/auth', authRoutes); // Register authentication routes
   app.use('/api/bot', botRoutes);
   app.use('/api/tokens', tokenRoutes);
+  app.use('/api/auto-sell', autoSellRoutes);
 
   app.get('/', (req, res) => {
     res.send('Bot and API server is running!');
@@ -55,12 +59,14 @@ async function main() {
 
   server.listen(PORT, () => {
     console.log(`🚀 API & WebSocket Server listening on http://localhost:${PORT}`);
+    // Start the AutoSell worker only after server is ready
+    startAutoSellWorker();
   });
   // --- 3. Start Existing Bot Services ---
   const connection = new Connection(process.env.RPC_ENDPOINT!);
 
   // Start global auto-sell worker
-  setInterval(() => checkAndExecuteAllAutoSells(connection), 5000);
+  //setInterval(() => checkAndExecuteAllAutoSells(connection), 5000);
 
   // Start MemeHome token worker
   startMemeHomeTokenWorker(wss);
@@ -83,6 +89,7 @@ main().catch(err => {
 // --- Graceful Shutdown Logic (Existing) ---
 process.on("SIGINT", () => {
   console.log("Received SIGINT, cleaning up...");
+  stopAutoSellWorker();
   // if (cleanupWatcher) cleanupWatcher();
   // if (cleanupPriceService) cleanupPriceService();
   // if (cleanupAutoSellWorker) cleanupAutoSellWorker();
@@ -92,6 +99,7 @@ process.on("SIGINT", () => {
 
 process.on("SIGTERM", () => {
   console.log("Received SIGTERM, cleaning up...");
+  stopAutoSellWorker();
   // if (cleanupWatcher) cleanupWatcher();
   // if (cleanupPriceService) cleanupPriceService();
   // if (cleanupAutoSellWorker) cleanupAutoSellWorker();

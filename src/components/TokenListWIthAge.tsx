@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Button, TextField } from '@mui/material';
+import React, { useEffect, useState, useRef } from 'react';
+import { Button, TextField, Switch, FormControlLabel, Snackbar, Alert } from '@mui/material';
 import { FaSortAmountDown, FaSortAmountUp } from 'react-icons/fa';
 //import { WebSocketContext } from '../context/webSocketContext';
 //import { PublicKey, Connection } from '@solana/web3.js';
@@ -19,6 +19,11 @@ type Token = {
   buyAmount?: number;
   balance?: number;
   lastUpdated?: string | number | Date;
+  autoSellEnabled?: boolean; // Added for backend sync
+  takeProfit?: number; // Added for backend sync
+  stopLoss?: number; // Added for backend sync
+  autoSellPercent?: number; // Added for backend sync
+  decimals?: number; // Added for backend sync
 };
 
 interface TokenListWithAgeProps {
@@ -43,9 +48,24 @@ function toFullDecimalString(num: number) {
   return str;
 }
 
+function formatTokenBalance(balance: number, symbol: string) {
+  console.log("[DEBUG] formatTokenBalance input:", balance, symbol);
+  if (balance >= 1_000_000) {
+    console.log("[DEBUG] Balance M:", balance / 1_000_000);
+    return `${(balance / 1_000_000).toFixed(2)}M ${symbol}`;
+  }
+  if (balance >= 1_000) {
+    console.log("[DEBUG] Balance K:", balance / 1_000);
+    return `${(balance / 1_000).toFixed(2)}K ${symbol}`;
+  }
+  console.log("[DEBUG] Balance:", balance);
+  return `${balance} ${symbol}`;
+}
+
 const sellPercents = [10, 30, 50, 100];
 
 const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBalance }) => {
+  // All useState, useEffect, useRef, etc. go here
   const [tokens, setTokens] = useState<Token[]>([]);
   const [now, setNow] = useState(Date.now());
   const [loading, setLoading] = useState(true);
@@ -54,8 +74,18 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
   const [presetModalOpen, setPresetModalOpen] = useState(false);
   const [buyAmounts, setBuyAmounts] = useState<{ [key: string]: string }>({});
   const [showMyTokens, setShowMyTokens] = useState(false);
+  const [walletTokens, setWalletTokens] = useState<Token[]>([]);
+  const [autoSellConfigs, setAutoSellConfigs] = useState<any[]>([]);
   const [userTokens, setUserTokens] = useState<Token[]>([]);
   const [sellPercentsState, setSellPercentsState] = useState<{ [key: string]: number }>({});
+  const [autoBuyEnabled, setAutoBuyEnabled] = useState(false);
+  const [bufferAmount, setBufferAmount] = useState<string>('');
+  const [autoBuySnackbar, setAutoBuySnackbar] = useState<{ open: boolean, message: string }>({ open: false, message: '' });
+  const [lastAutoBuyMint, setLastAutoBuyMint] = useState<string | null>(null);
+  const [takeProfitState, setTakeProfitState] = useState<{ [key: string]: string }>({});
+  const [stopLossState, setStopLossState] = useState<{ [key: string]: string }>({});
+  const [autoSellPercentState, setAutoSellPercentState] = useState<{ [key: string]: string }>({});
+  const [autoSellEnabledState, setAutoSellEnabledState] = useState<{ [key: string]: boolean }>({});
 
   // Preset state (copied from App.tsx ic)
   const {
@@ -68,6 +98,18 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
     ws,
     walletAddress
   } = useWebSocket();
+
+  const autoBuyEnabledRef = useRef(autoBuyEnabled);
+  const bufferAmountRef = useRef(bufferAmount);
+  const buyPresetsRef = useRef(buyPresets);
+  const activeBuyPresetRef = useRef(activeBuyPreset);
+
+  useEffect(() => { autoBuyEnabledRef.current = autoBuyEnabled; }, [autoBuyEnabled]);
+  useEffect(() => { bufferAmountRef.current = bufferAmount; }, [bufferAmount]);
+  useEffect(() => { buyPresetsRef.current = buyPresets; }, [buyPresets]);
+  useEffect(() => { activeBuyPresetRef.current = activeBuyPreset; }, [activeBuyPreset]);
+
+  const userId = localStorage.getItem('userId');
 
   // Handle buy amount input change
   const handleBuyAmountChange = (mint: string, value: string) => {
@@ -108,6 +150,213 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
       priorityFee: toLamports(preset.priorityFee),
       bribeAmount: toLamports(preset.bribeAmount),
     }));
+  };
+
+  const handleMyTokensClick = () => {
+    if (ws) {
+      if (!showMyTokens) {
+        ws.send(JSON.stringify({ type: "GET_USER_TOKENS" }));
+        setShowMyTokens(true);
+      } else {
+        setShowMyTokens(false);
+      }
+    }
+  };
+
+  const handleSellPercentChange = (mint: string, value: number) => {
+    setSellPercentsState(prev => ({
+      ...prev,
+      [mint]: value
+    }));
+  };
+
+  const handleSellClick = (token: Token) => {
+    const percent = sellPercentsState[token.mint];
+    if (!percent || percent <= 0) {
+      alert('Please select a valid sell percent');
+      return;
+    }
+    if (!ws) {
+      alert('WebSocket not connected');
+      return;
+    }
+    const preset = sellPresets[activeSellPreset] || {};
+    if (!preset || Object.keys(preset).length === 0) {
+      alert("No sell preset loaded! Please set your sell preset first.");
+      return;
+    }
+
+    // Debug: See what is being sent
+    console.log("Manual sell with preset:", preset);
+
+    // FIX: Send fees in SOL (not lamports) - backend expects SOL values
+    ws.send(JSON.stringify({
+      type: "MANUAL_SELL",
+      mintAddress: token.mint,
+      percent,
+      slippage: preset.slippage,
+      priorityFee: Number(preset.priorityFee), // Send as SOL, not lamports
+      bribeAmount: Number(preset.bribeAmount), // Send as SOL, not lamports
+      walletAddress,
+    }));
+  };
+
+  const handleTakeProfitChange = (mint: string, value: string) => {
+    setTakeProfitState(prev => ({
+      ...prev,
+      [mint]: value
+    }));
+
+    if (autoSellEnabledState[mint]) {
+      const preset = sellPresets[activeSellPreset] || {};
+      const payload = {
+        userId,
+        walletAddress,
+        mint,
+        buyPrice: userTokens.find(t => t.mint === mint)?.buyAmount || 0,
+        takeProfit: Number(value) || undefined,
+        stopLoss: Number(stopLossState[mint]) || undefined,
+        autoSellPercent: Number(autoSellPercentState[mint]) || 100,
+        autoSellEnabled: true,
+        slippage: preset.slippage || 5,
+        priorityFee: preset.priorityFee || 0.001,
+        bribeAmount: preset.bribeAmount || 0,
+        tokenName: userTokens.find(t => t.mint === mint)?.name,
+        tokenSymbol: userTokens.find(t => t.mint === mint)?.symbol,
+      };
+      const API_URL = import.meta.env.VITE_API_BASE_URL;
+      fetch(`${API_URL}/api/auto-sell/upsert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    }
+  };
+
+  const handleStopLossChange = (mint: string, value: string) => {
+    setStopLossState(prev => ({
+      ...prev,
+      [mint]: value
+    }));
+
+    if (autoSellEnabledState[mint]) {
+      const preset = sellPresets[activeSellPreset] || {};
+      const payload = {
+        userId,
+        walletAddress,
+        mint,
+        buyPrice: userTokens.find(t => t.mint === mint)?.buyAmount || 0,
+        takeProfit: Number(takeProfitState[mint]) || undefined,
+        stopLoss: Number(value) || undefined,
+        autoSellPercent: Number(autoSellPercentState[mint]) || 100,
+        autoSellEnabled: true,
+        slippage: preset.slippage || 5,
+        priorityFee: preset.priorityFee || 0.001,
+        bribeAmount: preset.bribeAmount || 0,
+        tokenName: userTokens.find(t => t.mint === mint)?.name,
+        tokenSymbol: userTokens.find(t => t.mint === mint)?.symbol,
+      };
+      const API_URL = import.meta.env.VITE_API_BASE_URL;
+      fetch(`${API_URL}/api/auto-sell/upsert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    }
+  };
+
+  const handleAutoSellPercentChange = (mint: string, value: string) => {
+    setAutoSellPercentState(prev => ({
+      ...prev,
+      [mint]: value
+    }));
+
+    if (autoSellEnabledState[mint]) {
+      const preset = sellPresets[activeSellPreset] || {};
+      const payload = {
+        userId,
+        walletAddress,
+        mint,
+        buyPrice: userTokens.find(t => t.mint === mint)?.buyAmount || 0,
+        takeProfit: Number(takeProfitState[mint]) || undefined,
+        stopLoss: Number(stopLossState[mint]) || undefined,
+        autoSellPercent: Number(value) || 100,
+        autoSellEnabled: true,
+        slippage: preset.slippage || 5,
+        priorityFee: preset.priorityFee || 0.001,
+        bribeAmount: preset.bribeAmount || 0,
+        tokenName: userTokens.find(t => t.mint === mint)?.name,
+        tokenSymbol: userTokens.find(t => t.mint === mint)?.symbol,
+      };
+      const API_URL = import.meta.env.VITE_API_BASE_URL;
+      fetch(`${API_URL}/api/auto-sell/upsert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    }
+  };
+
+  const handleAutoSellToggle = (token: Token) => {
+    const enabled = !autoSellEnabledState[token.mint];
+    setAutoSellEnabledState(prev => ({
+      ...prev,
+      [token.mint]: enabled
+    }));
+
+    if (enabled) {
+      // Sync input fields with backend values
+      setTakeProfitState(prev => ({
+        ...prev,
+        [token.mint]: token.takeProfit !== undefined ? String(token.takeProfit) : ''
+      }));
+      setStopLossState(prev => ({
+        ...prev,
+        [token.mint]: token.stopLoss !== undefined ? String(token.stopLoss) : ''
+      }));
+      setAutoSellPercentState(prev => ({
+        ...prev,
+        [token.mint]: token.autoSellPercent !== undefined ? String(token.autoSellPercent) : ''
+      }));
+      const preset = sellPresets[activeSellPreset] || {};
+      const payload = {
+        userId,
+        walletAddress,
+        mint: token.mint,
+        buyPrice: token.buyAmount || 0,
+        takeProfit: Number(takeProfitState[token.mint]) || undefined,
+        stopLoss: Number(stopLossState[token.mint]) || undefined,
+        autoSellPercent: Number(autoSellPercentState[token.mint]) || 100,
+        autoSellEnabled: true,
+        slippage: preset.slippage || 5,
+        priorityFee: preset.priorityFee || 0.001,
+        bribeAmount: preset.bribeAmount || 0,
+        tokenName: token.name,
+        tokenSymbol: token.symbol,
+      };
+      console.log('AutoSell ON payload:', payload);
+      const API_URL = import.meta.env.VITE_API_BASE_URL;
+      fetch(`${API_URL}/api/auto-sell/upsert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    } else {
+      // Optionally: update autoSellEnabled: false in DB
+      const payload = {
+        userId,
+        walletAddress,
+        mint: token.mint,
+        autoSellEnabled: false
+      };
+      console.log('AutoSell OFF payload:', payload);
+      const API_URL = import.meta.env.VITE_API_BASE_URL;
+      fetch(`${API_URL}/api/auto-sell/upsert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    }
   };
 
   // Fetch tokens on mount with proper authentication
@@ -161,14 +410,44 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
     const handleMessage = (event: MessageEvent) => {
       const data = JSON.parse(event.data);
       if (data.type === "NEW_TOKEN" && data.token) {
+        // Always update token list
         setTokens(prev => {
-          // Agar token already list me hai, to update karo, warna add karo
           const exists = prev.find(t => t.mint === data.token.mint);
           if (exists) {
             return prev.map(t => t.mint === data.token.mint ? data.token : t);
           }
           return [data.token, ...prev];
         });
+
+        // Only trigger auto-buy if eventType is 'launch'
+        if (data.eventType === "launch") {
+          console.log('NEW_TOKEN received:', data.token, 'eventType:', data.eventType);
+          if (
+            autoBuyEnabledRef.current &&
+            bufferAmountRef.current &&
+            !isNaN(Number(bufferAmountRef.current)) &&
+            Number(bufferAmountRef.current) > 0 &&
+            ws
+          ) {
+            const preset = buyPresetsRef.current[activeBuyPresetRef.current] || {};
+            console.log('Auto buy check:', { autoBuyEnabled: autoBuyEnabledRef.current, bufferAmount: bufferAmountRef.current, preset, ws });
+            if (preset && Object.keys(preset).length > 0) {
+              const amountLamports = Math.floor(Number(bufferAmountRef.current) * 1e9);
+              const toLamports = (val: string) => Math.floor(Number(val) * 1e9);
+              ws.send(JSON.stringify({
+                type: "MANUAL_BUY",
+                mintAddress: data.token.mint,
+                amount: amountLamports,
+                slippage: preset.slippage,
+                priorityFee: toLamports(preset.priorityFee),
+                bribeAmount: toLamports(preset.bribeAmount),
+              }));
+              console.log('MANUAL_BUY sent for:', data.token.mint);
+              setAutoBuySnackbar({ open: true, message: `Auto buy order placed for ${data.token.name || data.token.mint}` });
+              setLastAutoBuyMint(data.token.mint);
+            }
+          }
+        }
       }
       if (data.type === "MANUAL_BUY_SUCCESS") {
         alert("Buy order placed successfully!");
@@ -176,12 +455,29 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
           ...prev,
           [data.details.mint]: ''
         }));
+        // Show snackbar if this was an auto buy
+        if (lastAutoBuyMint && data.details.mint === lastAutoBuyMint) {
+          setAutoBuySnackbar({ open: true, message: 'Auto buy order successful!' });
+          setLastAutoBuyMint(null);
+        }
       }
       if (data.type === "MANUAL_BUY_ERROR") {
         alert("Buy failed: " + (data.error || "Unknown error"));
       }
       if (data.type === "USER_TOKENS") {
-        setUserTokens(data.tokens || []);
+        setWalletTokens(data.tokens || []);
+      }
+      if (data.type === "AUTO_SELL_TRIGGERED") {
+        // Auto-sell triggered notification
+        setAutoBuySnackbar({ open: true, message: `Auto sell triggered for ${data.tokenName || data.mint}! P/L: ${data.profitLoss?.toFixed(2)}%` });
+      }
+      if (data.type === "AUTO_SELL_SUCCESS") {
+        // Auto-sell completed successfully
+        setAutoBuySnackbar({ open: true, message: `Auto sell completed! Received ${data.actualSolReceived?.toFixed(6)} SOL` });
+      }
+      if (data.type === "AUTO_SELL_DISABLED") {
+        // Auto-sell disabled notification
+        setAutoBuySnackbar({ open: true, message: `Auto sell disabled for ${data.tokenName || data.mint}` });
       }
       if (data.type === "MANUAL_SELL_SUCCESS") {
         alert("Sell order placed successfully!");
@@ -202,8 +498,98 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
     }
   }, [ws]);
 
+  useEffect(() => {
+    // Jab bhi userTokens update ho, state ko backend ki value se sync karo
+    const newAutoSellEnabledState: { [key: string]: boolean } = {};
+    const newTakeProfitState: { [key: string]: string } = {};
+    const newStopLossState: { [key: string]: string } = {};
+    const newAutoSellPercentState: { [key: string]: string } = {};
+
+    userTokens.forEach(token => {
+      newAutoSellEnabledState[token.mint] = !!token.autoSellEnabled;
+      newTakeProfitState[token.mint] = token.takeProfit !== undefined ? String(token.takeProfit) : '';
+      newStopLossState[token.mint] = token.stopLoss !== undefined ? String(token.stopLoss) : '';
+      newAutoSellPercentState[token.mint] = token.autoSellPercent !== undefined ? String(token.autoSellPercent) : '';
+    });
+
+    setAutoSellEnabledState(newAutoSellEnabledState);
+    setTakeProfitState(newTakeProfitState);
+    setStopLossState(newStopLossState);
+    setAutoSellPercentState(newAutoSellPercentState);
+  }, [userTokens]);
+
+  useEffect(() => {
+    if (!showMyTokens) return;
+    const userId = localStorage.getItem('userId');
+    if (!userId) return;
+    fetch(`${import.meta.env.VITE_API_BASE_URL}/api/auto-sell/user/${userId}`)
+      .then(res => res.json())
+      .then(data => {
+        setAutoSellConfigs(data.autoSells || []);
+      });
+  }, [showMyTokens]);
+
+  useEffect(() => {
+    // Merge walletTokens and autoSellConfigs
+    if (!showMyTokens) return;
+    const merged = walletTokens.map(token => {
+      const config = autoSellConfigs.find(c => c.mint === token.mint);
+      return {
+        ...token,
+        autoSellEnabled: config?.autoSellEnabled || false,
+        takeProfit: config?.takeProfit,
+        stopLoss: config?.stopLoss,
+        autoSellPercent: config?.autoSellPercent,
+        // ...baaki fields agar chahiye
+      };
+    });
+    setUserTokens(merged);
+  }, [walletTokens, autoSellConfigs, showMyTokens]);
+
+  useEffect(() => {
+    if (!showMyTokens) return;
+    userTokens.forEach(token => {
+      if (autoSellEnabledState[token.mint]) {
+        const preset = sellPresets[activeSellPreset] || {};
+        const payload = {
+          userId,
+          walletAddress,
+          mint: token.mint,
+          buyPrice: token.buyAmount || 0,
+          takeProfit: Number(takeProfitState[token.mint]) || undefined,
+          stopLoss: Number(stopLossState[token.mint]) || undefined,
+          autoSellPercent: Number(autoSellPercentState[token.mint]) || 100,
+          autoSellEnabled: true,
+          slippage: preset.slippage || 5,
+          priorityFee: preset.priorityFee || 0.001,
+          bribeAmount: preset.bribeAmount || 0,
+          tokenName: token.name,
+          tokenSymbol: token.symbol,
+        };
+        // === YAHAN DEBUG ENTRY DALEIN ===
+        console.log('Preset change POST:', payload, 'preset:', preset);
+        const API_URL = import.meta.env.VITE_API_BASE_URL;
+        fetch(`${API_URL}/api/auto-sell/upsert`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(data => console.log('Upsert response:', data));
+      }
+    });
+  }, [activeSellPreset]);
+
   // Sort tokens based on creationTimestamp and sortOrder
   const sortedTokens = [...tokens].sort((a, b) => {
+    if (sortOrder === 'desc') {
+      return b.creationTimestamp - a.creationTimestamp;
+    } else {
+      return a.creationTimestamp - b.creationTimestamp;
+    }
+  });
+
+  const sortedUserTokens = [...userTokens].sort((a, b) => {
     if (sortOrder === 'desc') {
       return b.creationTimestamp - a.creationTimestamp;
     } else {
@@ -217,86 +603,18 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
     return ((currentPrice - buyPrice) / buyPrice) * 100;
   }
 
-  if (loading) {
-    return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        minHeight: '50vh',
-        color: 'white'
-      }}>
-        <div>Loading tokens...</div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div style={{ 
-        display: 'flex', 
-        flexDirection: 'column',
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        minHeight: '50vh',
-        color: 'white',
-        gap: '16px'
-      }}>
-        <div style={{ color: '#ff6b6b' }}>Error: {error}</div>
-        <Button 
-          onClick={onBackHome}
-          variant="contained"
-          sx={{
-            bgcolor: '#483D8B',
-            '&:hover': { bgcolor: '#372B7A' },
-          }}
-        >
-          Back to Home
-        </Button>
-      </div>
-    );
-  }
-
-  const handleMyTokensClick = () => {
-    if (ws) {
-      if (!showMyTokens) {
-        ws.send(JSON.stringify({ type: "GET_USER_TOKENS" }));
-        setShowMyTokens(true);
-      } else {
-        setShowMyTokens(false);
-      }
-    }
-  };
-
-  const handleSellPercentChange = (mint: string, value: number) => {
-    setSellPercentsState(prev => ({ ...prev, [mint]: value }));
-  };
-
-  const handleSellClick = (token: Token) => {
-    const percent = sellPercentsState[token.mint] || 100;
-    if (!ws) {
-      alert('WebSocket not connected');
-      return;
-    }
-    const preset = sellPresets[activeSellPreset] || {};
-    if (!preset || Object.keys(preset).length === 0) {
-      alert("No sell preset loaded! Please set your sell preset first.");
-      return;
-    }
-    const toLamports = (val: string | number) => Math.floor(Number(val) * 1e9);
-
-    console.log("SELL walletAddress:", walletAddress);
-
-    ws.send(JSON.stringify({
-      type: "MANUAL_SELL",
-      mint: token.mint,
-      percent,
-      walletAddress,
-      slippage: preset.slippage,
-      priorityFee: preset.priorityFee, // <-- yahan multiply mat karein
-      bribeAmount: preset.bribeAmount, // <-- sirf yahan multiply karein
-    }));
-  };
+  useEffect(() => {
+    // Set default sell percent to 100 for all tokens if not already set
+    setSellPercentsState(prev => {
+      const updated = { ...prev };
+      tokens.forEach(token => {
+        if (updated[token.mint] === undefined) {
+          updated[token.mint] = 100;
+        }
+      });
+      return updated;
+    });
+  }, [tokens]);
 
   return (
     <>
@@ -307,6 +625,16 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
           {typeof solBalance === 'number' && ` ${solBalance} SOL`}
         </span>
       )}
+      <Snackbar
+        open={autoBuySnackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setAutoBuySnackbar({ open: false, message: '' })}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setAutoBuySnackbar({ open: false, message: '' })} severity="success" sx={{ width: '100%' }}>
+          {autoBuySnackbar.message}
+        </Alert>
+      </Snackbar>
 
       {/* Main content wrapper */}
       <div
@@ -372,9 +700,51 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
             fontWeight: 'bold', 
             fontSize: 28, 
             margin: 0,
-            color: 'white'
+            color: 'white',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 16
           }}>
             All MemeHome Tokens
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={autoBuyEnabled}
+                  onChange={() => setAutoBuyEnabled(v => !v)}
+                  color="primary"
+                />
+              }
+              label={<span style={{ color: '#FFD700', fontWeight: 600, fontSize: 16 }}>Auto Buy Enable</span>}
+              labelPlacement="end"
+              sx={{ marginLeft: 2 }}
+            />
+            <TextField
+              label="Buffer Amount (SOL)"
+              type="number"
+              size="small"
+              value={bufferAmount}
+              onChange={e => setBufferAmount(e.target.value)}
+              sx={{
+                width: 160,
+                background: '#23242a',
+                borderRadius: 2,
+                input: { color: '#FFD700', fontWeight: 600, fontSize: 16 },
+                label: { color: '#FFD700' },
+                '& .MuiOutlinedInput-root': {
+                  '& fieldset': {
+                    borderColor: '#FFD700',
+                  },
+                  '&:hover fieldset': {
+                    borderColor: '#FFD700',
+                  },
+                  '&.Mui-focused fieldset': {
+                    borderColor: '#FFD700',
+                  },
+                },
+              }}
+              inputProps={{ min: 0, step: 'any' }}
+              disabled={!autoBuyEnabled}
+            />
           </h2>
           <div style={{ display: 'flex', gap: '12px' }}>
             <Button
@@ -396,8 +766,17 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
             gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
             gap: 16 
           }}>
-            {userTokens.length === 0 ? null : (
-              userTokens.map(token => {
+            {sortedUserTokens.length === 0 ? null : (
+              sortedUserTokens.map(token => {
+                // Debug log for each token
+                console.log(
+                  "[DEBUG] Token:",
+                  token.name,
+                  "| Mint:", token.mint,
+                  "| Balance (raw):", token.balance,
+                  "| Decimals:", token.decimals,
+                  "| Symbol:", token.symbol
+                );
                 // Assume token.balance, token.buyAmount, token.currentPrice, token.lastUpdated are present
                 const buyPrice = token.buyAmount;
                 const currentPrice = token.currentPrice;
@@ -414,6 +793,7 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
                       boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
                       transition: 'transform 0.2s ease, box-shadow 0.2s ease',
                       cursor: 'pointer',
+                      position: 'relative', // for absolute toggle
                     }}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.transform = 'translateY(-2px)';
@@ -424,8 +804,24 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
                       e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
                     }}
                   >
+                    {/* Toggle at top-right */}
+                    <div style={{ position: 'absolute', top: 4, right: 12, zIndex: 2 }}>
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={!!autoSellEnabledState[token.mint]}
+                            onChange={() => handleAutoSellToggle(token)}
+                            color="primary"
+                            size="small"
+                          />
+                        }
+                        label="Auto Sell"
+                        labelPlacement="start"
+                        sx={{ color: '#FFD700', fontWeight: 500, fontSize: 13 }}
+                      />
+                    </div>
                     {token.imageUrl && (
-                      <div style={{ textAlign: 'center', marginBottom: 16 }}>
+                      <div style={{ textAlign: 'center', marginBottom: 16, marginTop: 32 }}>
                         <img
                           src={token.imageUrl}
                           alt={token.name}
@@ -495,7 +891,9 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
 
                     {/* --- NEW: Token metrics --- */}
                     <div style={{ margin: '8px 0', color: '#FFD700', fontWeight: 500, fontSize: 15 }}>
-                      Balance: {token.balance ?? '-'}
+                      Balance: <span style={{ color: '#FFD700', fontWeight: 500, fontSize: 15 }}>
+                        {token.balance} {token.symbol}
+                      </span>
                     </div>
                     <div style={{ color: '#00BFFF', fontSize: 14 }}>
                       Buy Price: {buyPrice ? `$${buyPrice}` : '-'}
@@ -520,7 +918,8 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
                         value={buyAmounts[token.mint] || ''}
                         onChange={(e) => handleBuyAmountChange(token.mint, e.target.value)}
                         sx={{
-                          flex: 1,
+                          flex: 1, // <-- important for equal width
+                          minWidth: 0,
                           '& .MuiOutlinedInput-root': {
                             '& fieldset': {
                               borderColor: '#666',
@@ -546,12 +945,12 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
                       <Button
                         variant="contained"
                         sx={{
+                          flex: 1, // <-- important for equal width
+                          minWidth: 0,
                           bgcolor: '#483D8B',
                           '&:hover': { bgcolor: '#372B7A' },
                           color: 'white',
                           fontWeight: 600,
-                          flex: 1,
-                          minWidth: 0,
                           padding: '8px 0',
                         }}
                         onClick={() => handleBuyClick(token)}
@@ -565,14 +964,21 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
                         value={sellPercentsState[token.mint] || 100}
                         onChange={e => handleSellPercentChange(token.mint, Number(e.target.value))}
                         style={{
-                          background: '#222',
+                          flex: 1,
+                          minWidth: 0,
+                          height: 40, // match TextField height
+                          background: '#23242a', // match TextField background
                           color: 'white',
                           border: '1px solid #ff6b6b',
-                          borderRadius: 6,
-                          padding: '8px 12px',
+                          borderRadius: 6, // match TextField border radius
+                          padding: '0 12px', // match TextField horizontal padding
                           fontWeight: 600,
-                          fontSize: 15,
+                          fontSize: 16, // match TextField font size
                           outline: 'none',
+                          appearance: 'none', // remove default arrow, you can add custom if needed
+                          boxSizing: 'border-box',
+                          display: 'flex',
+                          alignItems: 'center',
                         }}
                       >
                         {sellPercents.map(p => (
@@ -581,8 +987,10 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
                       </select>
                       <Button
                         variant="outlined"
-                        fullWidth
                         sx={{
+                          flex: 1, // <-- important for equal width
+                          minWidth: 0,
+                          height: 40, // match Buy button height
                           borderColor: '#ff6b6b',
                           color: '#ff6b6b',
                           fontWeight: 600,
@@ -594,6 +1002,72 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
                       >
                         Sell
                       </Button>
+                    </div>
+                    {/* --- NEW: Take Profit, Stop Loss, Auto Sell % row --- */}
+                    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                      <input
+                        type="number"
+                        placeholder="Take Profit"
+                        value={takeProfitState[token.mint] || ''}
+                        onChange={e => handleTakeProfitChange(token.mint, e.target.value)}
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          height: 36,
+                          background: '#23242a',
+                          color: 'white',
+                          border: '1px solid #FFD700',
+                          borderRadius: 6,
+                          padding: '0 12px',
+                          fontWeight: 500,
+                          fontSize: 15,
+                          outline: 'none',
+                          boxSizing: 'border-box',
+                        }}
+                        disabled={!autoSellEnabledState[token.mint]}
+                      />
+                      <input
+                        type="number"
+                        placeholder="Stop Loss %"
+                        value={stopLossState[token.mint] || ''}
+                        onChange={e => handleStopLossChange(token.mint, e.target.value)}
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          height: 36,
+                          background: '#23242a',
+                          color: 'white',
+                          border: '1px solid #ff6b6b',
+                          borderRadius: 6,
+                          padding: '0 12px',
+                          fontWeight: 500,
+                          fontSize: 15,
+                          outline: 'none',
+                          boxSizing: 'border-box',
+                        }}
+                        disabled={!autoSellEnabledState[token.mint]}
+                      />
+                      <input
+                        type="number"
+                        placeholder="Auto Sell %"
+                        value={autoSellPercentState[token.mint] || ''}
+                        onChange={e => handleAutoSellPercentChange(token.mint, e.target.value)}
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          height: 36,
+                          background: '#23242a',
+                          color: 'white',
+                          border: '1px solid #00BFFF',
+                          borderRadius: 6,
+                          padding: '0 12px',
+                          fontWeight: 500,
+                          fontSize: 15,
+                          outline: 'none',
+                          boxSizing: 'border-box',
+                        }}
+                        disabled={!autoSellEnabledState[token.mint]}
+                      />
                     </div>
                     {/* --- END NEW --- */}
                   </div>
