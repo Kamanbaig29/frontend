@@ -1,6 +1,6 @@
 import User from '../models/user_auth';
-import { startWalletSyncWatcher } from '../helper-functions/wallet-token-watcher';
-import { startPriceUpdateService } from '../helper-functions/priceUpdateService';
+//import { startWalletSyncWatcher } from '../helper-functions/wallet-token-watcher';
+//import { startPriceUpdateService } from '../helper-functions/priceUpdateService';
 //import { startAutoSellWorker } from '../helper-functions/autosellworker';
 import { Connection, PublicKey } from '@solana/web3.js';
 import { getConnection } from '../utils/getProvider';
