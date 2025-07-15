@@ -48,7 +48,7 @@ async function fetchTokenMetadata(uri: string) {
   try {
     const res = await fetch(uri);
     const json = await res.json();
-    console.log('[fetchTokenMetadata] Success:', uri, json);
+    //console.log('[fetchTokenMetadata] Success:', uri, json);
     return json;
   } catch (e) {
     console.error('[fetchTokenMetadata] Error fetching:', uri, e);
@@ -60,17 +60,17 @@ async function fetchTokenMetadata(uri: string) {
 async function fetchMetaplexMetadata(connection: Connection, mint: string) {
   try {
     const metadataPDA = getMetadataPDA(mint);
-    console.log('[fetchMetaplexMetadata] metadataPDA:', metadataPDA.toBase58());
+    //console.log('[fetchMetaplexMetadata] metadataPDA:', metadataPDA.toBase58());
     const accountInfo = await connection.getAccountInfo(metadataPDA);
     if (!accountInfo) {
-      console.warn('[fetchMetaplexMetadata] No accountInfo for:', metadataPDA.toBase58());
+      //console.warn('[fetchMetaplexMetadata] No accountInfo for:', metadataPDA.toBase58());
       return {};
     }
     const metadata = Metadata.deserialize(accountInfo.data)[0];
     const uri = metadata.data.uri.replace(/\0/g, '');
-    console.log('[fetchMetaplexMetadata] Fetched URI:', uri);
+    //console.log('[fetchMetaplexMetadata] Fetched URI:', uri);
     const metaJson: any = await fetchTokenMetadata(uri);
-    console.log('[fetchMetaplexMetadata] metaJson:', metaJson);
+    //console.log('[fetchMetaplexMetadata] metaJson:', metaJson);
     return {
       name: metadata.data.name,
       symbol: metadata.data.symbol,
@@ -148,10 +148,10 @@ async function getTokenLaunchTimestamp(connection: Connection, mint: string) {
   console.log(`[getTokenLaunchTimestamp] Searching for launch tx for mint: ${mint} using programId: ${programId}`);
 
   const signatures = await connection.getSignaturesForAddress(new PublicKey(programId), { limit: 500 });
-  console.log(`[getTokenLaunchTimestamp] Found ${signatures.length} signatures for programId`);
+ // console.log(`[getTokenLaunchTimestamp] Found ${signatures.length} signatures for programId`);
 
   for (const sig of signatures) {
-    console.log(`[getTokenLaunchTimestamp] Checking tx: ${sig.signature}`);
+    //console.log(`[getTokenLaunchTimestamp] Checking tx: ${sig.signature}`);
     const tx = await connection.getTransaction(sig.signature, { commitment: 'confirmed' });
     if (!tx) {
       console.log(`[getTokenLaunchTimestamp] Transaction not found for signature: ${sig.signature}`);
@@ -162,20 +162,20 @@ async function getTokenLaunchTimestamp(connection: Connection, mint: string) {
       continue;
     }
 
-    console.log(`[getTokenLaunchTimestamp] logMessages:`, tx.meta.logMessages);
+    //console.log(`[getTokenLaunchTimestamp] logMessages:`, tx.meta.logMessages);
 
     if (tx.meta.logMessages.some(log => log.includes('Instruction: Launch'))) {
       const accountKeys = tx.transaction.message.accountKeys.map(key => key.toBase58());
-      console.log(`[getTokenLaunchTimestamp] Found 'Instruction: Launch' in tx: ${sig.signature}`);
-      console.log(`[getTokenLaunchTimestamp] Account keys:`, accountKeys);
+      //console.log(`[getTokenLaunchTimestamp] Found 'Instruction: Launch' in tx: ${sig.signature}`);
+      //console.log(`[getTokenLaunchTimestamp] Account keys:`, accountKeys);
 
       if (accountKeys.includes(mint)) {
-        console.log(`[getTokenLaunchTimestamp] Found matching mint in tx: ${sig.signature}`);
+        //console.log(`[getTokenLaunchTimestamp] Found matching mint in tx: ${sig.signature}`);
         if (tx.blockTime) {
-          console.log(`[getTokenLaunchTimestamp] Returning blockTime: ${tx.blockTime * 1000}`);
+          //console.log(`[getTokenLaunchTimestamp] Returning blockTime: ${tx.blockTime * 1000}`);
           return tx.blockTime * 1000;
         } else {
-          console.log(`[getTokenLaunchTimestamp] No blockTime, using Date.now()`);
+          //console.log(`[getTokenLaunchTimestamp] No blockTime, using Date.now()`);
           return Date.now();
         }
       } else {
@@ -225,7 +225,7 @@ export async function startMemeHomeTokenWorker(wss: WebSocketServer) {
           log.includes('Instruction: Update')
         );
         console.log(`[MemeHomeTokenWorker] Detected event: ${eventType}`);
-        console.log('[MemeHomeTokenWorker] logInfo:', logInfo);
+        //console.log('[MemeHomeTokenWorker] logInfo:', logInfo);
 
         // 1. Fetch transaction details
         const tx = await connection.getTransaction(logInfo.signature, { commitment: 'confirmed' });
@@ -235,15 +235,15 @@ export async function startMemeHomeTokenWorker(wss: WebSocketServer) {
         }
         // FIX: Declare accountKeys before any use
         const accountKeys = tx.transaction.message.getAccountKeys();
-        console.log('[MemeHomeTokenWorker] Transaction:', tx);
+        //console.log('[MemeHomeTokenWorker] Transaction:', tx);
         // Debug: Print all logs
-        console.log('[DEBUG] Transaction logs:', tx.meta?.logMessages);
+        //console.log('[DEBUG] Transaction logs:', tx.meta?.logMessages);
         // Debug: Print all instructions and their accounts
         tx.transaction.message.instructions.forEach((ix, idx) => {
-          console.log(`[DEBUG] Instruction ${idx}:`, ix);
-          console.log(`[DEBUG] Accounts for instruction ${idx}:`, ix.accounts.map(i => accountKeys.get(i)?.toBase58()));
+          //console.log(`[DEBUG] Instruction ${idx}:`, ix);
+          //console.log(`[DEBUG] Accounts for instruction ${idx}:`, ix.accounts.map(i => accountKeys.get(i)?.toBase58()));
         });
-        console.log('[DEBUG] All account keys:', accountKeys.staticAccountKeys.map((k: any) => accountKeys.get(k)?.toBase58 ? accountKeys.get(k)?.toBase58() : k));
+        //console.log('[DEBUG] All account keys:', accountKeys.staticAccountKeys.map((k: any) => accountKeys.get(k)?.toBase58 ? accountKeys.get(k)?.toBase58() : k));
 
         // 2. Extract token info from transaction
         // Updated indices as per new IDL
@@ -252,9 +252,9 @@ export async function startMemeHomeTokenWorker(wss: WebSocketServer) {
         const curveTokenAccount = accountKeys.get(4)?.toBase58(); // launch: 4, swap: 5
         const decimalsDefault = 9;
 
-        console.log('[MemeHomeTokenWorker] Parsed keys:', { creator, bondingCurve, curveTokenAccount });
-        console.log('[MemeHomeTokenWorker] All account keys:', accountKeys.staticAccountKeys.map(k => k.toBase58()));
-        console.log('[MemeHomeTokenWorker] All instructions:', tx.transaction.message.instructions);
+        //console.log('[MemeHomeTokenWorker] Parsed keys:', { creator, bondingCurve, curveTokenAccount });
+        //console.log('[MemeHomeTokenWorker] All account keys:', accountKeys.staticAccountKeys.map(k => k.toBase58()));
+        //console.log('[MemeHomeTokenWorker] All instructions:', tx.transaction.message.instructions);
 
         if (!creator) {
           console.warn('[MemeHomeTokenWorker] Skipping log: creator undefined');
@@ -274,22 +274,30 @@ export async function startMemeHomeTokenWorker(wss: WebSocketServer) {
           if (programId === MEMEHOME_PROGRAM_ID.toBase58()) {
             if (isLaunch && ix.accounts.length >= 5) {
               mint = accountKeys.get(ix.accounts[2])?.toBase58(); // Launch: tokenMint at index 2
-              console.log(`[DEBUG] Launch mint extracted: ${mint}`);
+              //console.log(`[DEBUG] Launch mint extracted: ${mint}`);
+              // === SEND TOKEN_DETECTED IMMEDIATELY ===
+              if (mint) {
+                wss.clients.forEach(client => {
+                  if (client.readyState === 1) {
+                    client.send(JSON.stringify({ type: 'TOKEN_DETECTED', mint }));
+                  }
+                });
+              }
               break;
             }
             if (isSwap && ix.accounts.length >= 7) {
               mint = accountKeys.get(ix.accounts[4])?.toBase58(); // Swap: tokenMint at index 4
-              console.log(`[DEBUG] Swap mint extracted: ${mint}`);
+              //console.log(`[DEBUG] Swap mint extracted: ${mint}`);
               break;
             }
             if (isBuy && ix.accounts.length >= 7) {
               mint = accountKeys.get(ix.accounts[4])?.toBase58(); // Buy: tokenMint at index 4 (same as swap)
-              console.log(`[DEBUG] Buy mint extracted: ${mint}`);
+              //console.log(`[DEBUG] Buy mint extracted: ${mint}`);
               break;
             }
             if (isSell && ix.accounts.length >= 7) {
               mint = accountKeys.get(ix.accounts[4])?.toBase58(); // Sell: tokenMint at index 4 (same as swap)
-              console.log(`[DEBUG] Sell mint extracted: ${mint}`);
+              //console.log(`[DEBUG] Sell mint extracted: ${mint}`);
               break;
             }
           }
@@ -306,10 +314,10 @@ export async function startMemeHomeTokenWorker(wss: WebSocketServer) {
         let imageUrl = '';
         let metadataUri = '';
 
-        try {
-          const tokenAccountInfo = await connection.getParsedAccountInfo(new PublicKey(mint));
-          // ...
-        } catch (e) { /* ... */ }
+        // try {
+        //   const tokenAccountInfo = await connection.getParsedAccountInfo(new PublicKey(mint));
+        //   // ...
+        // } catch (e) { /* ... */ }
 
         if (name === "Unknown" || symbol === "Unknown") {
           try {
@@ -330,20 +338,20 @@ export async function startMemeHomeTokenWorker(wss: WebSocketServer) {
         let currentPrice = 0;
         try {
           currentPrice = await getCurrentPriceWithRetry(connection, mint);
-          console.log('[MemeHomeTokenWorker] currentPrice:', currentPrice);
+          //console.log('[MemeHomeTokenWorker] currentPrice:', currentPrice);
         } catch (e) {
           console.error(`[${mint}] Error getting current price:`, e);
         }
 
         // 6. Check if token already exists in DB
         const tokenInDb = await MemeHomeToken.findOne({ mint });
-        console.log(`[MemeHomeTokenWorker] tokenInDb:`, !!tokenInDb);
+        //console.log(`[MemeHomeTokenWorker] tokenInDb:`, !!tokenInDb);
 
         // 7. Decide creationTimestamp
         let creationTimestamp;
         if (isLaunch) {
           creationTimestamp = Date.now();
-          console.log(`[MemeHomeTokenWorker] Launch event: using Date.now() for creationTimestamp: ${creationTimestamp}`);
+          //console.log(`[MemeHomeTokenWorker] Launch event: using Date.now() for creationTimestamp: ${creationTimestamp}`);
         } else if ((isBuy || isSell || isSwap) && !tokenInDb) {
           console.log('[MemeHomeTokenWorker] Calling getTokenLaunchTimestamp for mint:', mint);
           creationTimestamp = await getTokenLaunchTimestamp(connection, mint);
@@ -352,10 +360,10 @@ export async function startMemeHomeTokenWorker(wss: WebSocketServer) {
           console.log('[MemeHomeTokenWorker] Not a launch/buy/sell/swap event or token already in DB, not setting creationTimestamp');
         }
 
-        console.log('[MemeHomeTokenWorker] creationTimestamp value before upsert:', creationTimestamp);
+        //console.log('[MemeHomeTokenWorker] creationTimestamp value before upsert:', creationTimestamp);
         if (typeof creationTimestamp !== 'number' || isNaN(creationTimestamp)) {
           creationTimestamp = Date.now();
-          console.log('[MemeHomeTokenWorker] Fallback: creationTimestamp set to Date.now()', creationTimestamp);
+          //console.log('[MemeHomeTokenWorker] Fallback: creationTimestamp set to Date.now()', creationTimestamp);
         }
 
         // 8. Upsert in DB
@@ -423,6 +431,15 @@ export async function startMemeHomeTokenWorker(wss: WebSocketServer) {
           wss.clients.forEach(client => {
             if (client.readyState === 1) {
               client.send(JSON.stringify({ type: 'NEW_TOKEN', token: latestToken, eventType }));
+            }
+          });
+        }
+
+        if (isLaunch && mint) {
+          // Turant notification ke liye message bhejein
+          wss.clients.forEach(client => {
+            if (client.readyState === 1) {
+              client.send(JSON.stringify({ type: 'TOKEN_DETECTED', mint }));
             }
           });
         }

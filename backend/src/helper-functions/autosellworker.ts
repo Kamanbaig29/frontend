@@ -6,11 +6,12 @@ import { getCurrentPrice } from './getCurrentPrice';
 import { getConnection } from '../utils/getProvider';
 import { getUserKeypairByWallet } from '../utils/userWallet';
 import WebSocket from 'ws';
+import { UserToken } from '../models/userToken'; // Added import for UserToken
 
 let autoSellWorkerInterval: NodeJS.Timeout | null = null;
 let ws: WebSocket | null = null;
 
-const apiLink = process.env.API_LINK;
+//const apiLink = process.env.API_LINK;
 const wslink = process.env.WS_LINK;
 const port = process.env.API_PORT;
 
@@ -83,6 +84,7 @@ function sendManualSellMessage(data: any) {
 
 export async function checkAndExecuteAllAutoSells() {
   const autoSells = await AutoSell.find({ autoSellEnabled: true });
+  console.log('[AutoSellWorker] checkAndExecuteAllAutoSells, active:', autoSells.length);
   const connection = getConnection();
 
   for (const config of autoSells) {
@@ -158,15 +160,95 @@ export async function checkAndExecuteAllAutoSells() {
   }
 }
 
+async function batchPriceSync() {
+  // Fetch all user tokens instead of auto-sell configs
+  const userTokens = await UserToken.find({});
+  console.log('[AutoSellWorker] batchPriceSync, processing tokens:', userTokens.length);
+  const connection = getConnection();
+  const BATCH_SIZE = 3;
+
+  for (let i = 0; i < userTokens.length; i += BATCH_SIZE) {
+    const batch = userTokens.slice(i, i + BATCH_SIZE);
+    await Promise.all(batch.map(async (token) => {
+      try {
+        // We need walletAddress to get the keypair for price fetching.
+        // If your UserToken model doesn't have walletAddress, you need to add it.
+        // For now, assuming it exists. If not, this is the next thing to fix.
+        if (!token.walletAddress) {
+            console.log(`[AutoSellWorker] Skipping token ${token.mint} because it has no walletAddress.`);
+            return;
+        }
+
+        console.log('[AutoSellWorker] Processing:', token.mint, token.walletAddress);
+        const userKeypair = await getUserKeypairByWallet(token.walletAddress);
+        if (!userKeypair) {
+          console.log('[AutoSellWorker] No userKeypair for:', token.walletAddress);
+          return;
+        }
+
+        const currentPrice = await getCurrentPrice(connection, token.mint, userKeypair.publicKey);
+        if (currentPrice === null || currentPrice === undefined) {
+          // console.log('[AutoSellWorker] No currentPrice for:', token.mint);
+          return;
+        }
+
+        // Only update if price changed
+        if (token.currentPrice !== currentPrice) {
+          console.log('[AutoSellWorker] Price changed for', token.mint, 'from', token.currentPrice, 'to', currentPrice);
+
+          // Update the UserToken document itself
+          const updateResult = await UserToken.updateOne(
+            { _id: token._id }, // Use the unique _id to update the correct document
+            { $set: { currentPrice: currentPrice, lastUpdated: new Date() } }
+          );
+
+          if (updateResult.modifiedCount > 0) {
+              console.log('[AutoSellWorker] UserToken update SUCCESS for mint:', token.mint);
+          } else {
+              console.log('[AutoSellWorker] UserToken update FAILED or no change for mint:', token.mint);
+          }
+          
+          // Send price update to frontend
+          const ws = getOrCreateWebSocket();
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+              type: "TOKEN_PRICE_UPDATE",
+              mint: token.mint,
+              price: currentPrice,
+              walletAddress: token.walletAddress,
+            }));
+            console.log('[AutoSellWorker] Sent TOKEN_PRICE_UPDATE for', token.mint, currentPrice);
+          }
+        }
+      } catch (e) {
+        console.error('[AutoSellWorker] Batch price sync error for mint', token.mint, ':', e);
+      }
+    }));
+    if (i + BATCH_SIZE < userTokens.length) {
+      await new Promise(res => setTimeout(res, 2000)); // 2s delay between batches
+    }
+  }
+}
+
+let autoSellWorkerActive = false;
+
 export function startAutoSellWorker() {
   console.log('🚀 AutoSell worker started');
-  autoSellWorkerInterval = setInterval(checkAndExecuteAllAutoSells, 5000);
+  autoSellWorkerActive = true;
+  const runWorker = async () => {
+    if (!autoSellWorkerActive) return;
+    try {
+      await checkAndExecuteAllAutoSells();
+      await batchPriceSync();
+    } catch (e) {
+      console.error('[AutoSellWorker] Worker error:', e);
+    }
+    setTimeout(runWorker, 5000);
+  };
+  runWorker();
 }
 
 export function stopAutoSellWorker() {
-  if (autoSellWorkerInterval) {
-    clearInterval(autoSellWorkerInterval);
-    autoSellWorkerInterval = null;
-    console.log('🛑 AutoSell worker stopped');
-  }
+  autoSellWorkerActive = false;
+  console.log('🛑 AutoSell worker stopped');
 }

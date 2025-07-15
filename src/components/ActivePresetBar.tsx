@@ -33,16 +33,16 @@ const ActivePresetBar: React.FC<ActivePresetBarProps> = ({
   sellPresets,
   setActiveBuyPreset,
   setActiveSellPreset,
-  showBuyPresetButtons = false,
-  showSellPresetButtons = false,
+  //showBuyPresetButtons = false,
+  //showSellPresetButtons = false,
   ws,
   onOpenSettings,
   walletAddress,
   solBalance,
   onLogout
 }) => {
-  console.log("BuyPresets:", buyPresets, "ActiveBuy:", activeBuyPreset, buyPresets[activeBuyPreset]);
-  console.log("SellPresets:", sellPresets, "ActiveSell:", activeSellPreset, sellPresets[activeSellPreset]);
+  //console.log("BuyPresets:", buyPresets, "ActiveBuy:", activeBuyPreset, buyPresets[activeBuyPreset]);
+  //console.log("SellPresets:", sellPresets, "ActiveSell:", activeSellPreset, sellPresets[activeSellPreset]);
 
   const [presetMode, setPresetMode] = useState<'buy' | 'sell'>('buy');
 

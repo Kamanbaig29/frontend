@@ -1,18 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { Button, ToggleButton, ToggleButtonGroup } from '@mui/material';
+import { useState, useEffect } from 'react';
+import { Button } from '@mui/material';
 import { BotProvider } from './context/BotContext';
-import { LandingPage } from './components/LandingPage';
-import { Dashboard } from './components/Dashboard';
-import { ManualBuyForm } from './components/ManualBuyForm';
-import { Stats } from './components/Stats';
-import { ManualSellList } from './components/ManualSellList';
+//import { LandingPage } from './components/LandingPage';
+//import { Dashboard } from './components/Dashboard';
+//import { ManualBuyForm } from './components/ManualBuyForm';
+//import { Stats } from './components/Stats';
+//import { ManualSellList } from './components/ManualSellList';
 import { WebSocketProvider, useWebSocket } from './context/webSocketContext';
-import { AutomaticSellDashboard } from './components/AutomaticSellDashboard';
+//import { AutomaticSellDashboard } from './components/AutomaticSellDashboard';
 import LoginPage from './components/LoginPage';
 import TokenListWithAge from './components/TokenListWIthAge';
 import { Typography } from '@mui/material';
 import ActivePresetBar from "./components/ActivePresetBar";
 import PresetModal from "./components/PresetModal";
+import TokenDetectedNotification from "./components/TokenDetectedNotification";
 
 /*function sendSetMode(ws: WebSocket | null, mode: 'manual' | 'automatic') {
   if (ws && ws.readyState === WebSocket.OPEN) {
@@ -40,7 +41,7 @@ const AppContent = () => {
     | 'stats'
   >('login');
 
-  const { ws, isAuthenticated, authenticate, status } = useWebSocket();
+  const { ws, isAuthenticated, status } = useWebSocket();
   const token = localStorage.getItem('token');
   const [isLoggedIn, setIsLoggedIn] = useState(!!token);
 
@@ -53,7 +54,7 @@ const AppContent = () => {
   const [walletAddress, setWalletAddress] = useState<string | undefined>(undefined);
   const [solBalance, setSolBalance] = useState<number | undefined>(undefined);
 
-  const [presetMode, setPresetMode] = useState<'buy' | 'sell'>('buy');
+  const [] = useState<'buy' | 'sell'>('buy');
 
   const handleModeSelect = (mode: 'manual' | 'automatic') => {
     if (ws && isAuthenticated) {
@@ -65,41 +66,41 @@ const AppContent = () => {
     }
   };
 
-  const handleGoToBuySelection = () => setCurrentView('selectBuyMode');
-  const handleGoToSellSelection = () => setCurrentView('selectSellMode');
-  const handleViewStats = () => setCurrentView('stats');
+  //const handleGoToBuySelection = () => setCurrentView('selectBuyMode');
+  //const handleGoToSellSelection = () => setCurrentView('selectSellMode');
+  //const handleViewStats = () => setCurrentView('stats');
   const handleManualSell = () => setCurrentView('manualSell');
   const handleAutomaticSell = () => setCurrentView('automaticSell');
   const handleBackHome = () => setCurrentView('landing');
-  const handleViewTokenList = () => setCurrentView('tokenList');
+  //const handleViewTokenList = () => setCurrentView('tokenList');
 
-  const handleLoginSuccess = () => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      console.log('[AppContent] Login successful. Calling authenticate and starting services...');
+  // const handleLoginSuccess = () => {
+  //   const token = localStorage.getItem('token');
+  //   if (token) {
+  //     console.log('[AppContent] Login successful. Calling authenticate and starting services...');
       
-      // Call start-services API
-      fetch('http://localhost:4000/api/bot/start-services', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      })
-      .then(res => res.json())
-      //.then(data => console.log('Bot services started:', data))
-      .catch(error => console.error('Failed to start bot services:', error));
+  //     // Call start-services API
+  //     fetch(`${import.meta.env.VITE_API_BASE_URL}/api/bot/start-services`, {
+  //       method: 'POST',
+  //       headers: {
+  //         'Content-Type': 'application/json',
+  //         'Authorization': `Bearer ${token}`,
+  //       },
+  //     })
+  //     .then(res => res.json())
+  //     //.then(data => console.log('Bot services started:', data))
+  //     .catch(error => console.error('Failed to start bot services:', error));
 
-      // Authenticate WebSocket
-      authenticate(token);
-    }
-    setIsLoggedIn(true);
-  };
+  //     // Authenticate WebSocket
+  //     authenticate(token);
+  //   }
+  //   setIsLoggedIn(true);
+  // };
 
   const handleLogout = () => {
     const token = localStorage.getItem('token');
     if (token) {
-      fetch('http://localhost:4000/api/bot/stop-services', {
+      fetch(`${import.meta.env.VITE_API_BASE_URL}/api/bot/stop-services`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -173,7 +174,7 @@ const AppContent = () => {
       try {
         const token = localStorage.getItem('token');
         if (!token) return;
-        const response = await fetch('http://localhost:4000/api/auth/wallet-info', {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/auth/wallet-info`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (response.ok) {
@@ -234,18 +235,7 @@ const AppContent = () => {
             {currentView === 'tokenList' && (
               <div style={{ width: '100%' }}>
                 <TokenListWithAge 
-                  onBackHome={handleBackHome} 
-                />
-              </div>
-            )}
-
-            {currentView === 'landing' && (
-              <div>
-                <LandingPage
-                  onBuyClick={handleGoToBuySelection}
-                  onSellClick={() => setCurrentView('automaticSell')}
-                  onViewStats={handleViewStats}
-                  onViewTokenList={handleViewTokenList}
+                  //onBackHome={handleBackHome} 
                 />
               </div>
             )}
@@ -300,74 +290,13 @@ const AppContent = () => {
 
             {currentView === 'automatic' && (
               <div>
-                <Dashboard
+                {/* <Dashboard
                   onBackHome={handleBackHome}
-                />
+                /> */}
               </div>
             )}
 
-            {currentView === 'manual' && (
-              <div className="container mx-auto p-4">
-                <div className="flex justify-between items-center mb-6">
-                  <div>
-                    <h1 className="text-2xl font-bold text-white">Manual Trading</h1>
-                    <p className="text-sm text-gray-400 mt-1">
-                      Buy tokens manually by providing mint address and amount
-                    </p>
-                  </div>
-                  <Button
-                    onClick={handleBackHome}
-                    variant="contained"
-                    sx={{
-                      bgcolor: '#483D8B',
-                      '&:hover': { bgcolor: '#372B7A' },
-                    }}
-                  >
-                    Back to Home
-                  </Button>
-                </div>
-                <ManualBuyForm
-                />
-              </div>
-            )}
-
-            {currentView === 'manualSell' && (
-              <div className="container mx-auto p-4">
-                <div className="flex justify-between items-center mb-6">
-                  <div>
-                    <h1 className="text-2xl font-bold text-white">Manual Sell</h1>
-                    <p className="text-sm text-gray-400 mt-1">
-                      Sell tokens manually by selecting from token list
-                    </p>
-                  </div>
-                  <Button
-                    onClick={handleBackHome}
-                    variant="contained"
-                    sx={{
-                      bgcolor: '#483D8B',
-                      '&:hover': { bgcolor: '#372B7A' },
-                    }}
-                  >
-                    Back to Home
-                  </Button>
-                </div>
-                <ManualSellList />
-              </div>
-            )}
-
-            {currentView === 'automaticSell' && (
-              <div>
-                <AutomaticSellDashboard
-                  onBackHome={handleBackHome}
-                />
-              </div>
-            )}
-
-            {currentView === 'stats' && (
-              <div>
-                <Stats onBackHome={handleBackHome} />
-              </div>
-            )}
+            <TokenDetectedNotification />
           </>
         )}
       </div>

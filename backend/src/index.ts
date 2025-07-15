@@ -5,16 +5,17 @@ dotenv.config();
 import express from 'express';
 import cors from 'cors';
 import http from 'http';
-import { WebSocketServer } from 'ws';
+//import { WebSocketServer } from 'ws';
 import authRoutes from './routes/authRoutes'; 
 import botRoutes from './routes/botRoutes';
 import tokenRoutes from './routes/tokenRoutes';
 import autoSellRoutes from './routes/autoSellRoutes';
+import path from 'path';
 
 // --- Existing Bot Imports ---
 import { connectDatabase } from "./config/database";
 //import { startTokenListener } from "./trade-bot/tokenListner";
-import { Connection, PublicKey } from "@solana/web3.js";
+//import { Connection } from "@solana/web3.js";
 //import { startWalletSyncWatcher } from "../src/helper-functions/wallet-token-watcher";
 //import { startPriceUpdateService } from '../src/helper-functions/priceUpdateService';
 //import { checkAndExecuteAllAutoSells } from './helper-functions/autosellworker';
@@ -25,9 +26,9 @@ import { startAutoSellWorker, stopAutoSellWorker } from './helper-functions/auto
 // import { startDbStatsBroadcaster } from './helper-functions/dbStatsBroadcaster';
 
 // --- Cleanup Variables ---
-let cleanupWatcher: (() => void) | null = null;
-let cleanupPriceService: (() => void) | null = null;
-let cleanupAutoSellWorker: (() => void) | null = null;
+//let cleanupWatcher: (() => void) | null = null;
+//let cleanupPriceService: (() => void) | null = null;
+//let cleanupAutoSellWorker: (() => void) | null = null;
 
 async function main() {
   // --- 1. Connect to Database ---
@@ -37,7 +38,7 @@ async function main() {
   // --- 2. Setup and Start Express API Server ---
   const app = express();
   const PORT = Number(process.env.API_PORT) || 4000;
-  const apiLink = process.env.API_LINK;
+  //const apiLink = process.env.API_LINK;
 
   app.use(cors()); // Enable CORS for frontend
   app.use(express.json()); // Enable JSON body parsing
@@ -46,10 +47,45 @@ async function main() {
   app.use('/api/tokens', tokenRoutes);
   app.use('/api/auto-sell', autoSellRoutes);
 
+  // --- Serve React Frontend Build ---
+  const frontendPath = path.join(__dirname, '../../dist'); // Adjust if needed
+  app.use(express.static(frontendPath));
+
+  // Health check route (should be before the catch-all)
   app.get('/', (req, res) => {
     res.send('Bot and API server is running!');
   });
-  
+
+  // Fallback: serve index.html for any non-API route (for React Router)
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next(); // Pass to next middleware for API routes
+    res.sendFile(path.join(frontendPath, 'index.html'));
+  });
+
+  // --- Debug: Print all registered routes ---
+  // function printRoutes() {
+  //   if (!app._router || !app._router.stack) return;
+  //   console.log('--- Registered routes ---');
+  //   app._router.stack.forEach((middleware: any) => {
+  //     if (middleware.route) {
+  //       // routes registered directly on the app
+  //       const methods = Object.keys(middleware.route.methods).join(',').toUpperCase();
+  //       console.log(`${methods} ${middleware.route.path}`);
+  //     } else if (middleware.name === 'router' && middleware.handle.stack) {
+  //       // router middleware
+  //       middleware.handle.stack.forEach((handler: any) => {
+  //         const route = handler.route;
+  //         if (route) {
+  //           const methods = Object.keys(route.methods).join(',').toUpperCase();
+  //           console.log(`${methods} ${route.path}`);
+  //         }
+  //       });
+  //     }
+  //   });
+  //   console.log('------------------------');
+  // }
+  // printRoutes()
+
   // Create HTTP server and attach Express app
   const server = http.createServer(app);
 
@@ -57,13 +93,13 @@ async function main() {
   const wss = createWebSocketServer(server);
   setupWebSocketHandlers(wss);
 
-  server.listen(PORT, () => {
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 API & WebSocket Server listening on http://localhost:${PORT}`);
     // Start the AutoSell worker only after server is ready
     startAutoSellWorker();
   });
   // --- 3. Start Existing Bot Services ---
-  const connection = new Connection(process.env.RPC_ENDPOINT!);
+  //const connection = new Connection(process.env.RPC_ENDPOINT!);
 
   // Start global auto-sell worker
   //setInterval(() => checkAndExecuteAllAutoSells(connection), 5000);

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticateJWT } from '../middleware/authMiddleware';
-import { startUserServices, stopUserServices } from '../servcies/userBotServices';
+//import { startUserServices, stopUserServices } from '../servcies/userBotServices';
 import User from '../models/user_auth';
 
 // Add this declaration to extend the Express Request type
@@ -24,8 +24,8 @@ router.post('/start-services', authenticateJWT, async (req, res) => {
       res.status(401).json({ message: 'User not authenticated' });
       return;
     }
-    console.log('POST /api/bot/start-services called');
-    console.log('user in /start-services:', req.user);
+    //console.log('POST /api/bot/start-services called');
+    //console.log('user in /start-services:', req.user);
 
     const user = await User.findById(userId);
     if (!user || !user.botWalletPublicKey) {
@@ -33,20 +33,20 @@ router.post('/start-services', authenticateJWT, async (req, res) => {
       return;
     }
 
-    await startUserServices(userId, user.botWalletPublicKey);
+    //await startUserServices(userId, user.botWalletPublicKey);
     
     res.status(200).json({ message: 'Services started' });
   } catch (error) {
-    console.error('Error starting services:', error);
+    //console.error('Error starting services:', error);
     res.status(500).json({ message: 'Failed to start services', error: (error as Error).message });
   }
 });
 
 router.post('/stop-services', authenticateJWT, async (req, res) => {
-    console.log('user in /stop-services:', (req as any).user);
+    //console.log('user in /stop-services:', (req as any).user);
   try {
     const userId = (req as any).user.id;
-    await stopUserServices(userId);
+    //await stopUserServices(userId);
     res.json({ message: 'Services stopped' });
   } catch (error: any) {
     res.status(500).json({ message: error.message });

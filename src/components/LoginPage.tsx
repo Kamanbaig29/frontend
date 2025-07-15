@@ -20,22 +20,26 @@ const PhantomIcon = () => (
     </svg>
 )
 
-const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
+const LoginPage: React.FC<LoginPageProps> = ({ }) => {
   const [view, setView] = useState<'login' | 'signup' | 'otp'>('login');
   
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [otp, setOtp] = useState('');
+  const [devOtp, setDevOtp] = useState<string | null>(null); // For development: store OTP
 
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+  //const WS_URL = import.meta.env.VITE_WS_URL; // If needed for WebSocket
 
   const handleApiCall = async (url: string, payload: object, successMessage: string) => {
     setError('');
     setMessage('');
     try {
-      const response = await fetch(`http://localhost:4000${url}`, {
+      const response = await fetch(`${API_BASE_URL}${url}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -49,21 +53,26 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       setMessage(data.message || successMessage);
       localStorage.setItem('token', data.token);
       if (data.userId) {
-        localStorage.setItem('userId', data.userId); // <-- YEH LINE ADD KARO
+        localStorage.setItem('userId', data.userId);
       }
-      window.location.reload();
+      if (data.otp) {
+        setDevOtp(data.otp);
+      }
       return data;
 
     } catch (err: any) {
       setError(err.message);
-      throw err; // Re-throw to be caught by the calling function if needed
+      throw err;
     }
   };
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await handleApiCall('/api/auth/signup', { name, email, password }, 'OTP sent!');
+      const data = await handleApiCall('/api/auth/signup', { name, email, password }, 'OTP sent!');
+      if (data.otp) {
+        setDevOtp(data.otp);
+      }
       setView('otp'); // Switch to OTP view on success
     } catch (error) {
       // Error is already set by handleApiCall
@@ -88,7 +97,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       const data = await handleApiCall('/api/auth/login', { email, password }, 'Login successful!');
       if (data.token) {
         localStorage.setItem('token', data.token);
-        window.location.reload();
+        window.location.reload(); // <-- SIRF YAHAN RELOAD KARO
       }
     } catch (error) {
        // Error is already set by handleApiCall
@@ -116,7 +125,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       // Send publicKey, message, and signature to backend for verification
       const signature = bs58.encode(signed.signature);
 
-      const response = await fetch('http://localhost:4000/api/auth/phantom-login', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/phantom-login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -153,6 +162,12 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               One-Time Password (OTP)
             </label>
           </div>
+          {/* Show dev OTP for development only */}
+          {devOtp && (
+            <div className="mt-2 text-center text-yellow-400 text-lg font-bold">
+              Dev OTP: {devOtp}
+            </div>
+          )}
           <button type="submit" className="w-full ...">Verify Account</button>
         </form>
       );

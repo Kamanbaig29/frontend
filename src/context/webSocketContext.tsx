@@ -14,6 +14,10 @@ export interface WebSocketContextType {
   activeSellPreset: number;
   setActiveBuyPreset: (idx: number) => void;
   setActiveSellPreset: (idx: number) => void;
+  showTokenDetectedNotification: boolean;
+  setShowTokenDetectedNotification: (show: boolean) => void;
+  latestDetectedTokenMint: string | null;
+  setLatestDetectedTokenMint: (mint: string | null) => void;
 }
 
 // Create the context with a default value
@@ -29,6 +33,10 @@ const WebSocketContext = createContext<WebSocketContextType>({
   activeSellPreset: 0,
   setActiveBuyPreset: () => {},
   setActiveSellPreset: () => {},
+  showTokenDetectedNotification: false,
+  setShowTokenDetectedNotification: () => {},
+  latestDetectedTokenMint: null,
+  setLatestDetectedTokenMint: () => {},
 });
 
 // Custom hook to use the WebSocket context
@@ -52,6 +60,8 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
   const [sellPresets, setSellPresets] = useState<any[]>([]);
   const [activeBuyPreset, setActiveBuyPreset] = useState<number>(0);
   const [activeSellPreset, setActiveSellPreset] = useState<number>(0);
+  const [showTokenDetectedNotification, setShowTokenDetectedNotification] = useState(false);
+  const [latestDetectedTokenMint, setLatestDetectedTokenMint] = useState<string | null>(null);
 
   // Helper to send messages
   const sendMessage = (data: any) => {
@@ -95,7 +105,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     }
 
     setStatus('connecting');
-    const socket = new WebSocket('ws://localhost:4000');
+    const socket = new WebSocket(import.meta.env.VITE_WS_URL);
     socketRef.current = socket;
 
     socket.onopen = () => {
@@ -105,6 +115,12 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
 
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data);
+      console.log("WS MESSAGE:", data);
+
+      if (data.type === "TOKEN_DETECTED" && data.mint) {
+        setShowTokenDetectedNotification(true);
+        setLatestDetectedTokenMint(data.mint);
+      }
 
       if (data.type === 'AUTH_SUCCESS') {
         setIsAuthenticated(true);
@@ -120,11 +136,16 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
       }
 
       if (data.type === "PRESETS") {
-        console.log("Received PRESETS from backend:", data);
+        //console.log("Received PRESETS from backend:", data);
         setBuyPresets(data.buyPresets || []);
         setSellPresets(data.sellPresets || []);
         setActiveBuyPreset(data.activeBuyPreset || 0);
         setActiveSellPreset(data.activeSellPreset || 0);
+      }
+
+      if (data.type === "NEW_TOKEN" && data.eventType === "launch") {
+        // setShowTokenDetectedNotification(true); // This line is now handled by the new handler
+        // setLatestDetectedTokenMint(data.token.mint); // This line is now handled by the new handler
       }
     };
 
@@ -134,7 +155,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
       setIsAuthenticated(false);
     };
 
-    socket.onerror = (error) => {
+    socket.onerror = (_) => {
       setStatus('error');
       socket.close();
     };
@@ -164,6 +185,10 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
       activeSellPreset,
       setActiveBuyPreset,
       setActiveSellPreset,
+      showTokenDetectedNotification,
+      setShowTokenDetectedNotification,
+      latestDetectedTokenMint,
+      setLatestDetectedTokenMint,
     }}>
       {children}
     </WebSocketContext.Provider>

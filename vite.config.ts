@@ -6,16 +6,18 @@ export default defineConfig({
   plugins: [
     react(),
     inject({
-      Buffer: ['buffer', 'Buffer'], // Inject Buffer polyfill
+      Buffer: ['buffer', 'Buffer'],
     }),
   ],
   define: {
-    global: 'window', // Needed for some Solana libraries
+    global: 'window',
   },
   optimizeDeps: {
-    include: ['buffer'], // Ensures `buffer` is available in dev
+    include: ['buffer'],
   },
   server: {
-    port: 5174, // Your desired port
+    port: 5174,
+    host: '0.0.0.0',         // 🔑 required for external tunnel access
+    allowedHosts: true      // 🔑 make sure it's NOT in []
   },
 });

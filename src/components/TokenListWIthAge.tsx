@@ -7,6 +7,9 @@ import PresetModal from './PresetModal';
 //import ActivePresetBar from './ActivePresetBar';
 import { useWebSocket } from '../context/webSocketContext';
 //import SettingsIcon from '@mui/icons-material/Settings';
+import BuySellFilterPanel, { type BuyFilters, type SellFilters } from './BuySellFilterPanel';
+import FilterListIcon from '@mui/icons-material/FilterList'; // or your icon
+//import { WebSocketContext } from "../context/webSocketContext";
 
 type Token = {
   mint: string;
@@ -26,12 +29,6 @@ type Token = {
   decimals?: number; // Added for backend sync
 };
 
-interface TokenListWithAgeProps {
-  onBackHome: () => void;
-  walletAddress?: string;
-  solBalance?: number;
-}
-
 function getAgeString(ageMs: number) {
   const totalSeconds = Math.floor(ageMs / 1000);
   const hours = Math.floor(totalSeconds / 3600);
@@ -48,28 +45,28 @@ function toFullDecimalString(num: number) {
   return str;
 }
 
-function formatTokenBalance(balance: number, symbol: string) {
-  console.log("[DEBUG] formatTokenBalance input:", balance, symbol);
-  if (balance >= 1_000_000) {
-    console.log("[DEBUG] Balance M:", balance / 1_000_000);
-    return `${(balance / 1_000_000).toFixed(2)}M ${symbol}`;
-  }
-  if (balance >= 1_000) {
-    console.log("[DEBUG] Balance K:", balance / 1_000);
-    return `${(balance / 1_000).toFixed(2)}K ${symbol}`;
-  }
-  console.log("[DEBUG] Balance:", balance);
-  return `${balance} ${symbol}`;
-}
+// function formatTokenBalance(balance: number, symbol: string) {
+//   console.log("[DEBUG] formatTokenBalance input:", balance, symbol);
+//   if (balance >= 1_000_000) {
+//     console.log("[DEBUG] Balance M:", balance / 1_000_000);
+//     return `${(balance / 1_000_000).toFixed(2)}M ${symbol}`;
+//   }
+//   if (balance >= 1_000) {
+//     console.log("[DEBUG] Balance K:", balance / 1_000);
+//     return `${(balance / 1_000).toFixed(2)}K ${symbol}`;
+//   }
+//   console.log("[DEBUG] Balance:", balance);
+//   return `${balance} ${symbol}`;
+// }
 
 const sellPercents = [10, 30, 50, 100];
 
-const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBalance }) => {
+const TokenListWithAge: React.FC = () => {
   // All useState, useEffect, useRef, etc. go here
   const [tokens, setTokens] = useState<Token[]>([]);
   const [now, setNow] = useState(Date.now());
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [, setLoading] = useState(true);
+  const [, setError] = useState('');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc'); // 'desc' = newest first
   const [presetModalOpen, setPresetModalOpen] = useState(false);
   const [buyAmounts, setBuyAmounts] = useState<{ [key: string]: string }>({});
@@ -86,6 +83,10 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
   const [stopLossState, setStopLossState] = useState<{ [key: string]: string }>({});
   const [autoSellPercentState, setAutoSellPercentState] = useState<{ [key: string]: string }>({});
   const [autoSellEnabledState, setAutoSellEnabledState] = useState<{ [key: string]: boolean }>({});
+  const [showFilters, setShowFilters] = useState(false);
+  const [buyFilters, setBuyFilters] = useState<{ [userId: string]: BuyFilters }>({});
+  const [sellFilters, setSellFilters] = useState<{ [userId: string]: SellFilters }>({});
+  const userId = localStorage.getItem('userId') || 'default';
 
   // Preset state (copied from App.tsx ic)
   const {
@@ -108,8 +109,6 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
   useEffect(() => { bufferAmountRef.current = bufferAmount; }, [bufferAmount]);
   useEffect(() => { buyPresetsRef.current = buyPresets; }, [buyPresets]);
   useEffect(() => { activeBuyPresetRef.current = activeBuyPreset; }, [activeBuyPreset]);
-
-  const userId = localStorage.getItem('userId');
 
   // Handle buy amount input change
   const handleBuyAmountChange = (mint: string, value: string) => {
@@ -208,6 +207,10 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
     }));
 
     if (autoSellEnabledState[mint]) {
+      if (!walletAddress) {
+        alert("Wallet address not loaded. Please refresh or re-login.");
+        return;
+      }
       const preset = sellPresets[activeSellPreset] || {};
       const payload = {
         userId,
@@ -224,6 +227,7 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
         tokenName: userTokens.find(t => t.mint === mint)?.name,
         tokenSymbol: userTokens.find(t => t.mint === mint)?.symbol,
       };
+      console.log('TakeProfitChange payload:', payload, 'walletAddress:', walletAddress);
       const API_URL = import.meta.env.VITE_API_BASE_URL;
       fetch(`${API_URL}/api/auto-sell/upsert`, {
         method: 'POST',
@@ -240,6 +244,10 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
     }));
 
     if (autoSellEnabledState[mint]) {
+      if (!walletAddress) {
+        alert("Wallet address not loaded. Please refresh or re-login.");
+        return;
+      }
       const preset = sellPresets[activeSellPreset] || {};
       const payload = {
         userId,
@@ -256,6 +264,7 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
         tokenName: userTokens.find(t => t.mint === mint)?.name,
         tokenSymbol: userTokens.find(t => t.mint === mint)?.symbol,
       };
+      console.log('StopLossChange payload:', payload, 'walletAddress:', walletAddress);
       const API_URL = import.meta.env.VITE_API_BASE_URL;
       fetch(`${API_URL}/api/auto-sell/upsert`, {
         method: 'POST',
@@ -272,6 +281,10 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
     }));
 
     if (autoSellEnabledState[mint]) {
+      if (!walletAddress) {
+        alert("Wallet address not loaded. Please refresh or re-login.");
+        return;
+      }
       const preset = sellPresets[activeSellPreset] || {};
       const payload = {
         userId,
@@ -288,6 +301,7 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
         tokenName: userTokens.find(t => t.mint === mint)?.name,
         tokenSymbol: userTokens.find(t => t.mint === mint)?.symbol,
       };
+      console.log('AutoSellPercentChange payload:', payload, 'walletAddress:', walletAddress);
       const API_URL = import.meta.env.VITE_API_BASE_URL;
       fetch(`${API_URL}/api/auto-sell/upsert`, {
         method: 'POST',
@@ -298,6 +312,10 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
   };
 
   const handleAutoSellToggle = (token: Token) => {
+    if (!walletAddress) {
+      alert("Wallet address not loaded. Please refresh or re-login.");
+      return;
+    }
     const enabled = !autoSellEnabledState[token.mint];
     setAutoSellEnabledState(prev => ({
       ...prev,
@@ -324,8 +342,8 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
         walletAddress,
         mint: token.mint,
         buyPrice: token.buyAmount || 0,
-        takeProfit: Number(takeProfitState[token.mint]) || undefined,
-        stopLoss: Number(stopLossState[token.mint]) || undefined,
+        takeProfit: Number(takeProfitState[token.mint]) || 10,
+        stopLoss: Number(stopLossState[token.mint]) || 10,
         autoSellPercent: Number(autoSellPercentState[token.mint]) || 100,
         autoSellEnabled: true,
         slippage: preset.slippage || 5,
@@ -334,7 +352,7 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
         tokenName: token.name,
         tokenSymbol: token.symbol,
       };
-      console.log('AutoSell ON payload:', payload);
+      console.log('AutoSell ON payload:', payload, 'walletAddress:', walletAddress);
       const API_URL = import.meta.env.VITE_API_BASE_URL;
       fetch(`${API_URL}/api/auto-sell/upsert`, {
         method: 'POST',
@@ -342,14 +360,15 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
         body: JSON.stringify(payload)
       });
     } else {
-      // Optionally: update autoSellEnabled: false in DB
       const payload = {
         userId,
         walletAddress,
         mint: token.mint,
+        buyPrice: token.buyAmount || 0,
+        autoSellPercent: Number(autoSellPercentState[token.mint]) || 100,
         autoSellEnabled: false
       };
-      console.log('AutoSell OFF payload:', payload);
+      console.log('AutoSell OFF payload:', payload, 'walletAddress:', walletAddress);
       const API_URL = import.meta.env.VITE_API_BASE_URL;
       fetch(`${API_URL}/api/auto-sell/upsert`, {
         method: 'POST',
@@ -370,7 +389,7 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
           return;
         }
 
-        const res = await fetch('http://localhost:4000/api/tokens/all', {
+        const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/tokens/all`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
@@ -485,6 +504,24 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
       }
       if (data.type === "MANUAL_SELL_ERROR") {
         alert("Sell failed: " + (data.error || "Unknown error"));
+      }
+      if (data.type === "TOKEN_PRICE_UPDATE" && data.mint && data.price) {
+        console.log("[FRONTEND] Received TOKEN_PRICE_UPDATE", data);
+        console.log("[FRONTEND] Current tokens:", tokens.map(t => t.mint));
+        setTokens(prevTokens =>
+          prevTokens.map(token =>
+            token.mint === data.mint
+              ? { ...token, currentPrice: data.price }
+              : token
+          )
+        );
+        setUserTokens(prevTokens =>
+          prevTokens.map(token =>
+            token.mint === data.mint
+              ? { ...token, currentPrice: data.price }
+              : token
+          )
+        );
       }
     };
 
@@ -616,13 +653,27 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
     });
   }, [tokens]);
 
+  // 👇 Yeh context se notification state lein
+  // Removed unused destructured elements from WebSocketContext
+
+  // 👇 Yeh effect add karein (tokens array update hone par check kare)
+  // REMOVE the following useEffect (timer for notification):
+  // useEffect(() => {
+  //   let timer: NodeJS.Timeout;
+  //   if (showTokenDetectedNotification) {
+  //     timer = setTimeout(() => {
+  //       setShowTokenDetectedNotification(false);
+  //     }, 5000); // 5 seconds
+  //   }
+  //   return () => clearTimeout(timer);
+  // }, [showTokenDetectedNotification, setShowTokenDetectedNotification]);
+
   return (
     <>
       {/* Wallet details + Logout (below the fixed bar) */}
       {walletAddress && (
         <span style={{ color: '#FFD700', fontWeight: 600, fontSize: 16, marginLeft: 16 }}>
           💰 {walletAddress.slice(0, 8)}...{walletAddress.slice(-4)}
-          {typeof solBalance === 'number' && ` ${solBalance} SOL`}
         </span>
       )}
       <Snackbar
@@ -687,6 +738,18 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
           >
             {showMyTokens ? 'All Tokens' : 'My Tokens'}
           </Button>
+          <Button
+            variant="outlined"
+            sx={{
+              borderColor: '#483D8B',
+              color: '#483D8B',
+              fontWeight: 600,
+              '&:hover': { bgcolor: '#483D8B', color: 'white' },
+            }}
+            onClick={() => setShowFilters(true)}
+          >
+            <FilterListIcon />
+          </Button>
         </div>
         {/* End Filter Bar */}
 
@@ -746,6 +809,8 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
               disabled={!autoBuyEnabled}
             />
           </h2>
+          {/* Remove Back to Home button */}
+          {/*
           <div style={{ display: 'flex', gap: '12px' }}>
             <Button
               onClick={onBackHome}
@@ -758,6 +823,7 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
               Back to Home
             </Button>
           </div>
+          */}
         </div>
         
         {showMyTokens ? (
@@ -769,14 +835,14 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
             {sortedUserTokens.length === 0 ? null : (
               sortedUserTokens.map(token => {
                 // Debug log for each token
-                console.log(
-                  "[DEBUG] Token:",
-                  token.name,
-                  "| Mint:", token.mint,
-                  "| Balance (raw):", token.balance,
-                  "| Decimals:", token.decimals,
-                  "| Symbol:", token.symbol
-                );
+                //console.log(
+                  //"[DEBUG] Token:",
+                  //token.name,
+                  //"| Mint:", token.mint,
+                  //"| Balance (raw):", token.balance,
+                  //"| Decimals:", token.decimals,
+                  //"| Symbol:", token.symbol
+                //);
                 // Assume token.balance, token.buyAmount, token.currentPrice, token.lastUpdated are present
                 const buyPrice = token.buyAmount;
                 const currentPrice = token.currentPrice;
@@ -1243,6 +1309,15 @@ const TokenListWithAge: React.FC<TokenListWithAgeProps> = ({ onBackHome, solBala
         activeSellPreset={activeSellPreset}
         setActiveBuyPreset={setActiveBuyPreset}
         setActiveSellPreset={setActiveSellPreset}
+      />
+      <BuySellFilterPanel
+        open={showFilters}
+        onClose={() => setShowFilters(false)}
+        userId={userId}
+        buyFilters={buyFilters[userId] || {}}
+        sellFilters={sellFilters[userId] || {}}
+        onChangeBuyFilters={filters => setBuyFilters(prev => ({ ...prev, [userId]: filters }))}
+        onChangeSellFilters={filters => setSellFilters(prev => ({ ...prev, [userId]: filters }))}
       />
     </>
   );

@@ -11,7 +11,7 @@ declare global {
   var currentUserId: string | null;
 }
 
-import { Connection, PublicKey, Keypair, Transaction } from "@solana/web3.js";
+import { Connection, PublicKey, Transaction } from "@solana/web3.js";
 import { getConnection } from "../utils/getProvider";
 import { getSwapAccounts } from "../action/getSwapAccounts";
 import { buyToken } from "../action/buy";
@@ -144,7 +144,7 @@ const verifyToken = (token: string) => {
 };
 
 // Auto snipe function - handles token detection and auto buying
-const handleAutoSnipe = async (
+const handleAutSnipe = async (
   connection: Connection,
   userPublicKey: PublicKey,
   logInfo: any,
@@ -434,7 +434,7 @@ const handleAutoSnipe = async (
         mintAddress,
         userPublicKey
       );
-      
+
       //console.log(
         //`[DEBUG] 13. Fetching keypair for buy transaction for user ID: ${userId}`
         //);
@@ -551,35 +551,35 @@ const handleAutoSnipe = async (
   }
 };
 
-// Start token listener for a specific user
-const startTokenListener = async (userId: string, userPublicKey: PublicKey) => {
-  const connection = getConnection();
-  const userSession = userSessions.get(userId);
+// // Start token listener for a specific user
+// const startTokenListener = async (userId: string, userPublicKey: PublicKey) => {
+//   const connection = getConnection();
+//   const userSession = userSessions.get(userId);
 
-  if (!userSession) {
-    console.error("❌ User session not found");
-    return;
-  }
+//   if (!userSession) {
+//     console.error("❌ User session not found");
+//     return;
+//   }
 
-  if (userSession.isListening) {
-    console.log("✅ Already listening for user:", userId);
-    return;
-  }
+//   if (userSession.isListening) {
+//     console.log("✅ Already listening for user:", userId);
+//     return;
+//   }
 
-  console.log(`🔑 Starting token listener for user: ${userId}`);
+//   console.log(`🔑 Starting token listener for user: ${userId}`);
 
-  // Set up log listener
-  userSession.logListener = connection.onLogs(
-    MEMEHOME_PROGRAM_ID,
-    async (logInfo) => {
-      await handleAutoSnipe(connection, userPublicKey, logInfo, userId);
-    },
-    "confirmed"
-  );
+//   // Set up log listener
+//   // userSession.logListener = connection.onLogs(
+//   //   MEMEHOME_PROGRAM_ID,
+//   //   async (logInfo) => {
+//   //     //await handleAutoSnipe(connection, userPublicKey, logInfo, userId);
+//   //   },
+//   //   "confirmed"
+//   // );
 
-  userSession.isListening = true;
-  console.log(`✅ Token listener started for user: ${userId}`);
-};
+//   userSession.isListening = true;
+//   console.log(`✅ Token listener started for user: ${userId}`);
+// };
 
 // Stop token listener for a specific user
 const stopTokenListener = (userId: string) => {
@@ -621,7 +621,7 @@ wss.on("connection", (ws: WSWithUser) => {
             ws.send(JSON.stringify({ type: "AUTH_ERROR", error: "No token provided" }));
             return;
           }
-          
+
           // Special case for auto-sell worker
           if (authToken === 'auto-sell-worker') {
             ws.userId = 'auto-sell-worker';
@@ -633,7 +633,7 @@ wss.on("connection", (ws: WSWithUser) => {
             }));
             return;
           }
-          
+
           const decoded = verifyToken(authToken);
           if (!decoded) {
             ws.send(JSON.stringify({ type: "AUTH_ERROR", error: "Invalid token" }));
@@ -702,13 +702,13 @@ wss.on("connection", (ws: WSWithUser) => {
             break;
           }
 
-          if (!ws._autoSnipeActive) {
-            ws._autoSnipeActive = true;
-            await startTokenListener(ws.userId, userSession.userPublicKey);
-            console.log(
-              `🚀 Auto-snipe listener started for user: ${userSession.userPublicKey.toBase58()}`
-            );
-          }
+          // if (!ws._autoSnipeActive) {
+          //   ws._autoSnipeActive = true;
+          //   await startTokenListener(ws.userId, userSession.userPublicKey);
+          //   console.log(
+          //     `🚀 Auto-snipe listener started for user: ${userSession.userPublicKey.toBase58()}`
+          //   );
+          // }
 
           ws.send(
             JSON.stringify({
@@ -721,67 +721,67 @@ wss.on("connection", (ws: WSWithUser) => {
         }
 
         case "SET_MODE":
-          if (data.mode === "automatic") {
-            if (ws.userId) {
-              const userSession = userSessions.get(ws.userId);
-              if (userSession) {
-                await startTokenListener(ws.userId, userSession.userPublicKey);
-              }
-            }
-            ws.send(
-              JSON.stringify({
-                type: "MODE_CHANGED",
-                mode: "automatic",
-                message: "Bot switched to automatic mode",
-              })
-            );
-          } else if (data.mode === "manual") {
-            if (ws.userId) {
-              stopTokenListener(ws.userId);
-            }
-            ws.send(
-              JSON.stringify({
-                type: "MODE_CHANGED",
-                mode: "manual",
-                message: "Bot switched to manual mode",
-              })
-            );
-          }
-          logAllUserSessions();
-          break;
+          // if (data.mode === "automatic") {
+          //   // if (ws.userId) {
+          //   //   const userSession = userSessions.get(ws.userId);
+          //   //   if (userSession) {
+          //   //     await startTokenListener(ws.userId, userSession.userPublicKey);
+          //   //   }
+          //   // }
+          //   ws.send(
+          //     JSON.stringify({
+          //       type: "MODE_CHANGED",
+          //       mode: "automatic",
+          //       message: "Bot switched to automatic mode",
+          //     })
+          //   );
+          // } else if (data.mode === "manual") {
+          //   if (ws.userId) {
+          //     stopTokenListener(ws.userId);
+          //   }
+          //   ws.send(
+          //     JSON.stringify({
+          //       type: "MODE_CHANGED",
+          //       mode: "manual",
+          //       message: "Bot switched to manual mode",
+          //     })
+          //   );
+          // }
+          // logAllUserSessions();
+          // break;
 
         case "UPDATE_AUTO_SNIPE_SETTINGS":
-          if (!ws.userId || !ws.autoSnipeSettings) {
-            ws.send(
-              JSON.stringify({ type: "ERROR", error: "User not authenticated" })
-            );
-            break;
-          }
+          // if (!ws.userId || !ws.autoSnipeSettings) {
+          //   ws.send(
+          //     JSON.stringify({ type: "ERROR", error: "User not authenticated" })
+          //   );
+          //   break;
+          // }
 
           // Log old and new settings
-          console.log(`🛠️ [AUTO_SNIPE_SETTINGS] User: ${ws.userId}`);
+          //console.log(`🛠️ [AUTO_SNIPE_SETTINGS] User: ${ws.userId}`);
           //console.log("    Old settings:", ws.autoSnipeSettings);
-          console.log("    New settings:", data.settings);
+          //console.log("    New settings:", data.settings);
 
-          ws.autoSnipeSettings = {
-            ...ws.autoSnipeSettings,
-            ...data.settings,
-          };
+          // ws.autoSnipeSettings = {
+          //   ...ws.autoSnipeSettings,
+          //   ...data.settings,
+          // };
 
           // Log autoBuyEnabled specifically
-          if ("autoBuyEnabled" in data.settings) {
-            console.log(
-              `🔘 [AUTO_BUY] User: ${ws.userId} set autoBuyEnabled = ${data.settings.autoBuyEnabled}`
-            );
-          }
+          // if ("autoBuyEnabled" in data.settings) {
+          //   console.log(
+          //     `🔘 [AUTO_BUY] User: ${ws.userId} set autoBuyEnabled = ${data.settings.autoBuyEnabled}`
+          //   );
+          // }
 
-          ws.send(
-            JSON.stringify({
-              type: "SETTINGS_UPDATED",
-              message: "Auto-snipe settings updated successfully",
-            })
-          );
-          break;
+          // ws.send(
+          //   JSON.stringify({
+          //     type: "SETTINGS_UPDATED",
+          //     message: "Auto-snipe settings updated successfully",
+          //   })
+          // );
+          // break;
 
         case "AUTO_SELL_TRIGGERED":
         case "AUTO_SELL_SUCCESS":
@@ -836,9 +836,9 @@ wss.on("connection", (ws: WSWithUser) => {
             //console.log("[MANUAL_BUY] Backend calculation:");
             //console.log("  networkFeeBuffer (lamports):", networkFeeBuffer, "(", networkFeeBuffer / 1e9, "SOL )");
             //console.log("  totalRequired (lamports):", totalRequired, "(", totalRequired / 1e9, "SOL )");
-            
 
-            
+
+
 
 
             //const buyAmount = getCurrentPrice(connection, data.mintAddress, userKeypair.publicKey);
@@ -918,17 +918,17 @@ wss.on("connection", (ws: WSWithUser) => {
             // Accept both 'mint' and 'mintAddress' for compatibility
             const mint = data.mint || data.mintAddress;
             // Debug: Print all incoming values
-            console.log("[MANUAL_SELL] Incoming values:", {
-              mint,
-              percent: data.percent,
-              walletAddress: data.walletAddress,
-              slippage: data.slippage,
-              priorityFee: data.priorityFee,
-              bribeAmount: data.bribeAmount,
-              userId: ws.userId,
-              wsWalletAddress: ws.walletAddress,
-              rawData: data
-            });
+            // console.log("[MANUAL_SELL] Incoming values:", {
+            //   mint,
+            //   percent: data.percent,
+            //   walletAddress: data.walletAddress,
+            //   slippage: data.slippage,
+            //   priorityFee: data.priorityFee,
+            //   bribeAmount: data.bribeAmount,
+            //   userId: ws.userId,
+            //   wsWalletAddress: ws.walletAddress,
+            //   //rawData: data
+            // });
             // Now destructure
             const {
                 percent,
@@ -947,9 +947,9 @@ wss.on("connection", (ws: WSWithUser) => {
             const connection = getConnection();
             let userKeypair;
             try {
-                console.log("Step 1: Getting userKeypair...");
+                //console.log("Step 1: Getting userKeypair...");
                 userKeypair = await getUserKeypairByWallet(walletAddress);
-                console.log("Step 2: Got userKeypair:", userKeypair.publicKey.toBase58());
+                //console.log("Step 2: Got userKeypair:", userKeypair.publicKey.toBase58());
             } catch (e) {
                 ws.send(JSON.stringify({ type: "ERROR", error: "User wallet not found or decryption failed" }));
                 return;
@@ -958,15 +958,15 @@ wss.on("connection", (ws: WSWithUser) => {
 
             // Get user's token account address (ATA)
             const userTokenAccount = await getAssociatedTokenAddress(mintPubkey, userKeypair.publicKey);
-            console.log("Step 3: Getting userTokenAccount...");
-            console.log("Step 4: Got userTokenAccount:", userTokenAccount.toBase58());
+            //console.log("Step 3: Getting userTokenAccount...");
+            //console.log("Step 4: Got userTokenAccount:", userTokenAccount.toBase58());
 
             // Get live token account info from blockchain
             let tokenAccountInfo;
             try {
                 tokenAccountInfo = await getAccount(connection, userTokenAccount);
-                console.log("Step 5: Getting tokenAccountInfo...");
-                console.log("Step 6: Got tokenAccountInfo");
+                //console.log("Step 5: Getting tokenAccountInfo...");
+                //console.log("Step 6: Got tokenAccountInfo");
             } catch (e) {
                 ws.send(JSON.stringify({ type: "MANUAL_SELL_ERROR", error: "Token account not found in wallet" }));
                 return;
@@ -977,7 +977,7 @@ wss.on("connection", (ws: WSWithUser) => {
             const decimalsForDebug = userTokenForDebug?.decimals ?? 6;
             // Get raw chain balance (no decimals division)
             const chainBalanceRaw = Number(tokenAccountInfo.amount); // RAW
-            console.log("[DEBUG] Step 9: chainBalance (RAW):", chainBalanceRaw);
+            //console.log("[DEBUG] Step 9: chainBalance (RAW):", chainBalanceRaw);
             // Calculate sell amount as % of raw balance
             let sellAmountInSmallestUnit;
             if (typeof amount === 'number' && amount > 0) {
@@ -988,7 +988,7 @@ wss.on("connection", (ws: WSWithUser) => {
               let sellAmount = (chainBalanceRaw * percent) / 100;
               sellAmountInSmallestUnit = Math.floor(sellAmount);
             }
-            console.log("[DEBUG] Sell Amount Calculation: percent:", percent, "sellAmountInSmallestUnit:", sellAmountInSmallestUnit);
+            //console.log("[DEBUG] Sell Amount Calculation: percent:", percent, "sellAmountInSmallestUnit:", sellAmountInSmallestUnit);
 
             if (sellAmountInSmallestUnit <= 0) {
                 ws.send(JSON.stringify({ type: "MANUAL_SELL_ERROR", error: "Sell amount too small" }));
@@ -1004,6 +1004,9 @@ wss.on("connection", (ws: WSWithUser) => {
             console.log("Token Amount:", chainBalanceRaw);
             console.log("Decimals:", decimalsForDebug);
             console.log("Sell Amount:", sellAmountInSmallestUnit);
+            console.log("Slippge value: ", slippage);
+            console.log("Priority Fee:", priorityFee);
+            console.log("Bribe Amount:", bribeAmount);
 
             // 5. Prepare Solana connection and swap accounts
             const swapAccounts = await getSwapAccounts({
@@ -1012,8 +1015,8 @@ wss.on("connection", (ws: WSWithUser) => {
                 connection,
               programId: MEMEHOME_PROGRAM_ID,
             });
-            console.log("Step 10: Getting swapAccounts...");
-            console.log("Step 11: Got swapAccounts");
+            //console.log("Step 10: Getting swapAccounts...");
+            //console.log("Step 11: Got swapAccounts");
 
             // 6. Get reserves for expected output calculation
             const tokenVaultInfo = await connection.getTokenAccountBalance(swapAccounts.curveTokenAccount);
@@ -1024,10 +1027,10 @@ wss.on("connection", (ws: WSWithUser) => {
                 return;
             }
             const solReserve = BigInt(bondingCurveInfo.lamports);
-            console.log("Step 12: Getting tokenVaultInfo...");
-            console.log("Step 13: Got tokenVaultInfo");
-            console.log("Step 14: Getting bondingCurveInfo...");
-            console.log("Step 15: Got bondingCurveInfo");
+            //console.log("Step 12: Getting tokenVaultInfo...");
+            //console.log("Step 13: Got tokenVaultInfo");
+            //console.log("Step 14: Getting bondingCurveInfo...");
+            //console.log("Step 15: Got bondingCurveInfo");
 
             // 7. Calculate expected output
             const expectedSolOut = calculateAmountOut(
@@ -1035,13 +1038,13 @@ wss.on("connection", (ws: WSWithUser) => {
                 tokenReserve,
                 solReserve
             );
-            console.log("Step 16: Calculating expectedSolOut...");
-            console.log("expectedSolOut:", expectedSolOut);
+            //console.log("Step 16: Calculating expectedSolOut...");
+            //console.log("expectedSolOut:", expectedSolOut);
 
             // 8. Log reserves and expected output
-            console.log("Token Reserve:", tokenReserve.toString());
-            console.log("SOL Reserve:", solReserve.toString());
-            console.log("Expected SOL Output (before slippage):", Number(expectedSolOut) / 1e9, "SOL");
+            //console.log("Token Reserve:", tokenReserve.toString());
+            //console.log("SOL Reserve:", solReserve.toString());
+            //console.log("Expected SOL Output (before slippage):", Number(expectedSolOut) / 1e9, "SOL");
 
             // 9. Prepare sell parameters
             const slippageValue = Number(slippage) || 0;
@@ -1066,7 +1069,7 @@ wss.on("connection", (ws: WSWithUser) => {
                         priorityFee: priorityFeeValue,
                         bribeAmount: bribeAmountValue,
                     });
-                    console.log("Step 17: Executing sellToken...");
+                    //console.log("Step 17: Executing sellToken...");
                     console.log("Step 18: Got txSignature:", txSignature);
                 } else {
                     // If the wallet address is different, we need to create a new transaction
@@ -1101,9 +1104,9 @@ wss.on("connection", (ws: WSWithUser) => {
                 let updatedChainBalanceRaw = 0;
                 try {
                   const updatedTokenAccountInfo = await getAccount(connection, userTokenAccount);
-                  console.log("[DEBUG] After Sell: updatedTokenAccountInfo.amount (raw):", updatedTokenAccountInfo.amount);
+                  //console.log("[DEBUG] After Sell: updatedTokenAccountInfo.amount (raw):", updatedTokenAccountInfo.amount);
                   updatedChainBalanceRaw = Number(updatedTokenAccountInfo.amount); // RAW
-                  console.log("[DEBUG] After Sell: updatedChainBalance (RAW):", updatedChainBalanceRaw);
+                  //console.log("[DEBUG] After Sell: updatedChainBalance (RAW):", updatedChainBalanceRaw);
                 } catch (e) {
                   updatedChainBalanceRaw = 0; // If account is closed, treat as zero
                 }
@@ -1117,7 +1120,7 @@ wss.on("connection", (ws: WSWithUser) => {
                   );
                 }
                 const userToken = await UserToken.findOne({ mint, walletAddress });
-                console.log("[DEBUG] DB UserToken after update (RAW):", userToken);
+                //console.log("[DEBUG] DB UserToken after update (RAW):", userToken);
                 // 11. Log transaction summary
                 console.log("\n=== MANUAL SELL SUMMARY (RAW) ===");
                 console.log(`User: ${walletAddress} (${userKeypair.publicKey.toBase58()})`);
@@ -1174,7 +1177,7 @@ wss.on("connection", (ws: WSWithUser) => {
 
                 // ADD THIS: Send updated token list to frontend
                 const userTokens = await UserToken.find({ walletAddress });
-                console.log("[DEBUG] Sending USER_TOKENS to frontend:", userTokens);
+                //console.log("[DEBUG] Sending USER_TOKENS to frontend:", userTokens);
                 ws.send(JSON.stringify({
                   type: "USER_TOKENS",
                   tokens: userTokens
@@ -1233,7 +1236,7 @@ wss.on("connection", (ws: WSWithUser) => {
             }
             const userTokens = await UserToken.find({ userId: ws.userId });
             console.log("[WS] userId for USER_TOKENS:", ws.userId);
-            console.log("[WS] Tokens found:", userTokens);
+            //console.log("[WS] Tokens found:", userTokens);
             ws.send(JSON.stringify({ type: "USER_TOKENS", tokens: userTokens }));
             break;
           }
@@ -1253,15 +1256,15 @@ wss.on("connection", (ws: WSWithUser) => {
             break;
 
           case "AUTO_SELL_CONNECT": {
-            console.log("[WS] AUTO_SELL_CONNECT for ws.walletAddress:", ws.walletAddress);
-            if (!ws.walletAddress) {
-                ws.send(JSON.stringify({ type: "ERROR", error: "User not authenticated" }));
-                break;
-            }
-            const userTokens = await UserToken.find({ userPublicKey: ws.walletAddress });
-            console.log("[WS] WalletToken.find result (AUTO_SELL_CONNECT):", userTokens.length, "tokens");
-            ws.send(JSON.stringify({ type: "USER_TOKENS", tokens: userTokens }));
-            break;
+            // console.log("[WS] AUTO_SELL_CONNECT for ws.walletAddress:", ws.walletAddress);
+            // if (!ws.walletAddress) {
+            //     ws.send(JSON.stringify({ type: "ERROR", error: "User not authenticated" }));
+            //     break;
+            // }
+            // const userTokens = await UserToken.find({ userPublicKey: ws.walletAddress });
+            // console.log("[WS] WalletToken.find result (AUTO_SELL_CONNECT):", userTokens.length, "tokens");
+            // ws.send(JSON.stringify({ type: "USER_TOKENS", tokens: userTokens }));
+            // break;
           }
 
           case "GET_TOKEN_PRICES": {
@@ -1276,13 +1279,13 @@ wss.on("connection", (ws: WSWithUser) => {
           }
 
           case "GET_USER_AUTOSELL_CONFIGS": {
-            if (!ws.walletAddress) {
-                ws.send(JSON.stringify({ type: "ERROR", error: "User not authenticated" }));
-                break;
-            }
-            //const configs = await AutoSell.find({ userPublicKey: ws.walletAddress });
-            //ws.send(JSON.stringify({ type: "USER_AUTOSELL_CONFIGS", configs }));
-            break;
+            // if (!ws.walletAddress) {
+            //     ws.send(JSON.stringify({ type: "ERROR", error: "User not authenticated" }));
+            //     break;
+            // }
+            // //const configs = await AutoSell.find({ userPublicKey: ws.walletAddress });
+            // //ws.send(JSON.stringify({ type: "USER_AUTOSELL_CONFIGS", configs }));
+            // break;
           }
 
         case "GET_PRESETS": {
@@ -1304,12 +1307,12 @@ wss.on("connection", (ws: WSWithUser) => {
               activeSellPreset: 0,
             });
           }
-          console.log("🟢 [WS] Sending PRESETS to frontend:", {
-            buyPresets: userPreset.buyPresets,
-            sellPresets: userPreset.sellPresets,
-            activeBuyPreset: userPreset.activeBuyPreset,
-            activeSellPreset: userPreset.activeSellPreset,
-          });
+          // console.log("🟢 [WS] Sending PRESETS to frontend:", {
+          //   buyPresets: userPreset.buyPresets,
+          //   sellPresets: userPreset.sellPresets,
+          //   activeBuyPreset: userPreset.activeBuyPreset,
+          //   activeSellPreset: userPreset.activeSellPreset,
+          // });
           ws.send(JSON.stringify({
             type: "PRESETS",
             buyPresets: userPreset.buyPresets,
@@ -1415,6 +1418,28 @@ wss.on("connection", (ws: WSWithUser) => {
           if (autoFeeIntervals.has(ws.userId)) {
             clearInterval(autoFeeIntervals.get(ws.userId)!);
             autoFeeIntervals.delete(ws.userId);
+          }
+          break;
+        }
+
+        // --- NEW CASE TO HANDLE PRICE UPDATES ---
+        case "TOKEN_PRICE_UPDATE": {
+          // This message comes from the auto-sell-worker
+          // We need to broadcast it to all connected clients.
+          if (ws.userId === 'auto-sell-worker') {
+            console.log(`📢 Broadcasting price update for ${data.mint} to all clients.`);
+            wss.clients.forEach(client => {
+              // Check if the client is a user and not the worker itself
+              const userClient = client as WSWithUser;
+              if (userClient.readyState === WebSocket.OPEN && userClient.userId !== 'auto-sell-worker') {
+                client.send(JSON.stringify({
+                  type: "TOKEN_PRICE_UPDATE",
+                  mint: data.mint,
+                  price: data.price,
+                  walletAddress: data.walletAddress
+                }));
+              }
+            });
           }
           break;
         }

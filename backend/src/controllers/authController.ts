@@ -4,13 +4,14 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import User from '../models/user_auth'; // Importing our User model
 import sendEmail from '../utils/sendEmail'; // Importing our email utility
-import { PublicKey } from '@solana/web3.js';
+//import { PublicKey } from '@solana/web3.js';
 import * as ed25519 from '@noble/ed25519';
 import { generateBotWallet } from '../utils/walletUtils';
 import bs58 from 'bs58';
+import UserFilterPreset from "../models/UserFilterPreset";
 //import {WalletToken} from '../models/WalletToken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'default_secret';
+//const JWT_SECRET = process.env.JWT_SECRET || 'default_secret';
 
 // --- 1. SIGNUP CONTROLLER ---
 export const signup: RequestHandler = async (req, res) => {
@@ -32,7 +33,7 @@ export const signup: RequestHandler = async (req, res) => {
       await user.save();
       
       await sendEmail(email, 'Verify Your Email Again', `Your new OTP is: <strong>${otp}</strong>`);
-      res.status(200).json({ message: 'User already exists but is not verified. A new OTP has been sent.' });
+      res.status(200).json({ message: 'User already exists but is not verified. A new OTP has been sent.', otp }); // <-- Add otp here for dev
       return;
     }
 
@@ -65,6 +66,7 @@ export const signup: RequestHandler = async (req, res) => {
 
     res.status(201).json({
       message: 'User registered successfully. Please check your email for the OTP.',
+      otp // <-- Add otp here for dev
     });
 
   } catch (error) {
@@ -122,6 +124,12 @@ export const login: RequestHandler = async (req, res) => {
     if (!isPasswordValid) {
       res.status(401).json({ message: 'Invalid credentials' });
       return;
+    }
+
+    // --- FILTER PRESET CHECK/CREATE ---
+    const filterExists = await UserFilterPreset.exists({ userId: user._id });
+    if (!filterExists) {
+      await UserFilterPreset.create({ userId: user._id });
     }
 
     // Generate JWT token
@@ -191,6 +199,12 @@ export const phantomLogin: RequestHandler = async (req, res) => {
         botWalletSecretKeyEncrypted: encryptedSecretKey
       });
       await user.save();
+    }
+
+    // --- FILTER PRESET CHECK/CREATE ---
+    const filterExists = await UserFilterPreset.exists({ userId: user._id });
+    if (!filterExists) {
+      await UserFilterPreset.create({ userId: user._id });
     }
 
     // Generate JWT token

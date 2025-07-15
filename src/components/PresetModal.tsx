@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions, Button,
-  ToggleButtonGroup, ToggleButton, Box, Typography, TextField, MenuItem, Checkbox, FormControlLabel
+  ToggleButtonGroup, ToggleButton, Box, Typography, TextField, Checkbox, FormControlLabel
 } from '@mui/material';
 import { useWebSocket } from '../context/webSocketContext';
 
@@ -16,11 +16,11 @@ interface PresetModalProps {
   setActiveSellPreset: (idx: number) => void;
 }
 
-const mevModes = [
-  { value: "off", label: "Off" },
-  { value: "reduced", label: "Reduced" },
-  { value: "secure", label: "Secure" }
-];
+// const mevModes = [
+//   { value: "off", label: "Off" },
+//   { value: "reduced", label: "Reduced" },
+//   { value: "secure", label: "Secure" }
+// ];
 
 const PresetModal: React.FC<PresetModalProps> = ({
   open, onClose, buyPresets, sellPresets, activeBuyPreset, activeSellPreset,
@@ -104,7 +104,7 @@ const PresetModal: React.FC<PresetModalProps> = ({
     // Jab bhi mode ya preset index change ho, backend ko update bhejo
   }, [form.priorityFee, form.bribeAmount, form.autoFee, ws, mode, activeBuyPreset, activeSellPreset]);
 
-  const handlePresetChange = (event: React.MouseEvent<HTMLElement>, newPreset: number) => {
+  const handlePresetChange = (_: any, newPreset: number) => {
     if (newPreset !== null) {
       if (mode === 'buy') setActiveBuyPreset(newPreset);
       else setActiveSellPreset(newPreset);
@@ -150,35 +150,35 @@ const PresetModal: React.FC<PresetModalProps> = ({
     }
   };
 
-  const handleSave = () => {
-    // Send update to backend
-    if (ws) {
-      ws.send(JSON.stringify({
-        type: "UPDATE_PRESET",
-        mode,
-        presetIndex: mode === 'buy' ? activeBuyPreset : activeSellPreset,
-        settings: form
-      }));
-    }
-  };
+  // const handleSave = () => {
+  //   // Send update to backend
+  //   if (ws) {
+  //     ws.send(JSON.stringify({
+  //       type: "UPDATE_PRESET",
+  //       mode,
+  //       presetIndex: mode === 'buy' ? activeBuyPreset : activeSellPreset,
+  //       settings: form
+  //     }));
+  //   }
+  // };
 
-  const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-    const target = e.target as HTMLInputElement;
-    const { name, value } = target;
-    const defaultFields = ["buyAmount", "priorityFee", "bribeAmount", "maxFee"];
-    if (defaultFields.includes(name) && (!value || value.trim() === "")) {
-      const newForm = { ...form, [name]: "0.001" };
-      setForm(newForm);
-      if (ws) {
-        ws.send(JSON.stringify({
-          type: "UPDATE_PRESET",
-          mode,
-          presetIndex: mode === 'buy' ? activeBuyPreset : activeSellPreset,
-          settings: newForm
-        }));
-      }
-    }
-  };
+  // const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+  //   const target = e.target as HTMLInputElement;
+  //   const { name, value } = target;
+  //   const defaultFields = ["buyAmount", "priorityFee", "bribeAmount", "maxFee"];
+  //   if (defaultFields.includes(name) && (!value || value.trim() === "")) {
+  //     const newForm = { ...form, [name]: "0.001" };
+  //     setForm(newForm);
+  //     if (ws) {
+  //       ws.send(JSON.stringify({
+  //         type: "UPDATE_PRESET",
+  //         mode,
+  //         presetIndex: mode === 'buy' ? activeBuyPreset : activeSellPreset,
+  //         settings: newForm
+  //       }));
+  //     }
+  //   }
+  // };
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
