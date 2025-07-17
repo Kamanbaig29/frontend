@@ -27,6 +27,9 @@ type Token = {
   stopLoss?: number; // Added for backend sync
   autoSellPercent?: number; // Added for backend sync
   decimals?: number; // Added for backend sync
+  devAddress?: string; // Added for whitelist/blacklist
+  owner?: string; // Added for owner
+  creator?: string;
 };
 
 function getAgeString(ageMs: number) {
@@ -397,9 +400,11 @@ const TokenListWithAge: React.FC = () => {
         });
 
         if (!res.ok) {
-          if (res.status === 401) {
-            setError('Authentication failed. Please login again.');
+          if (res.status === 401 || res.status === 404) {
+            // Auto-logout and redirect to login
             localStorage.removeItem('token');
+            localStorage.removeItem('userId');
+            window.location.href = '/login'; // or your login route
             return;
           }
           throw new Error('Failed to fetch tokens');
@@ -426,10 +431,16 @@ const TokenListWithAge: React.FC = () => {
   useEffect(() => {
     if (!ws) return;
 
-    const handleMessage = (event: MessageEvent) => {
+    const handleMessage = async (event: MessageEvent) => {
       const data = JSON.parse(event.data);
+      if (data.type === "AUTH_ERROR") {
+        localStorage.removeItem('token');
+        localStorage.removeItem('userId');
+        window.location.href = '/login';
+        return;
+      }
       if (data.type === "NEW_TOKEN" && data.token) {
-        // Always update token list
+        // 1. Always update token list
         setTokens(prev => {
           const exists = prev.find(t => t.mint === data.token.mint);
           if (exists) {
@@ -438,9 +449,11 @@ const TokenListWithAge: React.FC = () => {
           return [data.token, ...prev];
         });
 
-        // Only trigger auto-buy if eventType is 'launch'
+        // 2. Token detected notification
+        setAutoBuySnackbar({ open: true, message: `Token detected: ${data.token.name || data.token.mint}` });
+
+        // 3. Only trigger auto-buy if eventType is 'launch'
         if (data.eventType === "launch") {
-          console.log('NEW_TOKEN received:', data.token, 'eventType:', data.eventType);
           if (
             autoBuyEnabledRef.current &&
             bufferAmountRef.current &&
@@ -449,22 +462,67 @@ const TokenListWithAge: React.FC = () => {
             ws
           ) {
             const preset = buyPresetsRef.current[activeBuyPresetRef.current] || {};
-            console.log('Auto buy check:', { autoBuyEnabled: autoBuyEnabledRef.current, bufferAmount: bufferAmountRef.current, preset, ws });
-            if (preset && Object.keys(preset).length > 0) {
-              const amountLamports = Math.floor(Number(bufferAmountRef.current) * 1e9);
-              const toLamports = (val: string) => Math.floor(Number(val) * 1e9);
-              ws.send(JSON.stringify({
-                type: "MANUAL_BUY",
-                mintAddress: data.token.mint,
-                amount: amountLamports,
-                slippage: preset.slippage,
-                priorityFee: toLamports(preset.priorityFee),
-                bribeAmount: toLamports(preset.bribeAmount),
-              }));
-              console.log('MANUAL_BUY sent for:', data.token.mint);
-              setAutoBuySnackbar({ open: true, message: `Auto buy order placed for ${data.token.name || data.token.mint}` });
-              setLastAutoBuyMint(data.token.mint);
-            }
+            // --- NEW: Fetch whitelist/blacklist from backend at runtime ---
+            (async () => {
+              try {
+                // 1. Fetch buyFilters from backend (new route, by userId)
+                const userId = localStorage.getItem('userId');
+                const buyFiltersRes = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/user-filters/buy-filters-by-user-id?userId=${userId}`);
+                const buyFiltersData = await buyFiltersRes.json();
+                const userBuyFilters = buyFiltersData.buyFilters || {};
+                const maxMcap = Number(userBuyFilters.maxMcap) || 0;
+                const maxBuyers = Number(userBuyFilters.maxBuyers) || 0;
+                // Debug log for buyFilters
+                console.log('[AutoBuy DEBUG] buyFiltersData:', buyFiltersData, 'Parsed maxMcap:', maxMcap, 'Parsed maxBuyers:', maxBuyers);
+
+                // 2. Fetch whitelist/blacklist from backend
+                const token = localStorage.getItem("token");
+                const [whitelistRes, blacklistRes] = await Promise.all([
+                  fetch(`${import.meta.env.VITE_API_BASE_URL}/api/user-filters/whitelist-devs`, {
+                    headers: { "Authorization": `Bearer ${token}` }
+                  }),
+                  fetch(`${import.meta.env.VITE_API_BASE_URL}/api/user-filters/blacklist-devs`, {
+                    headers: { "Authorization": `Bearer ${token}` }
+                  })
+                ]);
+                const whitelistData = await whitelistRes.json();
+                const blacklistData = await blacklistRes.json();
+                const whitelistDevs = whitelistData.whitelistDevs || [];
+                const blacklistDevs = blacklistData.blacklistDevs || [];
+                if (!autoBuyFilter(data.token, blacklistDevs, whitelistDevs, setAutoBuySnackbar)) return;
+
+                // 3. Fetch metrics as before
+                const metricsRes = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/tokens/${data.token.mint}/metrics`);
+                const metrics = await metricsRes.json();
+
+                // 4. Comparison logic
+                console.log('AutoBuy Filter:', { marketCapUsd: metrics.marketCapUsd, maxMcap, buyersCount: metrics.buyersCount, maxBuyers });
+
+                if (maxMcap > 0 && metrics.marketCapUsd && metrics.marketCapUsd > maxMcap) {
+                  setAutoBuySnackbar({ open: true, message: `Auto-buy blocked: Market Cap $${metrics.marketCapUsd} > filter $${maxMcap}` });
+                  return;
+                }
+                if (maxBuyers > 0 && metrics.buyersCount && metrics.buyersCount > maxBuyers) {
+                  setAutoBuySnackbar({ open: true, message: `Auto-buy blocked: Buyers ${metrics.buyersCount} > filter ${maxBuyers}` });
+                  return;
+                }
+
+                // Allow buy
+                const amountLamports = Math.floor(Number(bufferAmountRef.current) * 1e9);
+                const toLamports = (val: string) => Math.floor(Number(val) * 1e9);
+                ws.send(JSON.stringify({
+                  type: "MANUAL_BUY",
+                  mintAddress: data.token.mint,
+                  amount: amountLamports,
+                  slippage: preset.slippage,
+                  priorityFee: toLamports(preset.priorityFee),
+                  bribeAmount: toLamports(preset.bribeAmount),
+                }));
+                setLastAutoBuyMint(data.token.mint);
+              } catch (err) {
+                setAutoBuySnackbar({ open: true, message: 'Auto-buy filter fetch failed.' });
+              }
+            })();
           }
         }
       }
@@ -652,6 +710,49 @@ const TokenListWithAge: React.FC = () => {
       return updated;
     });
   }, [tokens]);
+
+  // Central auto-buy filter for whitelist/blacklist
+  function autoBuyFilter(
+    token: Token,
+    blacklistDevs: string[],
+    whitelistDevs: string[],
+    setAutoBuySnackbar: (arg: { open: boolean; message: string }) => void
+  ): boolean {
+    const creator = (token.creator || '').trim();
+    const whitelistNorm = whitelistDevs.map(d => d.trim());
+    const blacklistNorm = blacklistDevs.map(d => d.trim());
+
+    // Debug logs
+    console.log('AutoBuyFilter DEBUG white black list:', {
+      creator,
+      whitelistNorm,
+      blacklistNorm
+    });
+
+    // If whitelist is empty or only ['true'], allow all except blacklist
+    if (whitelistNorm.length === 0 || (whitelistNorm.length === 1 && whitelistNorm[0] === 'true')) {
+      const isBlacklisted = blacklistNorm.includes(creator);
+      console.log('Comparing (whitelist true):', { creator, blacklistNorm, isBlacklisted });
+      if (isBlacklisted) {
+        setAutoBuySnackbar({ open: true, message: 'Creator is blacklisted, cannot auto-buy.' });
+        return false;
+      }
+      return true;
+    }
+    // If whitelist has real creators, only allow buy if creator is in whitelist and not in blacklist
+    const isWhitelisted = whitelistNorm.includes(creator);
+    const isBlacklisted = blacklistNorm.includes(creator);
+    console.log('Comparing (real whitelist):', { creator, whitelistNorm, isWhitelisted, blacklistNorm, isBlacklisted });
+    if (!isWhitelisted) {
+      setAutoBuySnackbar({ open: true, message: 'Creator is not whitelisted.' });
+      return false;
+    }
+    if (isBlacklisted) {
+      setAutoBuySnackbar({ open: true, message: 'Creator is blacklisted, cannot auto-buy.' });
+      return false;
+    }
+    return true;
+  }
 
   // 👇 Yeh context se notification state lein
   // Removed unused destructured elements from WebSocketContext
@@ -924,6 +1025,16 @@ const TokenListWithAge: React.FC = () => {
                       {token.symbol}
                     </div>
                     
+                    <div style={{ 
+                      fontSize: 12, 
+                      color: '#FFD700', 
+                      marginBottom: 6, 
+                      textAlign: 'center', 
+                      wordBreak: 'break-all'
+                    }}>
+                      Creator: {token.creator || '-'}
+                    </div>
+
                     <div style={{ 
                       fontSize: 11, 
                       color: '#666', 
@@ -1215,6 +1326,16 @@ const TokenListWithAge: React.FC = () => {
                     {token.symbol}
                   </div>
                   
+                  <div style={{ 
+                    fontSize: 12, 
+                    color: '#FFD700', 
+                    marginBottom: 6, 
+                    textAlign: 'center', 
+                    wordBreak: 'break-all'
+                  }}>
+                    Creator: {token.creator || token.devAddress || '-'}
+                  </div>
+
                   <div style={{ 
                     fontSize: 11, 
                     color: '#666', 

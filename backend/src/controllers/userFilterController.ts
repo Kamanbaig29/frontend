@@ -1,0 +1,202 @@
+import { Request, Response } from 'express';
+import UserFilterPreset from '../models/UserFilterPreset';
+import User from '../models/user_auth';
+
+// Helper to get userId from req
+function getUserId(req: Request): string | undefined {
+  return (req as any).user?.id;
+}
+
+export const getWhitelistDevs = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+    
+    const preset = await UserFilterPreset.findOne({ userId });
+    if (!preset) {
+      res.json({ whitelistDevs: ['true'] });
+      return;
+    }
+    
+    res.json({ whitelistDevs: preset.buyFilters.whitelistDevs || ['true'] });
+  } catch (e) {
+    res.status(500).json({ message: 'Failed to fetch whitelist devs' });
+  }
+};
+
+export const addWhitelistDev = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = getUserId(req);
+    const { address } = req.body;
+    
+    if (!userId || !address) {
+      res.status(400).json({ message: 'Missing userId or address' });
+      return;
+    }
+    
+    const preset = await UserFilterPreset.findOneAndUpdate(
+      { userId },
+      { $addToSet: { 'buyFilters.whitelistDevs': address } },
+      { new: true, upsert: true }
+    );
+    
+    res.json({ whitelistDevs: preset.buyFilters.whitelistDevs });
+  } catch (e) {
+    res.status(500).json({ message: 'Failed to add whitelist dev' });
+  }
+};
+
+export const removeWhitelistDev = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = getUserId(req);
+    const { address } = req.body;
+    
+    if (!userId || !address) {
+      res.status(400).json({ message: 'Missing userId or address' });
+      return;
+    }
+    
+    const preset = await UserFilterPreset.findOneAndUpdate(
+      { userId },
+      { $pull: { 'buyFilters.whitelistDevs': address } },
+      { new: true }
+    );
+
+    let finalWhitelist = ['true'];
+    if (preset && preset.buyFilters.whitelistDevs && preset.buyFilters.whitelistDevs.length > 0) {
+      finalWhitelist = preset.buyFilters.whitelistDevs;
+    } else if (preset) {
+      preset.buyFilters.whitelistDevs = ['true'];
+      await preset.save();
+    }
+    
+    res.json({ whitelistDevs: finalWhitelist });
+  } catch (e) {
+    res.status(500).json({ message: 'Failed to remove whitelist dev' });
+  }
+};
+
+// --- Fixed Blacklist Devs Handlers ---
+export const getBlacklistDevs = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        res.status(401).json({ message: 'Unauthorized' });
+        return;
+      }
+      
+      const preset = await UserFilterPreset.findOne({ userId });
+      if (!preset) {
+        res.json({ blacklistDevs: [] });
+        return;
+      }
+      
+      res.json({ blacklistDevs: preset.buyFilters.blacklistDevs || [] });
+    } catch (e) {
+      res.status(500).json({ message: 'Failed to fetch blacklist devs' });
+    }
+  };
+  
+  export const addBlacklistDev = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const userId = getUserId(req);
+      const { address } = req.body;
+      
+      if (!userId || !address) {
+        res.status(400).json({ message: 'Missing userId or address' });
+        return;
+      }
+      
+      const preset = await UserFilterPreset.findOneAndUpdate(
+        { userId },
+        { $addToSet: { 'buyFilters.blacklistDevs': address } },
+        { new: true, upsert: true }
+      );
+      
+      res.json({ blacklistDevs: preset.buyFilters.blacklistDevs });
+    } catch (e) {
+      res.status(500).json({ message: 'Failed to add blacklist dev' });
+    }
+  };
+  
+  export const removeBlacklistDev = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const userId = getUserId(req);
+      const { address } = req.body;
+      
+      if (!userId || !address) {
+        res.status(400).json({ message: 'Missing userId or address' });
+        return;
+      }
+      
+      const preset = await UserFilterPreset.findOneAndUpdate(
+        { userId },
+        { $pull: { 'buyFilters.blacklistDevs': address } },
+        { new: true }
+      );
+      
+      res.json({ blacklistDevs: preset?.buyFilters.blacklistDevs || [] });
+    } catch (e) {
+      res.status(500).json({ message: 'Failed to remove blacklist dev' });
+    }
+  };
+
+export const updateBuyFilter = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).user?.id;
+    const { field, value } = req.body;
+    if (!userId || !field) {
+      res.status(400).json({ message: 'Missing userId or field' });
+      return;
+    }
+    const allowedFields = ['maxMcap', 'maxBuyers'];
+    if (!allowedFields.includes(field)) {
+      res.status(400).json({ message: 'Invalid field' });
+      return;
+    }
+    const preset = await UserFilterPreset.findOneAndUpdate(
+      { userId },
+      { $set: { [`buyFilters.${field}`]: value } },
+      { new: true, upsert: true }
+    );
+    res.json({ buyFilters: preset.buyFilters });
+  } catch (e) {
+    res.status(500).json({ message: 'Failed to update buy filter' });
+  }
+};
+
+export const getBuyFilters = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).user?.id;
+    if (!userId) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+    const preset = await UserFilterPreset.findOne({ userId });
+    res.json({ buyFilters: preset?.buyFilters || {} });
+  } catch (e) {
+    res.status(500).json({ message: 'Failed to fetch buy filters' });
+  }
+};
+
+// New: Get buyFilters by userId (no auth, for debug/testing)
+export const getBuyFiltersByUserId = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.query.userId as string;
+    if (!userId) {
+      res.status(400).json({ message: 'Missing userId param' });
+      return;
+    }
+    // Use .lean() to get a plain JS object
+    const preset = await UserFilterPreset.findOne({ userId }).lean();
+    const buyFilters = { ...(preset?.buyFilters || {}) };
+    buyFilters.maxMcap = Number(buyFilters.maxMcap) || 0;
+    buyFilters.maxBuyers = Number(buyFilters.maxBuyers) || 0;
+    res.json({ buyFilters });
+  } catch (e) {
+    res.status(500).json({ message: 'Failed to fetch buy filters by userId' });
+  }
+};

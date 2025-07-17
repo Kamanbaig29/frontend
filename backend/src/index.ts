@@ -10,6 +10,7 @@ import authRoutes from './routes/authRoutes';
 import botRoutes from './routes/botRoutes';
 import tokenRoutes from './routes/tokenRoutes';
 import autoSellRoutes from './routes/autoSellRoutes';
+import userFilterRoutes from './routes/userFilterRoutes';
 import path from 'path';
 
 // --- Existing Bot Imports ---
@@ -46,6 +47,7 @@ async function main() {
   app.use('/api/bot', botRoutes);
   app.use('/api/tokens', tokenRoutes);
   app.use('/api/auto-sell', autoSellRoutes);
+  app.use('/api/user-filters', userFilterRoutes);
 
   // --- Serve React Frontend Build ---
   const frontendPath = path.join(__dirname, '../../dist'); // Adjust if needed

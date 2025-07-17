@@ -313,6 +313,7 @@ export async function startMemeHomeTokenWorker(wss: WebSocketServer) {
         let decimals = decimalsDefault;
         let imageUrl = '';
         let metadataUri = '';
+        let supply = 0; // <-- NEW: numeric supply
 
         // try {
         //   const tokenAccountInfo = await connection.getParsedAccountInfo(new PublicKey(mint));
@@ -332,16 +333,80 @@ export async function startMemeHomeTokenWorker(wss: WebSocketServer) {
           }
         }
 
-        console.log('[MemeHomeTokenWorker] Final token meta:', { name, symbol, decimals, imageUrl, metadataUri });
+        // --- Fetch supply from on-chain (RAW units, no divide) ---
+        let supplyRaw = 0;
+        try {
+          const tokenSupplyInfo = await connection.getParsedAccountInfo(new PublicKey(mint));
+          if (
+            tokenSupplyInfo.value &&
+            typeof tokenSupplyInfo.value.data === "object" &&
+            "parsed" in tokenSupplyInfo.value.data &&
+            tokenSupplyInfo.value.data.parsed.info &&
+            tokenSupplyInfo.value.data.parsed.info.supply !== undefined
+          ) {
+            // supply is a string, use as number (RAW, no divide)
+            supplyRaw = Number(tokenSupplyInfo.value.data.parsed.info.supply);
+          }
+        } catch (e) {
+          console.error(`[${mint}] Error fetching supply:`, e);
+        }
+
+        // --- Fetch bonding curve reserves for marketCap (RAW units, no divide) ---
+        let virtualSolRaw = 0;
+        let virtualTokenRaw = 0;
+        try {
+          const dummyKey = Keypair.generate().publicKey;
+          const swapAccounts = await getSwapAccounts({
+            mintAddress: mint,
+            buyer: dummyKey,
+            connection,
+            programId: MEMEHOME_PROGRAM_ID
+          });
+          if (swapAccounts) {
+            const program = initProgram(connection, dummyKey);
+            const bondingCurveAcc: any = await program.account.bondingCurve.fetch(swapAccounts.bondingCurve);
+            const virtualSolReserves = bondingCurveAcc['virtualSolReserves'] as BN;
+            const virtualTokenReserves = bondingCurveAcc['virtualTokenReserves'] as BN;
+            virtualSolRaw = virtualSolReserves.toNumber(); // RAW
+            virtualTokenRaw = virtualTokenReserves.toNumber(); // RAW
+          }
+        } catch (e) {
+          console.error(`[${mint}] Error fetching bonding curve reserves:`, e);
+        }
 
         // 5. Try to get current price (but don't fail if error)
         let currentPrice = 0;
         try {
           currentPrice = await getCurrentPriceWithRetry(connection, mint);
-          //console.log('[MemeHomeTokenWorker] currentPrice:', currentPrice);
         } catch (e) {
           console.error(`[${mint}] Error getting current price:`, e);
         }
+
+        // --- Use getMarketCap for marketCap calculation (RAW units) ---
+        let marketCapLamports = 0;
+        let marketCap = 0;
+        try {
+          marketCapLamports = await getMarketCap(supplyRaw, virtualSolRaw, virtualTokenRaw);
+          marketCap = marketCapLamports / 1e9; // Convert lamports to SOL
+        } catch (e) {
+          console.error(`[${mint}] Error calculating marketCap:`, e);
+        }
+        // --- Calculate marketCapUsd ---
+        let marketCapUsd = 0;
+        const solPriceUsd = parseFloat(process.env.SOL_PRICE_USD || '0');
+        if (solPriceUsd && marketCap) {
+          marketCapUsd = marketCap * solPriceUsd;
+        }
+        console.log('[MarketCap Debug - Upsert]', {
+          supplyRaw,
+          virtualSolRaw,
+          virtualTokenRaw,
+          mint,
+          marketCapLamports,
+          marketCap,
+          solPriceUsd,
+          marketCapUsd
+        });
 
         // 6. Check if token already exists in DB
         const tokenInDb = await MemeHomeToken.findOne({ mint });
@@ -372,7 +437,6 @@ export async function startMemeHomeTokenWorker(wss: WebSocketServer) {
             mint,
             name,
             symbol,
-            creator,
             bondingCurve,
             curveTokenAccount,
             decimals,
@@ -382,10 +446,16 @@ export async function startMemeHomeTokenWorker(wss: WebSocketServer) {
             creationSignature: logInfo.signature,
             isActive: true,
             lastUpdated: new Date(),
-            platform: 'memehome'
+            platform: 'memehome',
+            supply: supplyRaw.toString(), // store as string for compatibility
+            marketCap, // in SOL
+            marketCapUsd // in USD
+          },
+          $setOnInsert: {
+            creationTimestamp,
+            creator
           }
         };
-        upsertObj.$setOnInsert = { creationTimestamp };
         console.log('[MemeHomeTokenWorker] Final upsertObj:', upsertObj);
 
         await MemeHomeToken.findOneAndUpdate(
@@ -492,10 +562,65 @@ async function periodicPriceSync(wss: WebSocketServer) {
     const batch = tokens.slice(i, i + BATCH_SIZE);
     await Promise.all(batch.map(async (token) => {
       try {
-        const price = await getCurrentPriceForWorker(connection, token.mint);
+        // --- Fetch bonding curve reserves for marketCap (RAW units) ---
+        let virtualSolRaw = 0;
+        let virtualTokenRaw = 0;
+        try {
+          const dummyKey = Keypair.generate().publicKey;
+          const swapAccounts = await getSwapAccounts({
+            mintAddress: token.mint,
+            buyer: dummyKey,
+            connection,
+            programId: MEMEHOME_PROGRAM_ID
+          });
+          if (swapAccounts) {
+            const program = initProgram(connection, dummyKey);
+            const bondingCurveAcc: any = await program.account.bondingCurve.fetch(swapAccounts.bondingCurve);
+            const virtualSolReserves = bondingCurveAcc['virtualSolReserves'] as BN;
+            const virtualTokenReserves = bondingCurveAcc['virtualTokenReserves'] as BN;
+            virtualSolRaw = virtualSolReserves.toNumber(); // RAW
+            virtualTokenRaw = virtualTokenReserves.toNumber(); // RAW
+          }
+        } catch (e) {
+          console.error(`[${token.mint}] Error fetching bonding curve reserves:`, e);
+        }
+        let price = 0;
+        try {
+          price = await getCurrentPriceForWorker(connection, token.mint);
+        } catch (e) {
+          console.error(`[${token.mint}] Error getting current price:`, e);
+        }
+        let supplyRaw = 0;
+        if (token.supply) {
+          supplyRaw = Number(token.supply);
+        }
+        let marketCapLamports = 0;
+        let marketCap = 0;
+        try {
+          marketCapLamports = await getMarketCap(supplyRaw, virtualSolRaw, virtualTokenRaw);
+          marketCap = marketCapLamports / 1e9; // Convert lamports to SOL
+        } catch (e) {
+          console.error(`[${token.mint}] Error calculating marketCap:`, e);
+        }
+        // --- Calculate marketCapUsd ---
+        let marketCapUsd = 0;
+        const solPriceUsd = parseFloat(process.env.SOL_PRICE_USD || '0');
+        if (solPriceUsd && marketCap) {
+          marketCapUsd = marketCap * solPriceUsd;
+        }
+        console.log('[MarketCap Debug - Sync]', {
+          supplyRaw,
+          virtualSolRaw,
+          virtualTokenRaw,
+          mint: token.mint,
+          marketCapLamports,
+          marketCap,
+          solPriceUsd,
+          marketCapUsd
+        });
         await MemeHomeToken.updateOne(
           { mint: token.mint },
-          { $set: { currentPrice: price, lastUpdated: new Date() } }
+          { $set: { currentPrice: price, lastUpdated: new Date(), marketCap, marketCapUsd } }
         );
         // --- NEW: Update all UserToken docs for this mint ---
         await UserToken.updateMany(
@@ -522,4 +647,15 @@ async function periodicPriceSync(wss: WebSocketServer) {
       await new Promise(res => setTimeout(res, 2000));
     }
   }
+}
+
+export const getMarketCap = async(
+    tokenTotalSupply: number,
+    virtualSolReserves: number,
+    virtualTokenReserves: number,
+) => {
+    if(virtualTokenReserves === 0){
+        return 0;
+    }
+    return Math.floor((tokenTotalSupply * virtualSolReserves) / virtualTokenReserves);
 }

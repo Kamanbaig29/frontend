@@ -168,7 +168,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ }) => {
               Dev OTP: {devOtp}
             </div>
           )}
-          <button type="submit" className="w-full ...">Verify Account</button>
+          <button type="submit" className="w-full px-4 py-2 font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition">Verify Account</button>
         </form>
       );
     }
@@ -195,7 +195,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ }) => {
               placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
            <label htmlFor="password" className="absolute left-0 -top-3.5 text-gray-400 text-sm ...">Password</label>
         </div>
-        <button type="submit" className="w-full px-4 py-2 font-bold text-white bg-blue-600 ...">
+        <button type="submit" className="w-full px-4 py-2 font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition">
             {view === 'login' ? 'Sign In' : 'Sign Up'}
         </button>
       </form>
@@ -220,8 +220,16 @@ const LoginPage: React.FC<LoginPageProps> = ({ }) => {
           </div>
           {view !== 'otp' && (
                <div className="flex items-center space-x-4">
-                  <button className="w-full inline-flex ..."><GoogleIcon /><span>Google</span></button>
-                  <button onClick={handlePhantomLogin} className="w-full inline-flex ...">
+                  <button
+                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-gray-600 bg-gray-700 hover:bg-gray-600 transition text-white font-semibold"
+                  >
+                    <GoogleIcon />
+                    <span>Google</span>
+                  </button>
+                  <button
+                    onClick={handlePhantomLogin}
+                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-gray-600 bg-gray-700 hover:bg-gray-600 transition text-white font-semibold"
+                  >
                     <PhantomIcon />
                     <span>Phantom</span>
                   </button>

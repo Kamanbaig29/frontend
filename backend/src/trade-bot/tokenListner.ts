@@ -637,46 +637,54 @@ wss.on("connection", (ws: WSWithUser) => {
           const decoded = verifyToken(authToken);
           if (!decoded) {
             ws.send(JSON.stringify({ type: "AUTH_ERROR", error: "Invalid token" }));
+            ws.close();
             return;
           }
           ws.userId = decoded.id;
           ws.walletAddress = decoded.walletAddress;
 
-          await ensureUserPreset(ws.userId);
+          try {
+            const userKeypair = await getUserKeypairById(decoded.id);
 
-          ws.autoSnipeSettings = { ...defaultAutoSnipeSettings };
-          ws.trackedTokens = [];
+            await ensureUserPreset(ws.userId);
 
-          // Store user session
-          const userKeypair = await getUserKeypairById(decoded.id);
-          userSessions.set(decoded.id, {
-            ws,
-            logListener: null,
-            isListening: false,
-            userPublicKey: userKeypair.publicKey,
-          });
+            ws.autoSnipeSettings = { ...defaultAutoSnipeSettings };
+            ws.trackedTokens = [];
 
-          ws.send(
-            JSON.stringify({
-              type: "AUTH_SUCCESS",
-              message: "WebSocket authenticated successfully",
-              walletAddress: decoded.walletAddress,
-            })
-          );
+            // Store user session
+            userSessions.set(decoded.id, {
+              ws,
+              logListener: null,
+              isListening: false,
+              userPublicKey: userKeypair.publicKey,
+            });
 
-          // ADD THIS: Send initial SOL balance
-          const connection = getConnection();
-          const initialBalance = await connection.getBalance(userKeypair.publicKey);
-          ws.send(JSON.stringify({
-            type: "SOL_BALANCE_UPDATE",
-            balance: initialBalance / 1e9,
-          }));
+            ws.send(
+              JSON.stringify({
+                type: "AUTH_SUCCESS",
+                message: "WebSocket authenticated successfully",
+                walletAddress: decoded.walletAddress,
+              })
+            );
 
-          const userTokens = await UserToken.find({ userId: ws.userId });
-          ws.send(JSON.stringify({
-            type: "USER_TOKENS",
-            tokens: userTokens
-          }));
+            // ADD THIS: Send initial SOL balance
+            const connection = getConnection();
+            const initialBalance = await connection.getBalance(userKeypair.publicKey);
+            ws.send(JSON.stringify({
+              type: "SOL_BALANCE_UPDATE",
+              balance: initialBalance / 1e9,
+            }));
+
+            const userTokens = await UserToken.find({ userId: ws.userId });
+            ws.send(JSON.stringify({
+              type: "USER_TOKENS",
+              tokens: userTokens
+            }));
+          } catch (e) {
+            ws.send(JSON.stringify({ type: "AUTH_ERROR", error: "User not found. Please login again." }));
+            ws.close();
+            return;
+          }
           break;
         }
 
