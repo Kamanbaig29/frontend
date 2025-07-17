@@ -94,10 +94,6 @@ const TokenListWithAge: React.FC = () => {
   //const [buyUntilReachedActive, setBuyUntilReachedActive] = useState<{ [mint: string]: boolean }>({});
   // Add a ref to track polling intervals per token
   const buyUntilReachedIntervals = useRef<{ [mint: string]: NodeJS.Timeout }>({});
-  // Add a ref to track timed out auto-buys
-  const timedOutAutoBuys = useRef<{ [mint: string]: boolean }>({});
-  // Add a ref to track pending auto-buy timeouts
-  const pendingAutoBuys = useRef<{ [mint: string]: NodeJS.Timeout }>({});
 
   // Preset state (copied from App.tsx ic)
   const {
@@ -470,23 +466,20 @@ const TokenListWithAge: React.FC = () => {
             ws
           ) {
             const preset = buyPresetsRef.current[activeBuyPresetRef.current] || {};
+            // --- NEW: Fetch whitelist/blacklist from backend at runtime ---
             (async () => {
               try {
-                // --- Buy Timeout filter: record start time ---
-                const filterStartTime = Date.now();
                 // 1. Fetch buyFilters from backend (new route, by userId)
                 const userId = localStorage.getItem('userId');
                 const buyFiltersRes = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/user-filters/buy-filters-by-user-id?userId=${userId}`);
                 const buyFiltersData = await buyFiltersRes.json();
                 const userBuyFilters = buyFiltersData.buyFilters || {};
-                const timeoutSec = Number(userBuyFilters.timeout) || 0;
-                const mint = data.token.mint;
-                // If this token has already timed out, do not try again
-                if (timedOutAutoBuys.current && timedOutAutoBuys.current[mint]) {
-                  setAutoBuySnackbar({ open: true, message: `Auto-buy skipped: Timeout already reached for this token.` });
-                  return;
-                }
-                // --- Filter: whitelist/blacklist ---
+                const maxMcap = Number(userBuyFilters.maxMcap) || 0;
+                const maxBuyers = Number(userBuyFilters.maxBuyers) || 0;
+                // Debug log for buyFilters
+                console.log('[AutoBuy DEBUG] buyFiltersData:', buyFiltersData, 'Parsed maxMcap:', maxMcap, 'Parsed maxBuyers:', maxBuyers);
+
+                // 2. Fetch whitelist/blacklist from backend
                 const token = localStorage.getItem("token");
                 const [whitelistRes, blacklistRes] = await Promise.all([
                   fetch(`${import.meta.env.VITE_API_BASE_URL}/api/user-filters/whitelist-devs`, {
@@ -501,11 +494,14 @@ const TokenListWithAge: React.FC = () => {
                 const whitelistDevs = whitelistData.whitelistDevs || [];
                 const blacklistDevs = blacklistData.blacklistDevs || [];
                 if (!autoBuyFilter(data.token, blacklistDevs, whitelistDevs, setAutoBuySnackbar)) return;
-                // --- Filter: metrics ---
+
+                // 3. Fetch metrics as before
                 const metricsRes = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/tokens/${data.token.mint}/metrics`);
                 const metrics = await metricsRes.json();
-                const maxMcap = Number(userBuyFilters.maxMcap) || 0;
-                const maxBuyers = Number(userBuyFilters.maxBuyers) || 0;
+
+                // 4. Comparison logic
+                console.log('AutoBuy Filter:', { marketCapUsd: metrics.marketCapUsd, maxMcap, buyersCount: metrics.buyersCount, maxBuyers });
+
                 if (maxMcap > 0 && metrics.marketCapUsd && metrics.marketCapUsd > maxMcap) {
                   setAutoBuySnackbar({ open: true, message: `Auto-buy blocked: Market Cap $${metrics.marketCapUsd} > filter $${maxMcap}` });
                   return;
@@ -514,7 +510,11 @@ const TokenListWithAge: React.FC = () => {
                   setAutoBuySnackbar({ open: true, message: `Auto-buy blocked: Buyers ${metrics.buyersCount} > filter ${maxBuyers}` });
                   return;
                 }
-                // --- Filter: maxTokenAge ---
+
+                // Allow buy
+                const amountLamports = Math.floor(Number(bufferAmountRef.current) * 1e9);
+                const toLamports = (val: string) => Math.floor(Number(val) * 1e9);
+                // After fetching userBuyFilters, add maxTokenAge logic before market cap/buyers check
                 const maxTokenAge = Number(userBuyFilters.maxTokenAge) || 0;
                 const noBribeMode = !!userBuyFilters.noBribeMode;
                 const tokenAgeSec = (Date.now() - data.token.creationTimestamp) / 1000;
@@ -522,16 +522,9 @@ const TokenListWithAge: React.FC = () => {
                   setAutoBuySnackbar({ open: true, message: `Auto-buy blocked: Token age ${Math.floor(tokenAgeSec)}s > filter ${maxTokenAge}s` });
                   return;
                 }
-                // --- Final check before sending transaction: buy timeout ---
-                if (timeoutSec > 0 && (Date.now() - filterStartTime) > timeoutSec * 1000) {
-                  setAutoBuySnackbar({ open: true, message: `Auto-buy filter timeout exceeded (${timeoutSec}s), transaction ignored.` });
-                  if (timedOutAutoBuys.current) timedOutAutoBuys.current[mint] = true;
-                  return;
-                }
-                // --- Allow buy ---
-                const amountLamports = Math.floor(Number(bufferAmountRef.current) * 1e9);
-                const toLamports = (val: string) => Math.floor(Number(val) * 1e9);
+                // In the buy transaction, use bribeAmount = 0 if noBribeMode is enabled
                 const bribeAmountToSend = noBribeMode ? 0 : toLamports(preset.bribeAmount);
+                console.log("Bribe Amount: ", bribeAmountToSend);
                 ws.send(JSON.stringify({
                   type: "MANUAL_BUY",
                   mintAddress: data.token.mint,
@@ -541,18 +534,6 @@ const TokenListWithAge: React.FC = () => {
                   bribeAmount: bribeAmountToSend,
                 }));
                 setLastAutoBuyMint(data.token.mint);
-                // --- Start buy timeout timer (post-send, as before) ---
-                if (timeoutSec > 0) {
-                  if (pendingAutoBuys.current && pendingAutoBuys.current[mint]) {
-                    clearTimeout(pendingAutoBuys.current[mint]);
-                  }
-                  if (pendingAutoBuys.current) {
-                    pendingAutoBuys.current[mint] = setTimeout(() => {
-                      if (timedOutAutoBuys.current) timedOutAutoBuys.current[mint] = true;
-                      setAutoBuySnackbar({ open: true, message: `Auto-buy timed out after ${timeoutSec}s for this token.` });
-                    }, timeoutSec * 1000);
-                  }
-                }
 
                 const buyUntilReached = !!userBuyFilters.buyUntilReached;
                 const buyUntilMarketCap = Number(userBuyFilters.buyUntilMarketCap) || 0;
@@ -860,7 +841,6 @@ const TokenListWithAge: React.FC = () => {
   useEffect(() => {
     return () => {
       Object.values(buyUntilReachedIntervals.current).forEach(clearInterval);
-      Object.values(pendingAutoBuys.current).forEach(clearTimeout);
     };
   }, []);
 
