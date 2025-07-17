@@ -10,7 +10,11 @@ const BuyFiltersSchema = new mongoose.Schema({
   whitelistDevs: { type: [String], default: ["true"] }, // now array, default ["true"]
   blacklistDevs: { type: [String], default: ["true"] }, // now array, default ["true"]
   autoSellCondition: { type: String, default: "" },
-  timeout: { type: Number, default: 0 }
+  timeout: { type: Number, default: 0 },
+  buyUntilReached: { type: Boolean, default: false },
+  buyUntilMarketCap: { type: Number, default: 0 },
+  buyUntilPrice: { type: Number, default: 0 },
+  buyUntilAmount: { type: Number, default: 0 }
 }, { _id: false });
 
 const SellFiltersSchema = new mongoose.Schema({

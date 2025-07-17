@@ -152,7 +152,11 @@ export const updateBuyFilter = async (req: Request, res: Response): Promise<void
       res.status(400).json({ message: 'Missing userId or field' });
       return;
     }
-    const allowedFields = ['maxMcap', 'maxBuyers'];
+    const allowedFields = [
+      'maxMcap', 'maxBuyers', 'maxTokenAge', 'antiRug', 'minLpLockTime',
+      'whitelistDevs', 'blacklistDevs', 'autoSellCondition', 'noBribeMode', 'timeout',
+      'buyUntilReached', 'buyUntilMarketCap', 'buyUntilPrice', 'buyUntilAmount'
+    ];
     if (!allowedFields.includes(field)) {
       res.status(400).json({ message: 'Invalid field' });
       return;

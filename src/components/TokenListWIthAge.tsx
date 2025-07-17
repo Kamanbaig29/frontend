@@ -90,6 +90,14 @@ const TokenListWithAge: React.FC = () => {
   const [buyFilters, setBuyFilters] = useState<{ [userId: string]: BuyFilters }>({});
   const [sellFilters, setSellFilters] = useState<{ [userId: string]: SellFilters }>({});
   const userId = localStorage.getItem('userId') || 'default';
+  // Add state to track per-token buyUntilReachedActive
+  //const [buyUntilReachedActive, setBuyUntilReachedActive] = useState<{ [mint: string]: boolean }>({});
+  // Add a ref to track polling intervals per token
+  const buyUntilReachedIntervals = useRef<{ [mint: string]: NodeJS.Timeout }>({});
+  // Add a ref to track timed out auto-buys
+  const timedOutAutoBuys = useRef<{ [mint: string]: boolean }>({});
+  // Add a ref to track pending auto-buy timeouts
+  const pendingAutoBuys = useRef<{ [mint: string]: NodeJS.Timeout }>({});
 
   // Preset state (copied from App.tsx ic)
   const {
@@ -462,20 +470,23 @@ const TokenListWithAge: React.FC = () => {
             ws
           ) {
             const preset = buyPresetsRef.current[activeBuyPresetRef.current] || {};
-            // --- NEW: Fetch whitelist/blacklist from backend at runtime ---
             (async () => {
               try {
+                // --- Buy Timeout filter: record start time ---
+                const filterStartTime = Date.now();
                 // 1. Fetch buyFilters from backend (new route, by userId)
                 const userId = localStorage.getItem('userId');
                 const buyFiltersRes = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/user-filters/buy-filters-by-user-id?userId=${userId}`);
                 const buyFiltersData = await buyFiltersRes.json();
                 const userBuyFilters = buyFiltersData.buyFilters || {};
-                const maxMcap = Number(userBuyFilters.maxMcap) || 0;
-                const maxBuyers = Number(userBuyFilters.maxBuyers) || 0;
-                // Debug log for buyFilters
-                console.log('[AutoBuy DEBUG] buyFiltersData:', buyFiltersData, 'Parsed maxMcap:', maxMcap, 'Parsed maxBuyers:', maxBuyers);
-
-                // 2. Fetch whitelist/blacklist from backend
+                const timeoutSec = Number(userBuyFilters.timeout) || 0;
+                const mint = data.token.mint;
+                // If this token has already timed out, do not try again
+                if (timedOutAutoBuys.current && timedOutAutoBuys.current[mint]) {
+                  setAutoBuySnackbar({ open: true, message: `Auto-buy skipped: Timeout already reached for this token.` });
+                  return;
+                }
+                // --- Filter: whitelist/blacklist ---
                 const token = localStorage.getItem("token");
                 const [whitelistRes, blacklistRes] = await Promise.all([
                   fetch(`${import.meta.env.VITE_API_BASE_URL}/api/user-filters/whitelist-devs`, {
@@ -490,14 +501,11 @@ const TokenListWithAge: React.FC = () => {
                 const whitelistDevs = whitelistData.whitelistDevs || [];
                 const blacklistDevs = blacklistData.blacklistDevs || [];
                 if (!autoBuyFilter(data.token, blacklistDevs, whitelistDevs, setAutoBuySnackbar)) return;
-
-                // 3. Fetch metrics as before
+                // --- Filter: metrics ---
                 const metricsRes = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/tokens/${data.token.mint}/metrics`);
                 const metrics = await metricsRes.json();
-
-                // 4. Comparison logic
-                console.log('AutoBuy Filter:', { marketCapUsd: metrics.marketCapUsd, maxMcap, buyersCount: metrics.buyersCount, maxBuyers });
-
+                const maxMcap = Number(userBuyFilters.maxMcap) || 0;
+                const maxBuyers = Number(userBuyFilters.maxBuyers) || 0;
                 if (maxMcap > 0 && metrics.marketCapUsd && metrics.marketCapUsd > maxMcap) {
                   setAutoBuySnackbar({ open: true, message: `Auto-buy blocked: Market Cap $${metrics.marketCapUsd} > filter $${maxMcap}` });
                   return;
@@ -506,19 +514,98 @@ const TokenListWithAge: React.FC = () => {
                   setAutoBuySnackbar({ open: true, message: `Auto-buy blocked: Buyers ${metrics.buyersCount} > filter ${maxBuyers}` });
                   return;
                 }
-
-                // Allow buy
+                // --- Filter: maxTokenAge ---
+                const maxTokenAge = Number(userBuyFilters.maxTokenAge) || 0;
+                const noBribeMode = !!userBuyFilters.noBribeMode;
+                const tokenAgeSec = (Date.now() - data.token.creationTimestamp) / 1000;
+                if (maxTokenAge > 0 && tokenAgeSec > maxTokenAge) {
+                  setAutoBuySnackbar({ open: true, message: `Auto-buy blocked: Token age ${Math.floor(tokenAgeSec)}s > filter ${maxTokenAge}s` });
+                  return;
+                }
+                // --- Final check before sending transaction: buy timeout ---
+                if (timeoutSec > 0 && (Date.now() - filterStartTime) > timeoutSec * 1000) {
+                  setAutoBuySnackbar({ open: true, message: `Auto-buy filter timeout exceeded (${timeoutSec}s), transaction ignored.` });
+                  if (timedOutAutoBuys.current) timedOutAutoBuys.current[mint] = true;
+                  return;
+                }
+                // --- Allow buy ---
                 const amountLamports = Math.floor(Number(bufferAmountRef.current) * 1e9);
                 const toLamports = (val: string) => Math.floor(Number(val) * 1e9);
+                const bribeAmountToSend = noBribeMode ? 0 : toLamports(preset.bribeAmount);
                 ws.send(JSON.stringify({
                   type: "MANUAL_BUY",
                   mintAddress: data.token.mint,
                   amount: amountLamports,
                   slippage: preset.slippage,
                   priorityFee: toLamports(preset.priorityFee),
-                  bribeAmount: toLamports(preset.bribeAmount),
+                  bribeAmount: bribeAmountToSend,
                 }));
                 setLastAutoBuyMint(data.token.mint);
+                // --- Start buy timeout timer (post-send, as before) ---
+                if (timeoutSec > 0) {
+                  if (pendingAutoBuys.current && pendingAutoBuys.current[mint]) {
+                    clearTimeout(pendingAutoBuys.current[mint]);
+                  }
+                  if (pendingAutoBuys.current) {
+                    pendingAutoBuys.current[mint] = setTimeout(() => {
+                      if (timedOutAutoBuys.current) timedOutAutoBuys.current[mint] = true;
+                      setAutoBuySnackbar({ open: true, message: `Auto-buy timed out after ${timeoutSec}s for this token.` });
+                    }, timeoutSec * 1000);
+                  }
+                }
+
+                const buyUntilReached = !!userBuyFilters.buyUntilReached;
+                const buyUntilMarketCap = Number(userBuyFilters.buyUntilMarketCap) || 0;
+                const buyUntilPrice = Number(userBuyFilters.buyUntilPrice) || 0;
+                const buyUntilAmount = Number(userBuyFilters.buyUntilAmount) || 0;
+
+                if (buyUntilReached) {
+                  // If an interval is already running for this token, do nothing
+                  if (buyUntilReachedIntervals.current[data.token.mint]) return;
+                  // Start polling for this token
+                  buyUntilReachedIntervals.current[data.token.mint] = setInterval(async () => {
+                    try {
+                      // Fetch latest metrics
+                      const metricsRes = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/tokens/${data.token.mint}/metrics`);
+                      const metrics = await metricsRes.json();
+                      const mcap = Number(metrics.marketCapUsd) || 0;
+                      const price = Number(metrics.currentPrice) || 0;
+                      const amount = Number(metrics.amount) || 0;
+                      console.log('[BuyUntilReached][Polling] Checking conditions:', {
+                        buyUntilMarketCap, mcap, buyUntilPrice, price, buyUntilAmount, amount
+                      });
+                      if ((buyUntilMarketCap > 0 && mcap >= buyUntilMarketCap) ||
+                          (buyUntilPrice > 0 && price >= buyUntilPrice) ||
+                          (buyUntilAmount > 0 && amount >= buyUntilAmount)) {
+                        console.log('[BuyUntilReached][Polling] Blocked: One or more on-chain values met/exceeded user limits.', {
+                          mcap, buyUntilMarketCap, price, buyUntilPrice, amount, buyUntilAmount
+                        });
+                        setAutoBuySnackbar({ open: true, message: 'Auto-buy blocked: Buy Until Reached condition met.' });
+                        clearInterval(buyUntilReachedIntervals.current[data.token.mint]);
+                        delete buyUntilReachedIntervals.current[data.token.mint];
+                        return;
+                      }
+                      // Else, trigger buy again
+                      console.log('[BuyUntilReached][Polling] Allowed: All on-chain values below user limits. Triggering buy again.');
+                      // Add 1.5s delay before sending buy
+                      await new Promise(res => setTimeout(res, 1500));
+                      // Reuse the same buy logic as before
+                      const amountLamports = Math.floor(Number(bufferAmountRef.current) * 1e9);
+                      const toLamports = (val: string) => Math.floor(Number(val) * 1e9);
+                      const bribeAmountToSend = noBribeMode ? 0 : toLamports(preset.bribeAmount);
+                      ws.send(JSON.stringify({
+                        type: "MANUAL_BUY",
+                        mintAddress: data.token.mint,
+                        amount: amountLamports,
+                        slippage: preset.slippage,
+                        priorityFee: toLamports(preset.priorityFee),
+                        bribeAmount: bribeAmountToSend,
+                      }));
+                    } catch (err) {
+                      console.error('[BuyUntilReached][Polling] Error during polling:', err);
+                    }
+                  }, 5000);
+                }
               } catch (err) {
                 setAutoBuySnackbar({ open: true, message: 'Auto-buy filter fetch failed.' });
               }
@@ -768,6 +855,14 @@ const TokenListWithAge: React.FC = () => {
   //   }
   //   return () => clearTimeout(timer);
   // }, [showTokenDetectedNotification, setShowTokenDetectedNotification]);
+
+  // Clean up intervals on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(buyUntilReachedIntervals.current).forEach(clearInterval);
+      Object.values(pendingAutoBuys.current).forEach(clearTimeout);
+    };
+  }, []);
 
   return (
     <>

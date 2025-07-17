@@ -17,6 +17,10 @@ export interface BuyFilters {
   noBribeMode?: boolean;
   timeout?: string;
   _whitelistDevsInput?: string; // Added for the new multi-select input
+  buyUntilReached?: boolean;
+  buyUntilMarketCap?: string;
+  buyUntilPrice?: string;
+  buyUntilAmount?: string;
 }
 
 export interface SellFilters {
@@ -331,7 +335,8 @@ const BuySellFilterPanel: React.FC<BuySellFilterPanelProps> = ({
 
   if (!open) return null;
 
-  const handleBuyFilterChange = async (field: 'maxMcap' | 'maxBuyers', value: string) => {
+  // Update handleBuyFilterChange to accept any field and value
+  const handleBuyFilterChange = async (field: string, value: any) => {
     onChangeBuyFilters({ ...buyFilters, [field]: value });
     try {
       const token = localStorage.getItem("token");
@@ -449,6 +454,8 @@ const BuySellFilterPanel: React.FC<BuySellFilterPanelProps> = ({
             {activeTab === "buy" && (
               <div style={{ width: "100%", transition: "all 0.4s" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  
+                  
                   <div style={{ display: "flex", alignItems: "center" }}>
                     <span style={{ minWidth: 180, color: "#fff" }}>
                       Max Market Cap:
@@ -478,7 +485,7 @@ const BuySellFilterPanel: React.FC<BuySellFilterPanelProps> = ({
                       Max Token Age (sec):
                       <InfoIcon tip="Only buy tokens created within this number of seconds. Useful for sniping new launches." />
                     </span>
-                    <input type="number" value={buyFilters.maxTokenAge || ""} onChange={e => onChangeBuyFilters({ ...buyFilters, maxTokenAge: e.target.value })} style={inputStyle} />
+                    <input type="number" value={buyFilters.maxTokenAge || ""} onChange={e => handleBuyFilterChange('maxTokenAge', e.target.value)} style={inputStyle} />
                   </div>
                   <div style={{ display: "flex", gap: 16 }}>
                     <div style={{ display: "flex", alignItems: "center" }}>
@@ -486,14 +493,14 @@ const BuySellFilterPanel: React.FC<BuySellFilterPanelProps> = ({
                         Anti-Rug:
                         <InfoIcon tip="Enable to skip tokens with suspicious liquidity or developer activity. Helps avoid scams and rug pulls." />
                       </span>
-                      <input type="checkbox" checked={!!buyFilters.antiRug} onChange={e => onChangeBuyFilters({ ...buyFilters, antiRug: e.target.checked })} />
+                      <input type="checkbox" checked={!!buyFilters.antiRug} onChange={e => handleBuyFilterChange('antiRug', e.target.checked)} />
                     </div>
                     <div style={{ display: "flex", alignItems: "center" }}>
                       <span style={{ minWidth: 180, color: "#fff" }}>
                         No Bribe Mode:
                         <InfoIcon tip="Enable to avoid sending bribes in buy transactions. Use if you want to avoid extra costs, but may miss early access." />
                       </span>
-                      <input type="checkbox" checked={!!buyFilters.noBribeMode} onChange={e => onChangeBuyFilters({ ...buyFilters, noBribeMode: e.target.checked })} />
+                      <input type="checkbox" checked={!!buyFilters.noBribeMode} onChange={e => handleBuyFilterChange('noBribeMode', e.target.checked)} />
                     </div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center" }}>
@@ -501,7 +508,7 @@ const BuySellFilterPanel: React.FC<BuySellFilterPanelProps> = ({
                       LP Lock Time (min):
                       <InfoIcon tip="Only buy tokens whose liquidity pool is locked for at least this many minutes. Reduces risk of rug pulls." />
                     </span>
-                    <input type="number" value={buyFilters.minLpLockTime || ""} onChange={e => onChangeBuyFilters({ ...buyFilters, minLpLockTime: e.target.value })} style={inputStyle} />
+                    <input type="number" value={buyFilters.minLpLockTime || ""} onChange={e => handleBuyFilterChange('minLpLockTime', e.target.value)} style={inputStyle} />
                   </div>
                   <div style={{ display: "flex", alignItems: "center" }}>
                     <span style={{ minWidth: 180, color: "#fff" }}>
@@ -812,19 +819,58 @@ const BuySellFilterPanel: React.FC<BuySellFilterPanelProps> = ({
                       )}
                     </div>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center" }}>
-                    <span style={{ minWidth: 180, color: "#fff" }}>
-                      Buy Until Reached:
-                      <InfoIcon tip="Keep buying until a take profit or stop loss condition is met. Useful for automated strategies." />
+                  <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}>
+                    <input
+                      type="checkbox"
+                      checked={!!buyFilters.buyUntilReached}
+                      onChange={e => handleBuyFilterChange('buyUntilReached', e.target.checked)}
+                      style={{ marginRight: 8 }}
+                    />
+                    <span style={{ color: '#fff', fontWeight: 600, fontSize: 16 }}>
+                      Buy Until Reached
+                      <InfoIcon tip="Enable to keep buying until one of the below conditions is met." />
                     </span>
-                    <input type="text" value={buyFilters.autoSellCondition || ""} onChange={e => onChangeBuyFilters({ ...buyFilters, autoSellCondition: e.target.value })} style={inputStyle} />
                   </div>
+                  {buyFilters.buyUntilReached && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+                      {/* Market Cap */}
+                      <div style={{ display: 'flex', flexDirection: 'column', marginBottom: 8 }}>
+                        <span style={{ color: '#fff', fontSize: 14 }}>Market Cap</span>
+                        <input
+                          type="number"
+                          value={buyFilters.buyUntilMarketCap || ""}
+                          onChange={e => handleBuyFilterChange('buyUntilMarketCap', e.target.value)}
+                          style={inputStyle}
+                        />
+                      </div>
+                      {/* Price */}
+                      <div style={{ display: 'flex', flexDirection: 'column', marginBottom: 8 }}>
+                        <span style={{ color: '#fff', fontSize: 14 }}>Price</span>
+                        <input
+                          type="number"
+                          value={buyFilters.buyUntilPrice || ""}
+                          onChange={e => handleBuyFilterChange('buyUntilPrice', e.target.value)}
+                          style={inputStyle}
+                        />
+                      </div>
+                      {/* Amount */}
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ color: '#fff', fontSize: 14 }}>Amount</span>
+                        <input
+                          type="number"
+                          value={buyFilters.buyUntilAmount || ""}
+                          onChange={e => handleBuyFilterChange('buyUntilAmount', e.target.value)}
+                          style={inputStyle}
+                        />
+                      </div>
+                    </div>
+                  )}
                   <div style={{ display: "flex", alignItems: "center" }}>
                     <span style={{ minWidth: 180, color: "#fff" }}>
                       Buy Timeout (sec):
                       <InfoIcon tip="Cancel the buy transaction if it is not confirmed within this number of seconds. Prevents stuck or slow buys." />
                     </span>
-                    <input type="number" value={buyFilters.timeout || ""} onChange={e => onChangeBuyFilters({ ...buyFilters, timeout: e.target.value })} style={inputStyle} />
+                    <input type="number" value={buyFilters.timeout || ""} onChange={e => handleBuyFilterChange('timeout', e.target.value)} style={inputStyle} />
                   </div>
                 </div>
               </div>
