@@ -31,6 +31,7 @@ export async function addOrUpdateTokenFromBuy({
   let creationTimestamp = Date.now();
   let currentPrice = undefined;
   let platform = 'memehome';
+  let creator = undefined;
 
   // Try to get from MemeHomeToken model first
   const memeToken = await MemeHomeToken.findOne({ mint });
@@ -43,6 +44,7 @@ export async function addOrUpdateTokenFromBuy({
     creationTimestamp = memeToken.creationTimestamp;
     //currentPrice = memeToken.currentPrice;
     platform = 'memehome';
+    creator = memeToken.creator;
   } else {
     // Try SPL token meta from wallet
     try {
@@ -100,6 +102,7 @@ export async function addOrUpdateTokenFromBuy({
           imageUrl: imageUrl,
           metadataUri: metadataUri,
           decimals: decimals,
+          creator: creator,
           creationTimestamp: creationTimestamp,
           currentPrice: currentPrice,
           lastUpdated: Date.now(),

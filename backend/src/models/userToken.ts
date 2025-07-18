@@ -9,6 +9,7 @@ export interface IUserToken extends Document {
   imageUrl?: string;
   metadataUri?: string;
   decimals: number;
+  creator?: string;
   creationTimestamp: number;
   currentPrice?: number;
   totalVolume?: number;
@@ -30,6 +31,7 @@ const UserTokenSchema: Schema = new Schema({
   imageUrl: { type: String },
   metadataUri: { type: String },
   decimals: { type: Number, required: true, default: 9 },
+  creator: { type: String },
   creationTimestamp: { type: Number, required: true },
   currentPrice: { type: Number },
   totalVolume: { type: Number, default: 0 },

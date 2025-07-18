@@ -7,6 +7,12 @@ const AutoSellSchema = new mongoose.Schema({
   buyPrice: { type: Number, required: true },
   takeProfit: { type: Number, required: false }, // e.g. 2.5 (SOL) or percent
   stopLoss: { type: Number, required: false },   // e.g. 10 (%)
+  trailingStopLossPercent: { type: Number, required: false }, // e.g. 5 (%)
+  trailingStopLossEnabled: { type: Boolean, default: false },
+  timeBasedSellSec: { type: Number, required: false }, // e.g. 60 (seconds)
+  timeBasedSellEnabled: { type: Boolean, default: false },
+  waitForBuyersBeforeSell: { type: Number, required: false }, // e.g. 5 (buyers)
+  waitForBuyersBeforeSellEnabled: { type: Boolean, default: false },
   autoSellPercent: { type: Number, required: true }, // e.g. 100 for full, 50 for half
   autoSellEnabled: { type: Boolean, default: false },
   lastSellTime: { type: Date },

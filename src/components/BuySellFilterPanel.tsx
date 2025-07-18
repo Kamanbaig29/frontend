@@ -880,20 +880,6 @@ const BuySellFilterPanel: React.FC<BuySellFilterPanelProps> = ({
                 <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                   <div style={{ display: "flex", alignItems: "center" }}>
                     <span style={{ minWidth: 180, color: "#fff" }}>
-                      Trailing Stop Loss (%):
-                      <InfoIcon tip="Sell if the price drops by this percent from its peak. Helps lock in profits during a run-up." />
-                    </span>
-                    <input type="number" value={sellFilters.trailingStopPercent || ""} onChange={e => onChangeSellFilters({ ...sellFilters, trailingStopPercent: e.target.value })} style={inputStyle} />
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center" }}>
-                    <span style={{ minWidth: 180, color: "#fff" }}>
-                      Time-Based Sell (sec):
-                      <InfoIcon tip="Sell after holding the token for this many seconds, regardless of price. Useful for time-based exits." />
-                    </span>
-                    <input type="number" value={sellFilters.timeoutSellAfterSec || ""} onChange={e => onChangeSellFilters({ ...sellFilters, timeoutSellAfterSec: e.target.value })} style={inputStyle} />
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center" }}>
-                    <span style={{ minWidth: 180, color: "#fff" }}>
                       Min Liquidity (SOL):
                       <InfoIcon tip="Only sell if the token’s liquidity pool is above this value. Helps avoid selling into low liquidity." />
                     </span>
@@ -914,13 +900,6 @@ const BuySellFilterPanel: React.FC<BuySellFilterPanelProps> = ({
                       </span>
                       <input type="checkbox" checked={!!sellFilters.loopSellLogic} onChange={e => onChangeSellFilters({ ...sellFilters, loopSellLogic: e.target.checked })} />
                     </div>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center" }}>
-                    <span style={{ minWidth: 180, color: "#fff" }}>
-                      Wait for Buyers Before Sell:
-                      <InfoIcon tip="Only sell if there are at least this many buyers in the market. Helps avoid selling into low demand." />
-                    </span>
-                    <input type="number" value={sellFilters.waitForBuyersBeforeSell || ""} onChange={e => onChangeSellFilters({ ...sellFilters, waitForBuyersBeforeSell: e.target.value })} style={inputStyle} />
                   </div>
                   <div style={{ display: "flex", alignItems: "center" }}>
                     <span style={{ minWidth: 180, color: "#fff" }}>

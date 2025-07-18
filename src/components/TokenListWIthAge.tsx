@@ -30,6 +30,12 @@ type Token = {
   devAddress?: string; // Added for whitelist/blacklist
   owner?: string; // Added for owner
   creator?: string;
+  trailingStopLossPercent?: number; // Added for backend sync
+  trailingStopLossEnabled?: boolean; // Added for backend sync
+  timeBasedSellSec?: number; // Added for backend sync
+  timeBasedSellEnabled?: boolean; // Added for backend sync
+  waitForBuyersBeforeSell?: number; // Added for backend sync
+  waitForBuyersBeforeSellEnabled?: boolean; // Added for backend sync
 };
 
 function getAgeString(ageMs: number) {
@@ -94,6 +100,15 @@ const TokenListWithAge: React.FC = () => {
   //const [buyUntilReachedActive, setBuyUntilReachedActive] = useState<{ [mint: string]: boolean }>({});
   // Add a ref to track polling intervals per token
   const buyUntilReachedIntervals = useRef<{ [mint: string]: NodeJS.Timeout }>({});
+  // Add state for trailing stop loss and age per token
+  const [trailingStopLossState, setTrailingStopLossState] = useState<{ [mint: string]: string }>({});
+  const [trailingStopLossEnabledState, setTrailingStopLossEnabledState] = useState<{ [mint: string]: boolean }>({});
+  const [timeBasedSellState, setTimeBasedSellState] = useState<{ [mint: string]: string }>({});
+  const [timeBasedSellEnabledState, setTimeBasedSellEnabledState] = useState<{ [mint: string]: boolean }>({});
+  const [ageEnabledState, setAgeEnabledState] = useState<{ [mint: string]: boolean }>({});
+  const [ageValueState, setAgeValueState] = useState<{ [mint: string]: string }>({});
+  const [waitForBuyersState, setWaitForBuyersState] = useState<{ [mint: string]: string }>({});
+  const [waitForBuyersEnabledState, setWaitForBuyersEnabledState] = useState<{ [mint: string]: boolean }>({});
 
   // Preset state (copied from App.tsx ic)
   const {
@@ -343,6 +358,21 @@ const TokenListWithAge: React.FC = () => {
         ...prev,
         [token.mint]: token.autoSellPercent !== undefined ? String(token.autoSellPercent) : ''
       }));
+      // Ensure trailingStopLossState has a value
+      setTrailingStopLossState(prev => ({
+        ...prev,
+        [token.mint]: prev[token.mint] !== undefined && prev[token.mint] !== '' ? prev[token.mint] : '10'
+      }));
+      // Ensure timeBasedSellState has a value
+      setTimeBasedSellState(prev => ({
+        ...prev,
+        [token.mint]: prev[token.mint] !== undefined && prev[token.mint] !== '' ? prev[token.mint] : '100'
+      }));
+      // Ensure waitForBuyersState has a value
+      setWaitForBuyersState(prev => ({
+        ...prev,
+        [token.mint]: prev[token.mint] !== undefined && prev[token.mint] !== '' ? prev[token.mint] : '5'
+      }));
       const preset = sellPresets[activeSellPreset] || {};
       const payload = {
         userId,
@@ -358,6 +388,20 @@ const TokenListWithAge: React.FC = () => {
         bribeAmount: preset.bribeAmount || 0,
         tokenName: token.name,
         tokenSymbol: token.symbol,
+        trailingStopLossPercent: trailingStopLossState[token.mint] !== undefined && trailingStopLossState[token.mint] !== '' 
+          ? Number(trailingStopLossState[token.mint]) 
+          : 10,
+        trailingStopLossEnabled: trailingStopLossEnabledState[token.mint] !== undefined 
+          ? trailingStopLossEnabledState[token.mint] 
+          : false,
+        timeBasedSellSec: timeBasedSellState[token.mint] !== undefined && timeBasedSellState[token.mint] !== ''
+          ? Number(timeBasedSellState[token.mint])
+          : 100,
+        timeBasedSellEnabled: timeBasedSellEnabledState[token.mint] !== undefined 
+          ? timeBasedSellEnabledState[token.mint] 
+          : false,
+        waitForBuyersBeforeSell: Number(waitForBuyersState[token.mint]) || 5,
+        waitForBuyersBeforeSellEnabled: waitForBuyersEnabledState[token.mint] !== undefined ? waitForBuyersEnabledState[token.mint] : false,
       };
       console.log('AutoSell ON payload:', payload, 'walletAddress:', walletAddress);
       const API_URL = import.meta.env.VITE_API_BASE_URL;
@@ -465,6 +509,9 @@ const TokenListWithAge: React.FC = () => {
             Number(bufferAmountRef.current) > 0 &&
             ws
           ) {
+            // --- BUY TIMEOUT LOGIC START ---
+            const startTime = Date.now();
+            // --- END BUY TIMEOUT LOGIC START ---
             const preset = buyPresetsRef.current[activeBuyPresetRef.current] || {};
             // --- NEW: Fetch whitelist/blacklist from backend at runtime ---
             (async () => {
@@ -522,6 +569,19 @@ const TokenListWithAge: React.FC = () => {
                   setAutoBuySnackbar({ open: true, message: `Auto-buy blocked: Token age ${Math.floor(tokenAgeSec)}s > filter ${maxTokenAge}s` });
                   return;
                 }
+                // --- BUY TIMEOUT LOGIC CHECK ---
+                const timeout = Number(userBuyFilters.timeout) || 0;
+                if (timeout > 0) {
+                  const elapsedSec = (Date.now() - startTime) / 1000;
+                  console.log("TOTAL TIME: ", elapsedSec);
+                  if (elapsedSec > timeout) {
+                    setAutoBuySnackbar({ open: true, message: `Auto-buy skipped: Buy timeout exceeded (${elapsedSec.toFixed(2)}s > ${timeout}s)` });
+                    return;
+                  }
+                }
+
+                console.log("TIME OUT: ", timeout);
+                // --- END BUY TIMEOUT LOGIC CHECK ---
                 // In the buy transaction, use bribeAmount = 0 if noBribeMode is enabled
                 const bribeAmountToSend = noBribeMode ? 0 : toLamports(preset.bribeAmount);
                 console.log("Bribe Amount: ", bribeAmountToSend);
@@ -667,18 +727,36 @@ const TokenListWithAge: React.FC = () => {
     const newTakeProfitState: { [key: string]: string } = {};
     const newStopLossState: { [key: string]: string } = {};
     const newAutoSellPercentState: { [key: string]: string } = {};
+    const newTrailingStopLossState: { [key: string]: string } = {};
+    const newTrailingStopLossEnabledState: { [key: string]: boolean } = {};
+    const newTimeBasedSellState: { [key: string]: string } = {};
+    const newTimeBasedSellEnabledState: { [key: string]: boolean } = {};
+    const newWaitForBuyersState: { [key: string]: string } = {};
+    const newWaitForBuyersEnabledState: { [key: string]: boolean } = {};
 
     userTokens.forEach(token => {
       newAutoSellEnabledState[token.mint] = !!token.autoSellEnabled;
       newTakeProfitState[token.mint] = token.takeProfit !== undefined ? String(token.takeProfit) : '';
       newStopLossState[token.mint] = token.stopLoss !== undefined ? String(token.stopLoss) : '';
       newAutoSellPercentState[token.mint] = token.autoSellPercent !== undefined ? String(token.autoSellPercent) : '';
+      newTrailingStopLossState[token.mint] = token.trailingStopLossPercent !== undefined ? String(token.trailingStopLossPercent) : '';
+      newTrailingStopLossEnabledState[token.mint] = !!token.trailingStopLossEnabled;
+      newTimeBasedSellState[token.mint] = token.timeBasedSellSec !== undefined ? String(token.timeBasedSellSec) : '';
+      newTimeBasedSellEnabledState[token.mint] = !!token.timeBasedSellEnabled;
+      newWaitForBuyersState[token.mint] = token.waitForBuyersBeforeSell !== undefined ? String(token.waitForBuyersBeforeSell) : '';
+      newWaitForBuyersEnabledState[token.mint] = !!token.waitForBuyersBeforeSellEnabled;
     });
 
     setAutoSellEnabledState(newAutoSellEnabledState);
     setTakeProfitState(newTakeProfitState);
     setStopLossState(newStopLossState);
     setAutoSellPercentState(newAutoSellPercentState);
+    setTrailingStopLossState(newTrailingStopLossState);
+    setTrailingStopLossEnabledState(newTrailingStopLossEnabledState);
+    setTimeBasedSellState(newTimeBasedSellState);
+    setTimeBasedSellEnabledState(newTimeBasedSellEnabledState);
+    setWaitForBuyersState(newWaitForBuyersState);
+    setWaitForBuyersEnabledState(newWaitForBuyersEnabledState);
   }, [userTokens]);
 
   useEffect(() => {
@@ -703,6 +781,10 @@ const TokenListWithAge: React.FC = () => {
         takeProfit: config?.takeProfit,
         stopLoss: config?.stopLoss,
         autoSellPercent: config?.autoSellPercent,
+        trailingStopLossPercent: config?.trailingStopLossPercent,
+        trailingStopLossEnabled: config?.trailingStopLossEnabled,
+        timeBasedSellSec: config?.timeBasedSellSec,
+        timeBasedSellEnabled: config?.timeBasedSellEnabled,
         // ...baaki fields agar chahiye
       };
     });
@@ -728,6 +810,20 @@ const TokenListWithAge: React.FC = () => {
           bribeAmount: preset.bribeAmount || 0,
           tokenName: token.name,
           tokenSymbol: token.symbol,
+          trailingStopLossPercent: trailingStopLossState[token.mint] !== undefined && trailingStopLossState[token.mint] !== '' 
+            ? Number(trailingStopLossState[token.mint]) 
+            : 10,
+          trailingStopLossEnabled: trailingStopLossEnabledState[token.mint] !== undefined 
+            ? trailingStopLossEnabledState[token.mint] 
+            : false,
+          timeBasedSellSec: timeBasedSellState[token.mint] !== undefined && timeBasedSellState[token.mint] !== ''
+            ? Number(timeBasedSellState[token.mint])
+            : 100,
+          timeBasedSellEnabled: timeBasedSellEnabledState[token.mint] !== undefined 
+            ? timeBasedSellEnabledState[token.mint] 
+            : false,
+          waitForBuyersBeforeSell: Number(waitForBuyersState[token.mint]) || 5,
+          waitForBuyersBeforeSellEnabled: waitForBuyersEnabledState[token.mint] !== undefined ? waitForBuyersEnabledState[token.mint] : false,
         };
         // === YAHAN DEBUG ENTRY DALEIN ===
         console.log('Preset change POST:', payload, 'preset:', preset);
@@ -843,6 +939,236 @@ const TokenListWithAge: React.FC = () => {
       Object.values(buyUntilReachedIntervals.current).forEach(clearInterval);
     };
   }, []);
+
+  const handleTrailingStopLossChange = (mint: string, value: string) => {
+    setTrailingStopLossState(prev => ({
+      ...prev,
+      [mint]: value
+    }));
+
+    if (autoSellEnabledState[mint]) {
+      if (!walletAddress) {
+        alert("Wallet address not loaded. Please refresh or re-login.");
+        return;
+      }
+      const preset = sellPresets[activeSellPreset] || {};
+      const payload = {
+        userId,
+        walletAddress,
+        mint,
+        buyPrice: userTokens.find(t => t.mint === mint)?.buyAmount || 0,
+        takeProfit: Number(takeProfitState[mint]) || undefined,
+        stopLoss: Number(stopLossState[mint]) || undefined,
+        autoSellPercent: Number(autoSellPercentState[mint]) || 100,
+        autoSellEnabled: true,
+        slippage: preset.slippage || 5,
+        priorityFee: preset.priorityFee || 0.001,
+        bribeAmount: preset.bribeAmount || 0,
+        tokenName: userTokens.find(t => t.mint)?.name,
+        tokenSymbol: userTokens.find(t => t.mint)?.symbol,
+        trailingStopLossPercent: Number(value) || 10,
+        trailingStopLossEnabled: trailingStopLossEnabledState[mint] !== undefined
+          ? trailingStopLossEnabledState[mint]
+          : false,
+      };
+      const API_URL = import.meta.env.VITE_API_BASE_URL;
+      fetch(`${API_URL}/api/auto-sell/upsert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    }
+  };
+
+  const handleTrailingStopLossEnabledChange = (mint: string, checked: boolean) => {
+    setTrailingStopLossEnabledState(prev => ({
+      ...prev,
+      [mint]: checked
+    }));
+
+    if (autoSellEnabledState[mint]) {
+      if (!walletAddress) {
+        alert("Wallet address not loaded. Please refresh or re-login.");
+        return;
+      }
+      const preset = sellPresets[activeSellPreset] || {};
+      const payload = {
+        userId,
+        walletAddress,
+        mint,
+        buyPrice: userTokens.find(t => t.mint === mint)?.buyAmount || 0,
+        takeProfit: Number(takeProfitState[mint]) || undefined,
+        stopLoss: Number(stopLossState[mint]) || undefined,
+        autoSellPercent: Number(autoSellPercentState[mint]) || 100,
+        autoSellEnabled: true,
+        slippage: preset.slippage || 5,
+        priorityFee: preset.priorityFee || 0.001,
+        bribeAmount: preset.bribeAmount || 0,
+        tokenName: userTokens.find(t => t.mint)?.name,
+        tokenSymbol: userTokens.find(t => t.mint)?.symbol,
+        trailingStopLossPercent: Number(trailingStopLossState[mint]) || 10,
+        trailingStopLossEnabled: checked,
+      };
+      const API_URL = import.meta.env.VITE_API_BASE_URL;
+      fetch(`${API_URL}/api/auto-sell/upsert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    }
+  };
+
+  const handleTimeBasedSellChange = (mint: string, value: string) => {
+    setTimeBasedSellState(prev => ({ ...prev, [mint]: value }));
+    if (autoSellEnabledState[mint]) {
+      if (!walletAddress) {
+        alert("Wallet address not loaded. Please refresh or re-login.");
+        return;
+      }
+      const preset = sellPresets[activeSellPreset] || {};
+      const payload = {
+        userId,
+        walletAddress,
+        mint,
+        buyPrice: userTokens.find(t => t.mint === mint)?.buyAmount || 0,
+        takeProfit: Number(takeProfitState[mint]) || undefined,
+        stopLoss: Number(stopLossState[mint]) || undefined,
+        autoSellPercent: Number(autoSellPercentState[mint]) || 100,
+        autoSellEnabled: true,
+        slippage: preset.slippage || 5,
+        priorityFee: preset.priorityFee || 0.001,
+        bribeAmount: preset.bribeAmount || 0,
+        tokenName: userTokens.find(t => t.mint)?.name,
+        tokenSymbol: userTokens.find(t => t.mint)?.symbol,
+        trailingStopLossPercent: Number(trailingStopLossState[mint]) || 10,
+        trailingStopLossEnabled: trailingStopLossEnabledState[mint] !== undefined ? trailingStopLossEnabledState[mint] : false,
+        timeBasedSellSec: Number(value) || 0,
+        timeBasedSellEnabled: timeBasedSellEnabledState[mint] !== undefined ? timeBasedSellEnabledState[mint] : false,
+        waitForBuyersBeforeSell: Number(waitForBuyersState[mint]) || 5,
+        waitForBuyersBeforeSellEnabled: waitForBuyersEnabledState[mint] !== undefined ? waitForBuyersEnabledState[mint] : false,
+      };
+      const API_URL = import.meta.env.VITE_API_BASE_URL;
+      fetch(`${API_URL}/api/auto-sell/upsert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    }
+  };
+
+  const handleTimeBasedSellEnabledChange = (mint: string, checked: boolean) => {
+    setTimeBasedSellEnabledState(prev => ({ ...prev, [mint]: checked }));
+    if (autoSellEnabledState[mint]) {
+      if (!walletAddress) {
+        alert("Wallet address not loaded. Please refresh or re-login.");
+        return;
+      }
+      const preset = sellPresets[activeSellPreset] || {};
+      const payload = {
+        userId,
+        walletAddress,
+        mint,
+        buyPrice: userTokens.find(t => t.mint === mint)?.buyAmount || 0,
+        takeProfit: Number(takeProfitState[mint]) || undefined,
+        stopLoss: Number(stopLossState[mint]) || undefined,
+        autoSellPercent: Number(autoSellPercentState[mint]) || 100,
+        autoSellEnabled: true,
+        slippage: preset.slippage || 5,
+        priorityFee: preset.priorityFee || 0.001,
+        bribeAmount: preset.bribeAmount || 0,
+        tokenName: userTokens.find(t => t.mint)?.name,
+        tokenSymbol: userTokens.find(t => t.mint)?.symbol,
+        trailingStopLossPercent: Number(trailingStopLossState[mint]) || 10,
+        trailingStopLossEnabled: trailingStopLossEnabledState[mint] !== undefined ? trailingStopLossEnabledState[mint] : false,
+        timeBasedSellSec: Number(timeBasedSellState[mint]) || 0,
+        timeBasedSellEnabled: checked,
+        waitForBuyersBeforeSell: Number(waitForBuyersState[mint]) || 5,
+        waitForBuyersBeforeSellEnabled: checked,
+      };
+      const API_URL = import.meta.env.VITE_API_BASE_URL;
+      fetch(`${API_URL}/api/auto-sell/upsert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    }
+  };
+
+  const handleWaitForBuyersChange = (mint: string, value: string) => {
+    setWaitForBuyersState(prev => ({ ...prev, [mint]: value }));
+    if (autoSellEnabledState[mint]) {
+      if (!walletAddress) {
+        alert("Wallet address not loaded. Please refresh or re-login.");
+        return;
+      }
+      const preset = sellPresets[activeSellPreset] || {};
+      const payload = {
+        userId,
+        walletAddress,
+        mint,
+        buyPrice: userTokens.find(t => t.mint === mint)?.buyAmount || 0,
+        takeProfit: Number(takeProfitState[mint]) || undefined,
+        stopLoss: Number(stopLossState[mint]) || undefined,
+        autoSellPercent: Number(autoSellPercentState[mint]) || 100,
+        autoSellEnabled: true,
+        slippage: preset.slippage || 5,
+        priorityFee: preset.priorityFee || 0.001,
+        bribeAmount: preset.bribeAmount || 0,
+        tokenName: userTokens.find(t => t.mint)?.name,
+        tokenSymbol: userTokens.find(t => t.mint)?.symbol,
+        trailingStopLossPercent: Number(trailingStopLossState[mint]) || 10,
+        trailingStopLossEnabled: trailingStopLossEnabledState[mint] !== undefined ? trailingStopLossEnabledState[mint] : false,
+        timeBasedSellSec: Number(timeBasedSellState[mint]) || 0,
+        timeBasedSellEnabled: timeBasedSellEnabledState[mint] !== undefined ? timeBasedSellEnabledState[mint] : false,
+        waitForBuyersBeforeSell: Number(value) || 5,
+        waitForBuyersBeforeSellEnabled: waitForBuyersEnabledState[mint] !== undefined ? waitForBuyersEnabledState[mint] : false,
+      };
+      const API_URL = import.meta.env.VITE_API_BASE_URL;
+      fetch(`${API_URL}/api/auto-sell/upsert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    }
+  };
+
+  const handleWaitForBuyersEnabledChange = (mint: string, checked: boolean) => {
+    setWaitForBuyersEnabledState(prev => ({ ...prev, [mint]: checked }));
+    if (autoSellEnabledState[mint]) {
+      if (!walletAddress) {
+        alert("Wallet address not loaded. Please refresh or re-login.");
+        return;
+      }
+      const preset = sellPresets[activeSellPreset] || {};
+      const payload = {
+        userId,
+        walletAddress,
+        mint,
+        buyPrice: userTokens.find(t => t.mint === mint)?.buyAmount || 0,
+        takeProfit: Number(takeProfitState[mint]) || undefined,
+        stopLoss: Number(stopLossState[mint]) || undefined,
+        autoSellPercent: Number(autoSellPercentState[mint]) || 100,
+        autoSellEnabled: true,
+        slippage: preset.slippage || 5,
+        priorityFee: preset.priorityFee || 0.001,
+        bribeAmount: preset.bribeAmount || 0,
+        tokenName: userTokens.find(t => t.mint)?.name,
+        tokenSymbol: userTokens.find(t => t.mint)?.symbol,
+        trailingStopLossPercent: Number(trailingStopLossState[mint]) || 10,
+        trailingStopLossEnabled: trailingStopLossEnabledState[mint] !== undefined ? trailingStopLossEnabledState[mint] : false,
+        timeBasedSellSec: Number(timeBasedSellState[mint]) || 0,
+        timeBasedSellEnabled: timeBasedSellEnabledState[mint] !== undefined ? timeBasedSellEnabledState[mint] : false,
+        waitForBuyersBeforeSell: Number(waitForBuyersState[mint]) || 5,
+        waitForBuyersBeforeSellEnabled: checked,
+      };
+      const API_URL = import.meta.env.VITE_API_BASE_URL;
+      fetch(`${API_URL}/api/auto-sell/upsert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    }
+  };
 
   return (
     <>
@@ -1107,7 +1433,7 @@ const TokenListWithAge: React.FC = () => {
                       textAlign: 'center', 
                       wordBreak: 'break-all'
                     }}>
-                      Creator: {token.creator || '-'}
+                      Creator: {token.creator || token.devAddress || '-'}
                     </div>
 
                     <div style={{ 
@@ -1267,8 +1593,8 @@ const TokenListWithAge: React.FC = () => {
                           minWidth: 0,
                           height: 36,
                           background: '#23242a',
-                          color: 'white',
-                          border: '1px solid #FFD700',
+                          border: (!autoSellEnabledState[token.mint] || !!timeBasedSellEnabledState[token.mint]) ? '1px solid #555' : '1px solid #FFD700',
+                          color: (!autoSellEnabledState[token.mint] || !!timeBasedSellEnabledState[token.mint]) ? '#888' : 'white',
                           borderRadius: 6,
                           padding: '0 12px',
                           fontWeight: 500,
@@ -1276,7 +1602,7 @@ const TokenListWithAge: React.FC = () => {
                           outline: 'none',
                           boxSizing: 'border-box',
                         }}
-                        disabled={!autoSellEnabledState[token.mint]}
+                        disabled={!autoSellEnabledState[token.mint] || !!timeBasedSellEnabledState[token.mint]}
                       />
                       <input
                         type="number"
@@ -1288,16 +1614,16 @@ const TokenListWithAge: React.FC = () => {
                           minWidth: 0,
                           height: 36,
                           background: '#23242a',
-                          color: 'white',
-                          border: '1px solid #ff6b6b',
+                          border: (!autoSellEnabledState[token.mint] || !!trailingStopLossEnabledState[token.mint] || !!timeBasedSellEnabledState[token.mint]) ? '1px solid #555' : '1px solid #ff6b6b',
                           borderRadius: 6,
                           padding: '0 12px',
                           fontWeight: 500,
                           fontSize: 15,
                           outline: 'none',
                           boxSizing: 'border-box',
+                          color: (!autoSellEnabledState[token.mint] || !!trailingStopLossEnabledState[token.mint] || !!timeBasedSellEnabledState[token.mint]) ? '#888' : 'white',
                         }}
-                        disabled={!autoSellEnabledState[token.mint]}
+                        disabled={!autoSellEnabledState[token.mint] || !!trailingStopLossEnabledState[token.mint] || !!timeBasedSellEnabledState[token.mint]}
                       />
                       <input
                         type="number"
@@ -1309,8 +1635,8 @@ const TokenListWithAge: React.FC = () => {
                           minWidth: 0,
                           height: 36,
                           background: '#23242a',
-                          color: 'white',
-                          border: '1px solid #00BFFF',
+                          border: !autoSellEnabledState[token.mint] ? '1px solid #555' : '1px solid #00BFFF',
+                          color: !autoSellEnabledState[token.mint] ? '#888' : 'white',
                           borderRadius: 6,
                           padding: '0 12px',
                           fontWeight: 500,
@@ -1322,6 +1648,182 @@ const TokenListWithAge: React.FC = () => {
                       />
                     </div>
                     {/* --- END NEW --- */}
+
+                    {/* --- Stop Trailing Loss % and Age --- */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10 }}>
+                      <TextField
+                        label="Trailing Stop Loss (%)"
+                        type="number"
+                        variant="outlined"
+                        size="small"
+                        sx={{
+                          flex: 1,
+                          '& .MuiOutlinedInput-root': {
+                            '& fieldset': {
+                              borderColor: '#ff6b6b',
+                            },
+                            '&:hover fieldset': {
+                              borderColor: '#888',
+                            },
+                            '&.Mui-focused fieldset': {
+                              borderColor: '#ff6b6b',
+                            },
+                          },
+                          '& .MuiInputBase-input': {
+                            color: 'white',
+                            background: '#23242a',
+                          },
+                          '& .MuiInputLabel-root': {
+                            color: '#888',
+                          },
+                          '& .MuiInputLabel-root.Mui-focused': {
+                            color: '#ff6b6b',
+                          },
+                          '& .MuiOutlinedInput-root.Mui-disabled .MuiInputBase-input': {
+                            color: '#888 !important',
+                            WebkitTextFillColor: '#888 !important',
+                            background: '#23242a !important',
+                            opacity: 1,
+                          },
+                          '& .MuiInputLabel-root.Mui-disabled': {
+                            color: '#555 !important',
+                          },
+                          '& .MuiOutlinedInput-root.Mui-disabled fieldset': {
+                            borderColor: '#555 !important',
+                          },
+                        }}
+                        value={trailingStopLossState[token.mint] || ''}
+                        onChange={e => handleTrailingStopLossChange(token.mint, e.target.value)}
+                        disabled={!autoSellEnabledState[token.mint] || !trailingStopLossEnabledState[token.mint] || !!timeBasedSellEnabledState[token.mint]}
+                      />
+                      <label style={{ color: (!autoSellEnabledState[token.mint] || !!timeBasedSellEnabledState[token.mint]) ? '#888' : '#FFD700', fontSize: 13, marginRight: 4 }}>
+                        <input
+                          type="checkbox"
+                          style={{ marginLeft: 4, marginRight: 2 }}
+                          checked={!!trailingStopLossEnabledState[token.mint]}
+                          onChange={e => handleTrailingStopLossEnabledChange(token.mint, e.target.checked)}
+                          disabled={!autoSellEnabledState[token.mint] || !!timeBasedSellEnabledState[token.mint]}
+                        />
+                        On/Off
+                      </label>
+                    </div>
+                    {/* --- NEW: Wait for Buyers Before Sell --- */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10 }}>
+                      <TextField
+                        label="Wait for Buyers Before Sell"
+                        type="number"
+                        variant="outlined"
+                        size="small"
+                        sx={{
+                          flex: 1,
+                          '& .MuiOutlinedInput-root': {
+                            '& fieldset': {
+                              borderColor: '#00BFFF',
+                            },
+                            '&:hover fieldset': {
+                              borderColor: '#888',
+                            },
+                            '&.Mui-focused fieldset': {
+                              borderColor: '#00BFFF',
+                            },
+                          },
+                          '& .MuiInputBase-input': {
+                            color: 'white',
+                            background: '#23242a',
+                          },
+                          '& .MuiInputLabel-root': {
+                            color: '#888',
+                          },
+                          '& .MuiInputLabel-root.Mui-focused': {
+                            color: '#00BFFF',
+                          },
+                          '& .MuiOutlinedInput-root.Mui-disabled .MuiInputBase-input': {
+                            color: '#888 !important',
+                            WebkitTextFillColor: '#888 !important',
+                            background: '#23242a !important',
+                            opacity: 1,
+                          },
+                          '& .MuiInputLabel-root.Mui-disabled': {
+                            color: '#555 !important',
+                          },
+                          '& .MuiOutlinedInput-root.Mui-disabled fieldset': {
+                            borderColor: '#555 !important',
+                          },
+                        }}
+                        value={waitForBuyersState[token.mint] || ''}
+                        onChange={e => handleWaitForBuyersChange(token.mint, e.target.value)}
+                        disabled={!autoSellEnabledState[token.mint] || !waitForBuyersEnabledState[token.mint] || !!timeBasedSellEnabledState[token.mint]}
+                      />
+                      <label style={{ color: (!autoSellEnabledState[token.mint] || !!timeBasedSellEnabledState[token.mint]) ? '#888' : '#FFD700', fontSize: 13, marginRight: 4 }}>
+                        <input
+                          type="checkbox"
+                          style={{ marginLeft: 4, marginRight: 2 }}
+                          checked={!!waitForBuyersEnabledState[token.mint]}
+                          onChange={e => handleWaitForBuyersEnabledChange(token.mint, e.target.checked)}
+                          disabled={!autoSellEnabledState[token.mint] || !!timeBasedSellEnabledState[token.mint]}
+                        />
+                        On/Off
+                      </label>
+                    </div>
+                    {/* --- NEW: Time-Based Sell (sec) --- */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10 }}>
+                      <TextField
+                        label="Time-Based Sell (sec)"
+                        type="number"
+                        variant="outlined"
+                        size="small"
+                        sx={{
+                          flex: 1,
+                          '& .MuiOutlinedInput-root': {
+                            '& fieldset': {
+                              borderColor: '#FFD700',
+                            },
+                            '&:hover fieldset': {
+                              borderColor: '#888',
+                            },
+                            '&.Mui-focused fieldset': {
+                              borderColor: '#FFD700',
+                            },
+                          },
+                          '& .MuiInputBase-input': {
+                            color: 'white',
+                            background: '#23242a',
+                          },
+                          '& .MuiInputLabel-root': {
+                            color: '#888',
+                          },
+                          '& .MuiInputLabel-root.Mui-focused': {
+                            color: '#FFD700',
+                          },
+                          '& .MuiOutlinedInput-root.Mui-disabled .MuiInputBase-input': {
+                            color: '#888 !important',
+                            WebkitTextFillColor: '#888 !important',
+                            background: '#23242a !important',
+                            opacity: 1,
+                          },
+                          '& .MuiInputLabel-root.Mui-disabled': {
+                            color: '#555 !important',
+                          },
+                          '& .MuiOutlinedInput-root.Mui-disabled fieldset': {
+                            borderColor: '#555 !important',
+                          },
+                        }}
+                        value={timeBasedSellState[token.mint] || ''}
+                        onChange={e => handleTimeBasedSellChange(token.mint, e.target.value)}
+                        disabled={!autoSellEnabledState[token.mint] || !timeBasedSellEnabledState[token.mint]}
+                      />
+                      <label style={{ color: (!autoSellEnabledState[token.mint]) ? '#888' : '#FFD700', fontSize: 13, marginRight: 4 }}>
+                        <input
+                          type="checkbox"
+                          style={{ marginLeft: 4, marginRight: 2 }}
+                          checked={!!timeBasedSellEnabledState[token.mint]}
+                          onChange={e => handleTimeBasedSellEnabledChange(token.mint, e.target.checked)}
+                          disabled={!autoSellEnabledState[token.mint]}
+                        />
+                        On/Off
+                      </label>
+                    </div>
+                    
                   </div>
                 );
               })

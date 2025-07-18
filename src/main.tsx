@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import {App} from './App'
+//import PumpSnipePage from './components/PumpSnipePage'
 import './index.css'
 // src/main.tsx or src/index.tsx
 //import TokenListWithAge from './components/TokenListWIthAge';
@@ -10,6 +11,7 @@ window.Buffer = Buffer;
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <App />
+    {/*<PumpSnipePage/>*/}
     
   </React.StrictMode>,
 )
