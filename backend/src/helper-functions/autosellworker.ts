@@ -7,6 +7,10 @@ import { getConnection } from '../utils/getProvider';
 import { getUserKeypairByWallet } from '../utils/userWallet';
 import WebSocket from 'ws';
 import { UserToken } from '../models/userToken'; // Added import for UserToken
+import UserFilterPreset from '../models/UserFilterPreset';
+import { createJupiterApiClient } from '@jup-ag/api';
+import { PublicKey, VersionedTransaction } from '@solana/web3.js';
+import { BN } from 'bn.js';
 
 let autoSellWorkerInterval: NodeJS.Timeout | null = null;
 let ws: WebSocket | null = null;
@@ -87,8 +91,145 @@ export async function checkAndExecuteAllAutoSells() {
   console.log('[AutoSellWorker] checkAndExecuteAllAutoSells, active:', autoSells.length);
   const connection = getConnection();
 
+  // --- Pre-fetch user filter presets for efficiency ---
+  const userIds = [...new Set(autoSells.map(s => s.userId.toString()))];
+  const presets = await UserFilterPreset.find({ userId: { $in: userIds } }).lean();
+  const presetsMap = new Map(presets.map(p => [p.userId, p]));
+
   for (const config of autoSells) {
     try {
+      // --- 0. BLOCKED TOKEN CHECK (HIGHEST PRIORITY) ---
+      const userPreset = presetsMap.get(config.userId.toString());
+      if (userPreset && userPreset.sellFilters?.blockedTokens?.includes(config.mint)) {
+        console.log(`[AutoSellWorker] ⛔ Token ${config.mint} for user ${config.userId} is blocked — skipping auto-sell.`);
+        continue; // Skip all other checks if token is blocked
+      }
+
+      console.log("After Blocked TOken")
+
+      // --- 1. FRONT-RUN PROTECTION CHECK ---
+      if (userPreset?.sellFilters?.frontRunProtection) {
+
+        const platform = 'devnet'
+        // Jupiter V6 API is for Mainnet. We bypass this check on Devnet.
+        if (platform === 'devnet') {
+          console.log(`[AutoSellWorker] 🟡 Bypassing front-run simulation on Devnet.`);
+        } else {
+          console.log(`[AutoSellWorker] 🛡️ Front-run protection enabled for ${config.mint}. Simulating sell...`);
+          try {
+            const userKeypair = await getUserKeypairByWallet(config.walletAddress);
+            if (!userKeypair) {
+              console.log(`[AutoSellWorker] No keypair for ${config.walletAddress}, cannot simulate sell.`);
+              continue;
+            }
+
+            const jupiterApi = createJupiterApiClient(); // Mainnet by default
+            const tokenMint = new PublicKey(config.mint);
+            
+            const tokenAccount = await connection.getParsedTokenAccountsByOwner(userKeypair.publicKey, { mint: tokenMint });
+            if (!tokenAccount.value.length) {
+              console.log(`[AutoSellWorker] No token account found for ${config.mint} to simulate.`);
+              continue;
+            }
+
+            const tokenInfo = tokenAccount.value[0].account.data.parsed.info;
+            const amountToSell = new BN(tokenInfo.tokenAmount.amount)
+              .mul(new BN(config.autoSellPercent || 100))
+              .div(new BN(100));
+
+            if (amountToSell.isZero()) {
+              console.log(`[AutoSellWorker] Amount to sell is zero for ${config.mint}, skipping simulation.`);
+              continue;
+            }
+
+            const quoteResponse = await jupiterApi.quoteGet({
+              inputMint: config.mint,
+              outputMint: "So11111111111111111111111111111111111111112", // SOL
+              amount: amountToSell.toNumber(),
+              slippageBps: (config.slippage || 15) * 100,
+            });
+
+            if (!quoteResponse) {
+              console.log("[AutoSellWorker] No Jupiter quote found for simulation.");
+              continue;
+            }
+
+            const { swapTransaction } = await jupiterApi.swapPost({
+              swapRequest: {
+                quoteResponse: quoteResponse,
+                userPublicKey: userKeypair.publicKey.toBase58(),
+              }
+            });
+
+            const swapTransactionBuf = Buffer.from(swapTransaction, 'base64');
+            const transaction = VersionedTransaction.deserialize(swapTransactionBuf);
+            transaction.sign([userKeypair]);
+            
+            const simulationResult = await connection.simulateTransaction(transaction);
+            if (simulationResult.value.err) {
+              console.log(`[AutoSellWorker] 🛡️ Front-run protection triggered for ${config.mint}. Simulation failed!`, simulationResult.value.err);
+              console.log("[AutoSellWorker] Logs:", simulationResult.value.logs);
+              continue;
+            }
+            
+            console.log(`[AutoSellWorker] ✅ Simulation successful for ${config.mint}. Proceeding with sell checks.`);
+
+          } catch (simError) {
+            console.error(`[AutoSellWorker] 🛡️ Front-run simulation error for ${config.mint}:`, simError);
+            continue;
+          }
+        }
+      }
+
+      console.log("After Front run");
+
+      // --- 2. MIN LIQUIDITY CHECK ---
+      const minLiquidity = userPreset?.sellFilters?.minLiquidity;
+      const platform = 'devnet'; // TODO: set to 'mainnet' on production
+      if (typeof minLiquidity === 'number' && minLiquidity > 0) {
+        if (platform === 'devnet') {
+          console.log(`[AutoSellWorker] 🟡 Bypassing min liquidity check on Devnet.`);
+        } else {
+          // --- Mainnet Liquidity Check (Uncomment when poolAddress is available) ---
+          console.log(`[AutoSellWorker] ⚠️ Mainnet liquidity check skipped: poolAddress not yet implemented in model.`);
+          /*
+          if (!config.poolAddress) {
+            console.log(`[AutoSellWorker] ⚠️ No pool address set for ${config.mint}, skipping liquidity check.`);
+          } else {
+            const poolSolBalance = await connection.getBalance(new PublicKey(config.poolAddress));
+            const poolSol = poolSolBalance / 1e9; // lamports to SOL
+            if (poolSol < minLiquidity) {
+              console.log(`[AutoSellWorker] 💧 Not enough liquidity (${poolSol} SOL < ${minLiquidity} SOL) — skipping auto-sell for ${config.mint}`);
+              continue;
+            }
+          }
+          */
+        }
+      }
+
+      console.log("After Min liquidate");
+
+    
+      const wait_buyer = 1;
+      const time_based_sell = 1;
+      const trail_loss = 1;
+      const classic_sell = 1;
+
+      if (!wait_buyer) {
+        console.log("⏳ Waiting for buyers is disabled.");
+      }
+      
+      if (time_based_sell) {
+        console.log("🕒 Time-based sell triggered.");
+      } else if (trail_loss) {
+        console.log("📉 Trailing stop loss triggered.");
+      } else {
+        console.log("🎯 Classic take-profit or stop-loss triggered.");
+      }
+      
+
+
+
       // Get userKeypair for price fetch
       const userKeypair = await getUserKeypairByWallet(config.walletAddress);
       if (!userKeypair) continue;
@@ -112,7 +253,7 @@ export async function checkAndExecuteAllAutoSells() {
         console.log(
           `🔔 AutoSell triggered for user: ${config.userId}, token: ${config.mint}, P/L: ${profitLossPercent.toFixed(2)}%`
         );
-        
+
         // Send auto-sell notification to frontend
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({
@@ -124,7 +265,7 @@ export async function checkAndExecuteAllAutoSells() {
             tokenName: config.tokenName || 'Unknown Token'
           }));
         }
-        
+
         sendManualSellMessage({
           mint: config.mint,
           percent: config.autoSellPercent,
@@ -154,8 +295,8 @@ export async function checkAndExecuteAllAutoSells() {
         // REMOVE THIS: Don't send SOL balance update here - wait for actual sell transaction
         // The balance update will be sent by the manual sell handler after transaction confirmation
       }
-    } catch (err) {
-      console.error('AutoSell worker error:', err);
+    } catch (error) {
+      console.error(`[AutoSellWorker] Error processing auto-sell for mint ${config.mint}:`, error);
     }
   }
 }
@@ -175,8 +316,8 @@ async function batchPriceSync() {
         // If your UserToken model doesn't have walletAddress, you need to add it.
         // For now, assuming it exists. If not, this is the next thing to fix.
         if (!token.walletAddress) {
-            console.log(`[AutoSellWorker] Skipping token ${token.mint} because it has no walletAddress.`);
-            return;
+          console.log(`[AutoSellWorker] Skipping token ${token.mint} because it has no walletAddress.`);
+          return;
         }
 
         console.log('[AutoSellWorker] Processing:', token.mint, token.walletAddress);
@@ -203,11 +344,11 @@ async function batchPriceSync() {
           );
 
           if (updateResult.modifiedCount > 0) {
-              console.log('[AutoSellWorker] UserToken update SUCCESS for mint:', token.mint);
+            console.log('[AutoSellWorker] UserToken update SUCCESS for mint:', token.mint);
           } else {
-              console.log('[AutoSellWorker] UserToken update FAILED or no change for mint:', token.mint);
+            console.log('[AutoSellWorker] UserToken update FAILED or no change for mint:', token.mint);
           }
-          
+
           // Send price update to frontend
           const ws = getOrCreateWebSocket();
           if (ws && ws.readyState === WebSocket.OPEN) {

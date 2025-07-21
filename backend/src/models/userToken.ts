@@ -20,6 +20,7 @@ export interface IUserToken extends Document {
   lastBuySignature?: string;
   lastSellSignature?: string;
   balance: number; // Total token balance in the user's wallet
+  buyTime?: Date; // Date/time when the token was bought
 }
 
 const UserTokenSchema: Schema = new Schema({
@@ -42,6 +43,7 @@ const UserTokenSchema: Schema = new Schema({
   lastBuySignature: { type: String },
   lastSellSignature: { type: String },
   balance: { type: Number, default: 0 }, // Total token balance in the user's wallet
+  buyTime: { type: Date }, // Date/time when the token was bought
 });
 
 UserTokenSchema.index({ userId: 1, mint: 1 }, { unique: true });

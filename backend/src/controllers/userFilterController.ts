@@ -144,6 +144,72 @@ export const getBlacklistDevs = async (req: Request, res: Response): Promise<voi
     }
   };
 
+// --- Blocked Tokens ---
+export const getBlockedTokens = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+    
+    const preset = await UserFilterPreset.findOne({ userId });
+    res.json({ blockedTokens: preset?.sellFilters?.blockedTokens || [] });
+  } catch (e) {
+    res.status(500).json({ message: 'Failed to fetch blocked tokens' });
+  }
+};
+
+export const addBlockedToken = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = getUserId(req);
+    const { address } = req.body;
+    
+    if (!userId || !address) {
+      res.status(400).json({ message: 'Missing userId or address' });
+      return;
+    }
+    
+    const preset = await UserFilterPreset.findOneAndUpdate(
+      { userId },
+      { 
+        $addToSet: { 'sellFilters.blockedTokens': address }
+      },
+      { 
+        new: true, 
+        upsert: true,
+      }
+    );
+    
+    res.json({ blockedTokens: preset?.sellFilters?.blockedTokens || [] });
+  } catch (e) {    
+    console.error('Error in addBlockedToken:', e);
+    res.status(500).json({ message: 'Failed to add blocked token' });
+  }
+};
+
+export const removeBlockedToken = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = getUserId(req); // Correctly get userId
+    const { address } = req.body;
+    
+    if (!userId || !address) {
+      res.status(400).json({ message: 'Missing userId or address' });
+      return;
+    }
+    
+    const preset = await UserFilterPreset.findOneAndUpdate(
+      { userId },
+      { $pull: { 'sellFilters.blockedTokens': address } },
+      { new: true }
+    );
+    
+    res.json({ blockedTokens: preset?.sellFilters?.blockedTokens || [] });
+  } catch (e) {
+    res.status(500).json({ message: 'Failed to remove blocked token' });
+  }
+};
+
 export const updateBuyFilter = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = (req as any).user?.id;
@@ -202,5 +268,46 @@ export const getBuyFiltersByUserId = async (req: Request, res: Response): Promis
     res.json({ buyFilters });
   } catch (e) {
     res.status(500).json({ message: 'Failed to fetch buy filters by userId' });
+  }
+};
+
+export const updateSellFilter = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).user?.id;
+    const { field, value } = req.body;
+    if (!userId || !field) {
+      res.status(400).json({ message: 'Missing userId or field' });
+      return;
+    }
+    const allowedFields = [
+      'minLiquidity', 'frontRunProtection', 'loopSellLogic', 'waitForBuyersBeforeSell', 'blockedTokens',
+      'takeProfitPercent', 'stopLossPercent', 'trailingStopPercent', 'timeoutSellAfterSec', 'sellPercent'
+    ];
+    if (!allowedFields.includes(field)) {
+      res.status(400).json({ message: 'Invalid field' });
+      return;
+    }
+    const preset = await UserFilterPreset.findOneAndUpdate(
+      { userId },
+      { $set: { [`sellFilters.${field}`]: value } },
+      { new: true, upsert: true }
+    );
+    res.json({ sellFilters: preset.sellFilters });
+  } catch (e) {
+    res.status(500).json({ message: 'Failed to update sell filter' });
+  }
+};
+
+export const getSellFilters = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).user?.id;
+    if (!userId) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+    const preset = await UserFilterPreset.findOne({ userId });
+    res.json({ sellFilters: preset?.sellFilters || {} });
+  } catch (e) {
+    res.status(500).json({ message: 'Failed to fetch sell filters' });
   }
 };

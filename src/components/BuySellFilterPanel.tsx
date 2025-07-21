@@ -239,12 +239,6 @@ const BuySellFilterPanel: React.FC<BuySellFilterPanelProps> = ({
     setBlacklistLoading(false);
   };
 
-  // Fetch blacklist devs when the filter panel opens
-  useEffect(() => {
-    if (open) fetchBlacklistDevs();
-    // eslint-disable-next-line
-  }, [open]);
-
   // Open dropdown: fetch devs
   useEffect(() => {
     if (blacklistDevsDropdownOpen) fetchBlacklistDevs();
@@ -307,11 +301,110 @@ const BuySellFilterPanel: React.FC<BuySellFilterPanelProps> = ({
         ? "No devs blacklisted"
         : `Blacklist: ${realBlacklistDevs.length} dev${realBlacklistDevs.length === 1 ? "" : "s"}`;
 
-  // Fetch whitelist devs when the filter panel opens
+  // --- Blocked Tokens Dropdown State ---
+  const [blockedTokensDropdownOpen, setBlockedTokensDropdownOpen] = useState(false);
+  const [blockedTokens, setBlockedTokens] = useState<string[]>([]);
+  const [blockedTokensLoading, setBlockedTokensLoading] = useState(false);
+  const [blockedTokensInput, setBlockedTokensInput] = useState("");
+  const blockedTokensDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Fetch blocked tokens from backend
+  const fetchBlockedTokens = async () => {
+    setBlockedTokensLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/user-filters/blocked-tokens`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setBlockedTokens(data.blockedTokens || []);
+    } catch {
+      setBlockedTokens([]);
+    }
+    setBlockedTokensLoading(false);
+  };
+
+  // Fetch data when the filter panel opens
   useEffect(() => {
-    if (open) fetchWhitelistDevs();
+    if (open) {
+      fetchWhitelistDevs();
+      fetchBlacklistDevs();
+      fetchBlockedTokens();
+      // --- Fetch sell filters from backend ---
+      const fetchSellFilters = async () => {
+        try {
+          const token = localStorage.getItem("token");
+          const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/user-filters/sell-filters`, {
+            headers: { "Authorization": `Bearer ${token}` }
+          });
+          const data = await res.json();
+          if (data.sellFilters) {
+            onChangeSellFilters({ ...sellFilters, ...data.sellFilters });
+          }
+        } catch (e) {
+          // Optionally handle error
+        }
+      };
+      fetchSellFilters();
+    }
     // eslint-disable-next-line
   }, [open]);
+
+  // Open dropdown: fetch tokens
+  useEffect(() => {
+    if (blockedTokensDropdownOpen) fetchBlockedTokens();
+  }, [blockedTokensDropdownOpen]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!blockedTokensDropdownOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (blockedTokensDropdownRef.current && !blockedTokensDropdownRef.current.contains(e.target as Node)) {
+        setBlockedTokensDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [blockedTokensDropdownOpen]);
+
+  // Add blocked token
+  const handleAddBlockedToken = async () => {
+    const address = blockedTokensInput.trim();
+    if (!address || blockedTokens.includes(address)) return;
+    setBlockedTokensLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/user-filters/blocked-tokens`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ address })
+      });
+      setBlockedTokensInput("");
+      fetchBlockedTokens();
+    } catch {}
+    setBlockedTokensLoading(false);
+  };
+
+  // Remove blocked token
+  const handleRemoveBlockedToken = async (address: string) => {
+    setBlockedTokensLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/user-filters/blocked-tokens`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ address })
+      });
+      fetchBlockedTokens();
+    } catch {}
+    setBlockedTokensLoading(false);
+  };
+
+  const blockedTokensPlaceholder =
+    blockedTokens.length === 0
+      ? "No tokens blocked"
+      : `Blocked: ${blockedTokens.length} token${blockedTokens.length === 1 ? "" : "s"}`;
+
 
   useEffect(() => {
     if (!open) return;
@@ -341,6 +434,21 @@ const BuySellFilterPanel: React.FC<BuySellFilterPanelProps> = ({
     try {
       const token = localStorage.getItem("token");
       await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/user-filters/buy-filter`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ field, value }),
+      });
+    } catch (e) {
+      // Optionally show error
+    }
+  };
+
+  // --- Sell Filter Backend Sync ---
+  const handleSellFilterChange = async (field: string, value: any) => {
+    onChangeSellFilters({ ...sellFilters, [field]: value });
+    try {
+      const token = localStorage.getItem("token");
+      await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/user-filters/sell-filter`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({ field, value }),
@@ -883,7 +991,7 @@ const BuySellFilterPanel: React.FC<BuySellFilterPanelProps> = ({
                       Min Liquidity (SOL):
                       <InfoIcon tip="Only sell if the token’s liquidity pool is above this value. Helps avoid selling into low liquidity." />
                     </span>
-                    <input type="number" value={sellFilters.minLiquidity || ""} onChange={e => onChangeSellFilters({ ...sellFilters, minLiquidity: e.target.value })} style={inputStyle} />
+                    <input type="number" value={sellFilters.minLiquidity || ""} onChange={e => handleSellFilterChange('minLiquidity', e.target.value)} style={inputStyle} />
                   </div>
                   <div style={{ display: "flex", gap: 16 }}>
                     <div style={{ display: "flex", alignItems: "center" }}>
@@ -891,14 +999,14 @@ const BuySellFilterPanel: React.FC<BuySellFilterPanelProps> = ({
                         Front-run Protection:
                         <InfoIcon tip="Enable to avoid selling if price manipulation or front-running is detected. Adds extra safety." />
                       </span>
-                      <input type="checkbox" checked={!!sellFilters.frontRunProtection} onChange={e => onChangeSellFilters({ ...sellFilters, frontRunProtection: e.target.checked })} />
+                      <input type="checkbox" checked={!!sellFilters.frontRunProtection} onChange={e => handleSellFilterChange('frontRunProtection', e.target.checked)} />
                     </div>
                     <div style={{ display: "flex", alignItems: "center" }}>
                       <span style={{ minWidth: 180, color: "#fff" }}>
                         Repeatable Strategy:
                         <InfoIcon tip="Enable to automatically repeat your sell strategy after each sell. Useful for ongoing trading." />
                       </span>
-                      <input type="checkbox" checked={!!sellFilters.loopSellLogic} onChange={e => onChangeSellFilters({ ...sellFilters, loopSellLogic: e.target.checked })} />
+                      <input type="checkbox" checked={!!sellFilters.loopSellLogic} onChange={e => handleSellFilterChange('loopSellLogic', e.target.checked)} />
                     </div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center" }}>
@@ -906,7 +1014,144 @@ const BuySellFilterPanel: React.FC<BuySellFilterPanelProps> = ({
                       Blocked Tokens:
                       <InfoIcon tip="Never sell these tokens, no matter what. Use to protect specific holdings from being sold." />
                     </span>
-                    <input type="text" value={sellFilters.blockedTokens || ""} onChange={e => onChangeSellFilters({ ...sellFilters, blockedTokens: e.target.value })} style={inputStyle} />
+                    <div style={{ position: 'relative', minWidth: 220, maxWidth: 260 }} ref={blockedTokensDropdownRef}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          background: '#23242a',
+                          border: '1px solid #ff4d4f',
+                          borderRadius: 8,
+                          padding: '6px 8px',
+                          minHeight: 40,
+                          cursor: 'pointer',
+                          color: '#ff4d4f',
+                          fontSize: 15,
+                          userSelect: 'none',
+                          width: 220,
+                          boxSizing: 'border-box',
+                        }}
+                        onClick={() => setBlockedTokensDropdownOpen((v) => !v)}
+                      >
+                        <span style={{ opacity: blockedTokens.length === 0 ? 0.7 : 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
+                          {blockedTokensPlaceholder}
+                        </span>
+                        <span style={{ marginLeft: 8, fontSize: 18, color: '#ff4d4f' }}>
+                          ▼
+                        </span>
+                      </div>
+                      {blockedTokensDropdownOpen && (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: '110%',
+                            left: 0,
+                            zIndex: 100,
+                            background: '#18181b',
+                            border: '1px solid #ff4d4f',
+                            borderRadius: 8,
+                            minWidth: 220,
+                            maxWidth: 260,
+                            boxShadow: '0 4px 16px #000a',
+                            padding: 10,
+                            marginTop: 4,
+                            boxSizing: 'border-box',
+                          }}
+                        >
+                          {blockedTokensLoading ? (
+                            <div style={{ color: '#ff4d4f', textAlign: 'center', padding: 8 }}>Loading...</div>
+                          ) : (
+                            <>
+                              {blockedTokens.length > 0 && (
+                                <div style={{
+                                  display: 'flex',
+                                  flexWrap: 'wrap',
+                                  gap: 6,
+                                  marginBottom: 8,
+                                  maxHeight: 60,
+                                  overflowY: 'auto',
+                                }}>
+                                  {blockedTokens.map((token) => (
+                                    <span
+                                      key={token}
+                                      style={{
+                                        background: '#ffcccc',
+                                        color: '#ff4d4f',
+                                        borderRadius: 5,
+                                        padding: '1px 6px 1px 6px',
+                                        fontSize: 12,
+                                        fontWeight: 500,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 4,
+                                        maxWidth: 180,
+                                        minWidth: 0,
+                                        whiteSpace: 'nowrap',
+                                        textOverflow: 'ellipsis',
+                                        overflow: 'visible',
+                                        position: 'relative',
+                                      }}
+                                      title={token}
+                                    >
+                                      <span
+                                        style={{
+                                          overflow: 'hidden',
+                                          textOverflow: 'ellipsis',
+                                          whiteSpace: 'nowrap',
+                                          maxWidth: 120,
+                                          display: 'inline-block',
+                                        }}
+                                      >
+                                        {token}
+                                      </span>
+                                      <span
+                                        style={{
+                                          cursor: 'pointer',
+                                          marginLeft: 6,
+                                          fontSize: 15,
+                                          fontWeight: 700,
+                                          color: '#ff4d4f',
+                                          background: 'none',
+                                          border: 'none',
+                                          outline: 'none',
+                                          padding: 0,
+                                          lineHeight: 1,
+                                          display: 'inline-block',
+                                        }}
+                                        onClick={() => handleRemoveBlockedToken(token)}
+                                        title="Remove"
+                                      >
+                                        ×
+                                      </span>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              <input
+                                type="text"
+                                placeholder="Add address & press Enter"
+                                value={blockedTokensInput}
+                                onChange={e => setBlockedTokensInput(e.target.value)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') handleAddBlockedToken();
+                                }}
+                                style={{
+                                  background: '#23242a',
+                                  border: '1px solid #ff4d4f',
+                                  borderRadius: 6,
+                                  color: '#ff4d4f',
+                                  fontSize: 15,
+                                  width: '100%',
+                                  padding: '4px 8px',
+                                  boxSizing: 'border-box',
+                                }}
+                                disabled={blockedTokensLoading}
+                              />
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

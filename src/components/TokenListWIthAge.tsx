@@ -36,6 +36,7 @@ type Token = {
   timeBasedSellEnabled?: boolean; // Added for backend sync
   waitForBuyersBeforeSell?: number; // Added for backend sync
   waitForBuyersBeforeSellEnabled?: boolean; // Added for backend sync
+  buyTime?: number; // Added for backend sync
 };
 
 function getAgeString(ageMs: number) {
@@ -366,7 +367,7 @@ const TokenListWithAge: React.FC = () => {
       // Ensure timeBasedSellState has a value
       setTimeBasedSellState(prev => ({
         ...prev,
-        [token.mint]: prev[token.mint] !== undefined && prev[token.mint] !== '' ? prev[token.mint] : '100'
+        [token.mint]: prev[token.mint] !== undefined && prev[token.mint] !== '' ? prev[token.mint] : '0'
       }));
       // Ensure waitForBuyersState has a value
       setWaitForBuyersState(prev => ({
@@ -396,7 +397,7 @@ const TokenListWithAge: React.FC = () => {
           : false,
         timeBasedSellSec: timeBasedSellState[token.mint] !== undefined && timeBasedSellState[token.mint] !== ''
           ? Number(timeBasedSellState[token.mint])
-          : 100,
+          : 0,
         timeBasedSellEnabled: timeBasedSellEnabledState[token.mint] !== undefined 
           ? timeBasedSellEnabledState[token.mint] 
           : false,
@@ -777,14 +778,16 @@ const TokenListWithAge: React.FC = () => {
       const config = autoSellConfigs.find(c => c.mint === token.mint);
       return {
         ...token,
-        autoSellEnabled: config?.autoSellEnabled || false,
-        takeProfit: config?.takeProfit,
-        stopLoss: config?.stopLoss,
-        autoSellPercent: config?.autoSellPercent,
-        trailingStopLossPercent: config?.trailingStopLossPercent,
-        trailingStopLossEnabled: config?.trailingStopLossEnabled,
-        timeBasedSellSec: config?.timeBasedSellSec,
-        timeBasedSellEnabled: config?.timeBasedSellEnabled,
+        autoSellEnabled: config?.autoSellEnabled ?? false,
+        takeProfit: config?.takeProfit !== undefined ? config.takeProfit : (token.takeProfit !== undefined ? token.takeProfit : 10),
+        stopLoss: config?.stopLoss !== undefined ? config.stopLoss : (token.stopLoss !== undefined ? token.stopLoss : 10),
+        autoSellPercent: config?.autoSellPercent !== undefined ? config.autoSellPercent : (token.autoSellPercent !== undefined ? token.autoSellPercent : 100),
+        trailingStopLossPercent: config?.trailingStopLossPercent !== undefined ? config.trailingStopLossPercent : (token.trailingStopLossPercent !== undefined ? token.trailingStopLossPercent : 10),
+        trailingStopLossEnabled: config?.trailingStopLossEnabled ?? token.trailingStopLossEnabled ?? false,
+        timeBasedSellSec: config?.timeBasedSellSec !== undefined ? config.timeBasedSellSec : (token.timeBasedSellSec !== undefined ? token.timeBasedSellSec : 0),
+        timeBasedSellEnabled: config?.timeBasedSellEnabled ?? token.timeBasedSellEnabled ?? false,
+        waitForBuyersBeforeSell: config?.waitForBuyersBeforeSell !== undefined ? config.waitForBuyersBeforeSell : (token.waitForBuyersBeforeSell !== undefined ? token.waitForBuyersBeforeSell : 5),
+        waitForBuyersBeforeSellEnabled: config?.waitForBuyersBeforeSellEnabled ?? token.waitForBuyersBeforeSellEnabled ?? false,
         // ...baaki fields agar chahiye
       };
     });
@@ -818,7 +821,7 @@ const TokenListWithAge: React.FC = () => {
             : false,
           timeBasedSellSec: timeBasedSellState[token.mint] !== undefined && timeBasedSellState[token.mint] !== ''
             ? Number(timeBasedSellState[token.mint])
-            : 100,
+            : 0,
           timeBasedSellEnabled: timeBasedSellEnabledState[token.mint] !== undefined 
             ? timeBasedSellEnabledState[token.mint] 
             : false,
@@ -1485,6 +1488,12 @@ const TokenListWithAge: React.FC = () => {
                     <div style={{ color: profitLossColor, fontWeight: 600, fontSize: 15 }}>
                       P/L: {profitLoss > 0 ? '+' : ''}{profitLoss.toFixed(2)}%
                     </div>
+                    {/* --- NEW: Show Buy Time if available --- */}
+                    {token.buyTime && (
+                      <div style={{ color: '#FFD700', fontSize: 13, textAlign: 'center', marginBottom: 6 }}>
+                        Bought: {new Date(token.buyTime).toLocaleString()}
+                      </div>
+                    )}
                     {/* --- END NEW --- */}
 
                     <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
@@ -1752,15 +1761,15 @@ const TokenListWithAge: React.FC = () => {
                         }}
                         value={waitForBuyersState[token.mint] || ''}
                         onChange={e => handleWaitForBuyersChange(token.mint, e.target.value)}
-                        disabled={!autoSellEnabledState[token.mint] || !waitForBuyersEnabledState[token.mint] || !!timeBasedSellEnabledState[token.mint]}
+                        disabled={!autoSellEnabledState[token.mint] || !waitForBuyersEnabledState[token.mint]}
                       />
-                      <label style={{ color: (!autoSellEnabledState[token.mint] || !!timeBasedSellEnabledState[token.mint]) ? '#888' : '#FFD700', fontSize: 13, marginRight: 4 }}>
+                      <label style={{ color: (!autoSellEnabledState[token.mint]) ? '#888' : '#FFD700', fontSize: 13, marginRight: 4 }}>
                         <input
                           type="checkbox"
                           style={{ marginLeft: 4, marginRight: 2 }}
                           checked={!!waitForBuyersEnabledState[token.mint]}
                           onChange={e => handleWaitForBuyersEnabledChange(token.mint, e.target.checked)}
-                          disabled={!autoSellEnabledState[token.mint] || !!timeBasedSellEnabledState[token.mint]}
+                          disabled={!autoSellEnabledState[token.mint]}
                         />
                         On/Off
                       </label>

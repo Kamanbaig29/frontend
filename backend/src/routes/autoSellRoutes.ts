@@ -12,9 +12,20 @@ router.post('/upsert', async (req: Request, res: Response, next: NextFunction) =
   }
 
   try {
-    const doc = await AutoSell.findOneAndUpdate(
+    // Check if this is a new AutoSell config (not found before)
+    let doc = await AutoSell.findOne({ userId, mint });
+    let boughtTime = undefined;
+    if (!doc) {
+      // Try to get buyTime from UserToken
+      const userToken = await require('../models/userToken').UserToken.findOne({ userId, mint });
+      if (userToken && userToken.buyTime) {
+        boughtTime = userToken.buyTime;
+      }
+    }
+    // Upsert with boughtTime if new
+    doc = await AutoSell.findOneAndUpdate(
       { userId, mint },
-      { $set: { ...rest, userId, mint, walletAddress } },
+      { $set: { ...rest, userId, mint, walletAddress, ...(boughtTime ? { boughtTime } : {}) } },
       { upsert: true, new: true }
     );
     res.json({ success: true, doc });

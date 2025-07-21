@@ -24,20 +24,18 @@ const SellFiltersSchema = new mongoose.Schema({
   frontRunProtection: { type: Boolean, default: false },
   loopSellLogic: { type: Boolean, default: false },
   waitForBuyersBeforeSell: { type: Number, default: 0 },
-  blockedTokens: { type: String, default: "" }
+  blockedTokens: { type: [String], default: [] }
 }, { _id: false });
 
 const UserFilterPresetSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, unique: true },
-  buyFilters: { type: BuyFiltersSchema, default: {} },
-  sellFilters: { type: SellFiltersSchema, default: {} },
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
+  userId: { type: String, required: true, unique: true },
+  buyFilters: { type: BuyFiltersSchema, default: () => ({}) },
+  sellFilters: { type: SellFiltersSchema, default: () => ({}) }
 });
 
-UserFilterPresetSchema.pre("save", function (next) {
-  this.updatedAt = new Date();
-  next();
-});
+// When a new document is created, Mongoose will apply the default values specified in the schemas.
+// For example, sellFilters will be initialized as an empty object, and inside it,
+// blockedTokens will be initialized as an empty array.
+const UserFilterPreset = mongoose.model('UserFilterPreset', UserFilterPresetSchema);
 
-export default mongoose.model("UserFilterPreset", UserFilterPresetSchema);
+export default UserFilterPreset;

@@ -110,10 +110,21 @@ export async function addOrUpdateTokenFromBuy({
           buyAmount: buyPrice,
           lastBuySignature: signature,
           balance: balance,
+          buyTime: new Date(), // Set buyTime to now on buy
         },
       },
       { upsert: true, new: true }
     );
+    // Also update AutoSell.boughtTime for this user/token
+    try {
+      const AutoSell = require('../models/autoSell').default;
+      await AutoSell.updateOne(
+        { userId: userID, mint: mint },
+        { $set: { boughtTime: new Date(), buyPrice: buyPrice, tokenName: name, tokenSymbol: symbol, peakPrice: buyPrice } }
+      );
+    } catch (e) {
+      console.error(`❌ Error updating AutoSell.boughtTime for mint ${mint}:`, e);
+    }
     console.log(`✅ UserToken updated successfully for mint: ${mint}`);
 
     // Call separate function for TokenPrice update

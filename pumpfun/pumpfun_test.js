@@ -7,7 +7,7 @@ import fetch from 'node-fetch'; // npm install node-fetch
 const PROGRAM_ID = new PublicKey('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P');
 
 // Load the IDL
-const idl = JSON.parse(fs.readFileSync('./bot/src/pump_fun_idl.json', 'utf8'));
+const idl = JSON.parse(fs.readFileSync('./pump_fun_idl.json', 'utf8'));
 
 // Connect to Solana mainnet
 const connection = new Connection(clusterApiUrl('mainnet-beta'), 'confirmed');

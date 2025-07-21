@@ -22,6 +22,8 @@ const AutoSellSchema = new mongoose.Schema({
   slippage: { type: Number, default: 5 }, // Default 5%
   priorityFee: { type: Number, default: 0.001 }, // Default 0.001 SOL
   bribeAmount: { type: Number, default: 0 }, // Default 0 SOL
+  boughtTime: { type: Date }, // Date/time when the token was bought
+  peakPrice: { type: Number }, // For trailing stop loss
 }, { timestamps: true }); // adds createdAt, updatedAt
 
 AutoSellSchema.index({ userId: 1, mint: 1 }, { unique: true }); // one config per user/token
