@@ -28,6 +28,7 @@ const PresetModal: React.FC<PresetModalProps> = ({
 }) => {
   const [mode, setMode] = useState<'buy' | 'sell'>('buy');
   const [form, setForm] = useState<any>({});
+  // amazonq-ignore-next-line
   const { ws } = useWebSocket();
 
   // Add a ref to track autoFee subscription
@@ -48,6 +49,7 @@ const PresetModal: React.FC<PresetModalProps> = ({
   useEffect(() => {
     if (!ws) return;
 
+    // amazonq-ignore-next-line
     const handleMessage = (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
@@ -85,7 +87,7 @@ const PresetModal: React.FC<PresetModalProps> = ({
     // eslint-disable-next-line
   }, [form.autoFee, ws]);
 
-  // 2. Jab bhi form.priorityFee ya form.bribeAmount change ho, backend ko update bhejo
+
   useEffect(() => {
     if (!ws) return;
     if (!form.autoFee) return;

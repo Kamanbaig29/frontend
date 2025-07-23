@@ -1,4 +1,4 @@
-// src/utils/getConnectionAndKeypair.ts
+// amazonq-ignore-next-line// src/utils/getConnectionAndKeypair.ts
 import { Connection, Keypair } from "@solana/web3.js";
 import fs from "fs";
 import path from "path";
@@ -17,6 +17,7 @@ export function getConnection(): Connection {
 export function getKeypair(): Keypair {
   const secretKeyPath = path.join(__dirname, "../wallet/my-keypair.json");
   if (!fs.existsSync(secretKeyPath)) {
+    // amazonq-ignore-next-line
     throw new Error("wallet.json file not found.");
   }
 

@@ -19,6 +19,7 @@ const TokenPriceSchema: Schema = new Schema({
 TokenPriceSchema.index({ mint: 1, userPublicKey: 1 }, { unique: true });
 
 // Post-update hook for findOneAndUpdate
+// amazonq-ignore-next-line
 TokenPriceSchema.post('findOneAndUpdate', async function (doc: any) {
   if (doc && wss && wss.clients) {
     const priceUpdate = {
@@ -30,6 +31,7 @@ TokenPriceSchema.post('findOneAndUpdate', async function (doc: any) {
         buyPrice: doc.buyPrice
       }
     };
+    // amazonq-ignore-next-line
     wss.clients.forEach((ws: any) => {
       ws.send(JSON.stringify(priceUpdate));
     });

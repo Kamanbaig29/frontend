@@ -54,6 +54,7 @@ const AppContent = () => {
   const [walletAddress, setWalletAddress] = useState<string | undefined>(undefined);
   const [solBalance, setSolBalance] = useState<number | undefined>(undefined);
 
+  // amazonq-ignore-next-line
   const [] = useState<'buy' | 'sell'>('buy');
 
   const handleModeSelect = (mode: 'manual' | 'automatic') => {

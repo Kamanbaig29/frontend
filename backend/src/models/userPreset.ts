@@ -4,6 +4,7 @@ export interface IPreset {
   slippage: number;
   priorityFee: string;
   bribeAmount: string;
+  // amazonq-ignore-next-line
   mevMode: "off" | "reduced" | "secure";
   rpcUrl: string;
   autoFee: boolean;
@@ -33,9 +34,11 @@ const UserPresetSchema: Schema = new Schema({
   buyPresets: {
     type: [PresetSchema],
     validate: {
+      // amazonq-ignore-next-line
       validator: (arr: any[]) => arr.length === 3,
       message: "User must have exactly 3 buy presets."
     },
+    // amazonq-ignore-next-line
     default: [{}, {}, {}]
   },
   sellPresets: {

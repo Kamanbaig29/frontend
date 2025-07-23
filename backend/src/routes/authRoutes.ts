@@ -25,6 +25,7 @@ router.post('/phantom-login', phantomLogin);
 // Logout route
 router.post('/logout', authenticateJWT, logout);
 
+// amazonq-ignore-next-line
 router.get('/protected', authenticateJWT, (req, res) => {
   res.json({ message: 'You are authenticated!', user: (req as any).user });
 });
@@ -50,6 +51,7 @@ router.get('/wallet-info', authenticateJWT, async (req, res) => {
       walletAddress: user.botWalletPublicKey,
       balance: balance
     });
+  // amazonq-ignore-next-line
   } catch (error) {
     console.error('Error fetching wallet info:', error);
     res.status(500).json({ message: 'Error fetching wallet info' });

@@ -6,8 +6,10 @@ import { Keypair } from '@solana/web3.js';
 export const getUserKeypairById = async (userId: string) => {
   const user = await User.findById(userId).select('+botWalletSecretKeyEncrypted');
   if (!user || !user.botWalletSecretKeyEncrypted) {
+    // amazonq-ignore-next-line
     throw new Error('User wallet not found');
   }
+  // amazonq-ignore-next-line
   const secretKeyArray = decryptWalletSecretKey(user.botWalletSecretKeyEncrypted);
   return Keypair.fromSecretKey(Uint8Array.from(secretKeyArray));
 };

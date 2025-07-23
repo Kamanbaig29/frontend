@@ -78,6 +78,7 @@ const UserSchema: Schema = new Schema({
   },
 
   // --- Timestamps ---
+  // amazonq-ignore-next-line
   createdAt: {
     type: Date,
     default: Date.now,

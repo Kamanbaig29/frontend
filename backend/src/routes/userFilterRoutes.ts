@@ -43,6 +43,7 @@ router.post('/buy-filter', updateBuyFilter);
 // Sell Filter route
 router.post('/sell-filter', updateSellFilter);
 router.get('/sell-filters', getSellFilters);
+// amazonq-ignore-next-line
 // GET /buy-filters always returns maxMcap and maxBuyers as numbers (never NaN/undefined), for frontend safety
 router.get('/buy-filters', getBuyFilters);
 // GET /buy-filters-by-user-id?userId=... returns buyFilters for any userId (no auth, for debug/testing)

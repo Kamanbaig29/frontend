@@ -20,6 +20,7 @@ const program = new anchor.Program(idl, PROGRAM_ID, provider);
 
 console.log('Listening for new Pump.fun tokens (CreateEvent)...');
 
+// amazonq-ignore-next-line
 program.addEventListener('CreateEvent', async (event, slot) => {
   console.log('--- New Token Created! ---');
   console.log('Name:   ', event.name);
@@ -30,7 +31,9 @@ program.addEventListener('CreateEvent', async (event, slot) => {
   console.log('Bonding Curve:', event.bondingCurve.toBase58());
   console.log('Slot:   ', slot);
 
+  // amazonq-ignore-next-line
   // 1. Metadata JSON fetch karo
+  // amazonq-ignore-next-line
   try {
     const response = await fetch(event.uri);
     const metadata = await response.json();

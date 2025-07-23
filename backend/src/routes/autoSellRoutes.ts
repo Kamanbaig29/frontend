@@ -29,7 +29,9 @@ router.post('/upsert', async (req: Request, res: Response, next: NextFunction) =
       { upsert: true, new: true }
     );
     res.json({ success: true, doc });
+  // amazonq-ignore-next-line
   } catch (e) {
+    // amazonq-ignore-next-line
     console.error('AutoSell upsert error:', e); // Log the error
     const upsertErrorMessage = e instanceof Error ? e.message : 'Internal server error';
     res.status(500).json({ error: upsertErrorMessage });

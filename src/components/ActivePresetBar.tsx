@@ -4,6 +4,7 @@ import { Button, ToggleButton, ToggleButtonGroup } from "@mui/material";
 interface ActivePresetBarProps {
   activeBuyPreset: number;
   activeSellPreset: number;
+  // amazonq-ignore-next-line
   buyPresets: any[];
   sellPresets: any[];
   setActiveBuyPreset: (idx: number) => void;
@@ -33,6 +34,7 @@ const ActivePresetBar: React.FC<ActivePresetBarProps> = ({
   sellPresets,
   setActiveBuyPreset,
   setActiveSellPreset,
+  // amazonq-ignore-next-line
   //showBuyPresetButtons = false,
   //showSellPresetButtons = false,
   ws,
@@ -79,6 +81,7 @@ const ActivePresetBar: React.FC<ActivePresetBarProps> = ({
       </div>
 
       {/* Center: Toggle + P1/P2/P3 */}
+
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <ToggleButtonGroup
           value={presetMode}

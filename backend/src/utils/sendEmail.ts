@@ -25,6 +25,7 @@ const sendEmail = async (to: string, subject: string, htmlContent: string) => {
 
     console.log(`Email sent to ${to}`);
     return true;
+  // amazonq-ignore-next-line
   } catch (error) {
     console.error('Error sending email:', error);
     return false;

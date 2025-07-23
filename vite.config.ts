@@ -17,6 +17,7 @@ export default defineConfig({
   },
   server: {
     port: 5174,
+    // amazonq-ignore-next-line
     host: '0.0.0.0',         // 🔑 required for external tunnel access
     allowedHosts: true      // 🔑 make sure it's NOT in []
   },

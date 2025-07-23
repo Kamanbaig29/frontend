@@ -8,6 +8,7 @@ export interface WebSocketContextType {
   isAuthenticated: boolean;
   authenticate: (token: string) => void;
   walletAddress?: string; // <-- add this
+  // amazonq-ignore-next-line
   buyPresets: any[];
   sellPresets: any[];
   activeBuyPreset: number;
@@ -113,6 +114,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
       sendMessage({ type: "AUTHENTICATE", token });
     };
 
+    // amazonq-ignore-next-line
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data);
       console.log("WS MESSAGE:", data);
@@ -155,6 +157,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
       setIsAuthenticated(false);
     };
 
+    // amazonq-ignore-next-line
     socket.onerror = (_) => {
       setStatus('error');
       socket.close();

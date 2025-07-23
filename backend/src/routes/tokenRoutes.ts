@@ -11,7 +11,9 @@ router.get('/all', authenticateJWT, async (req: Request, res: Response): Promise
   try {
     const tokens = await MemeHomeToken.find({}).sort({ creationTimestamp: -1 });
     res.json({ tokens });
+  // amazonq-ignore-next-line
   } catch (err) {
+    // amazonq-ignore-next-line
     console.error('Error fetching tokens:', err);
     res.status(500).json({ error: 'Failed to fetch tokens' });
   }

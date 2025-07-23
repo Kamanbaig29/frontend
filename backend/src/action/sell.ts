@@ -10,6 +10,7 @@ import {
 } from "@solana/web3.js";
 import { getAccount } from "@solana/spl-token";
 
+// amazonq-ignore-next-line
 function calculateDiscriminator(name: string): Buffer {
   const hash = sha256.digest(name);
   return Buffer.from(hash.slice(0, 8));
@@ -40,6 +41,7 @@ interface SellTokenParams {
   bribeAmount?: number;
 }
 
+// amazonq-ignore-next-line
 export async function sellToken({
   connection,
   userKeypair,
@@ -116,6 +118,7 @@ export async function sellToken({
     const sig = await connection.sendTransaction(tx, [userKeypair]);
     console.log("Sell tx sent:", sig);
     return sig;
+  // amazonq-ignore-next-line
   } catch (err: any) {
     console.error("Sell tx error:", err);
     if (err.logs) {

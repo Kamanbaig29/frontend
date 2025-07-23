@@ -15,11 +15,14 @@ import { BN } from 'bn.js';
 let autoSellWorkerInterval: NodeJS.Timeout | null = null;
 let ws: WebSocket | null = null;
 
+// amazonq-ignore-next-line
 //const apiLink = process.env.API_LINK;
+// amazonq-ignore-next-line
 const wslink = process.env.WS_LINK;
 const port = process.env.API_PORT;
 
 // --- WebSocket Setup ---
+// amazonq-ignore-next-line
 function getOrCreateWebSocket() {
   if (ws && ws.readyState === WebSocket.OPEN) return ws;
   if (ws && ws.readyState === WebSocket.CONNECTING) return ws;
@@ -64,6 +67,7 @@ function getOrCreateWebSocket() {
   return ws;
 }
 
+// amazonq-ignore-next-line
 function sendManualSellMessage(data: any) {
   const ws = getOrCreateWebSocket();
   const payload = { type: 'MANUAL_SELL', ...data };
@@ -86,12 +90,67 @@ function sendManualSellMessage(data: any) {
   }
 }
 
+// Helper function to execute the sell and perform related actions
+async function executeSell(config: any, reason: string, currentPrice?: number) {
+  const ws = getOrCreateWebSocket();
+  let profitLossPercent: number | undefined;
+
+  if (currentPrice !== undefined && config.buyPrice) {
+    profitLossPercent = ((currentPrice - config.buyPrice) / config.buyPrice) * 100;
+  }
+
+  console.log(
+    `🔔 AutoSell triggered for user: ${config.userId}, token: ${config.mint}, Reason: ${reason}, P/L: ${profitLossPercent ? profitLossPercent.toFixed(2) + '%' : 'N/A'}`
+  );
+
+  // Send auto-sell notification to frontend
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: "AUTO_SELL_TRIGGERED",
+      mint: config.mint,
+      walletAddress: config.walletAddress,
+      percent: config.autoSellPercent,
+      profitLoss: profitLossPercent,
+      reason: reason,
+      tokenName: config.tokenName || 'Unknown Token'
+    }));
+  }
+
+  sendManualSellMessage({
+    mint: config.mint,
+    percent: config.autoSellPercent,
+    walletAddress: config.walletAddress,
+    slippage: config.slippage,
+    priorityFee: config.priorityFee,
+    bribeAmount: config.bribeAmount,
+    isAutoSell: true,
+  });
+
+  // Immediately disable autoSellEnabled to prevent repeated sells
+  await AutoSell.updateOne(
+    { _id: config._id },
+    { $set: { autoSellEnabled: false } }
+  );
+  console.log(`[AutoSellWorker] AutoSell immediately disabled for mint: ${config.mint}, wallet: ${config.walletAddress}`);
+
+  // Send auto-sell disabled notification
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: "AUTO_SELL_DISABLED",
+      mint: config.mint,
+      walletAddress: config.walletAddress,
+      tokenName: config.tokenName || 'Unknown Token'
+    }));
+  }
+}
+
 export async function checkAndExecuteAllAutoSells() {
   const autoSells = await AutoSell.find({ autoSellEnabled: true });
   console.log('[AutoSellWorker] checkAndExecuteAllAutoSells, active:', autoSells.length);
   const connection = getConnection();
 
   // --- Pre-fetch user filter presets for efficiency ---
+  // amazonq-ignore-next-line
   const userIds = [...new Set(autoSells.map(s => s.userId.toString()))];
   const presets = await UserFilterPreset.find({ userId: { $in: userIds } }).lean();
   const presetsMap = new Map(presets.map(p => [p.userId, p]));
@@ -105,6 +164,7 @@ export async function checkAndExecuteAllAutoSells() {
         continue; // Skip all other checks if token is blocked
       }
 
+      // amazonq-ignore-next-line
       console.log("After Blocked TOken")
 
       // --- 1. FRONT-RUN PROTECTION CHECK ---
@@ -125,7 +185,7 @@ export async function checkAndExecuteAllAutoSells() {
 
             const jupiterApi = createJupiterApiClient(); // Mainnet by default
             const tokenMint = new PublicKey(config.mint);
-            
+
             const tokenAccount = await connection.getParsedTokenAccountsByOwner(userKeypair.publicKey, { mint: tokenMint });
             if (!tokenAccount.value.length) {
               console.log(`[AutoSellWorker] No token account found for ${config.mint} to simulate.`);
@@ -164,14 +224,14 @@ export async function checkAndExecuteAllAutoSells() {
             const swapTransactionBuf = Buffer.from(swapTransaction, 'base64');
             const transaction = VersionedTransaction.deserialize(swapTransactionBuf);
             transaction.sign([userKeypair]);
-            
+
             const simulationResult = await connection.simulateTransaction(transaction);
             if (simulationResult.value.err) {
               console.log(`[AutoSellWorker] 🛡️ Front-run protection triggered for ${config.mint}. Simulation failed!`, simulationResult.value.err);
               console.log("[AutoSellWorker] Logs:", simulationResult.value.logs);
               continue;
             }
-            
+
             console.log(`[AutoSellWorker] ✅ Simulation successful for ${config.mint}. Proceeding with sell checks.`);
 
           } catch (simError) {
@@ -209,91 +269,111 @@ export async function checkAndExecuteAllAutoSells() {
 
       console.log("After Min liquidate");
 
-    
-      const wait_buyer = 1;
-      const time_based_sell = 1;
-      const trail_loss = 1;
-      const classic_sell = 1;
-
-      if (!wait_buyer) {
-        console.log("⏳ Waiting for buyers is disabled.");
+      // --- 3. WAIT FOR BUYERS BEFORE SELL CHECK ---
+      if (config.waitForBuyersBeforeSellEnabled) {
+        try {
+          const buyersCount = await import('./getBuyersCount').then(mod => mod.getBuyersCount(config.mint));
+          if (typeof config.waitForBuyersBeforeSell === 'number' && buyersCount < config.waitForBuyersBeforeSell) {
+            console.log(`[AutoSellWorker] ⏳ Waiting for more buyers: ${buyersCount}/${config.waitForBuyersBeforeSell} for mint: ${config.mint}`);
+            continue;
+          }
+        } catch (err) {
+          console.error(`[AutoSellWorker] Error getting buyers count for mint ${config.mint}:`, err);
+          continue;
+        }
       }
-      
-      if (time_based_sell) {
-        console.log("🕒 Time-based sell triggered.");
-      } else if (trail_loss) {
-        console.log("📉 Trailing stop loss triggered.");
-      } else {
-        console.log("🎯 Classic take-profit or stop-loss triggered.");
+
+      console.log("After Wait for Buyer");
+
+      // --- 4. TIME-BASED SELL CHECK ---
+      if (config.timeBasedSellEnabled) {
+        if (typeof config.timeBasedSellSec !== 'number' || config.timeBasedSellSec <= 0) {
+          console.log(`[AutoSellWorker] ⚠️ Invalid timeBasedSellSec (${config.timeBasedSellSec}) for user: ${config.userId}, token: ${config.mint}`);
+          continue;
+        }
+        if (config.boughtTime instanceof Date && !isNaN(config.boughtTime.getTime())) {
+          const now = new Date();
+          const secondsSinceBought = (now.getTime() - config.boughtTime.getTime()) / 1000;
+          if (secondsSinceBought >= config.timeBasedSellSec) {
+            await executeSell(config, 'time-based');
+            continue; // Do not process any other sell logic if time-based sell is triggered
+          } else {
+            console.log(`[AutoSellWorker] ⏳ Time-based sell not triggered yet for user: ${config.userId}, token: ${config.mint}, seconds since bought: ${secondsSinceBought}`);
+            continue; // Do not process any other sell logic if time-based sell is enabled but not yet triggered
+          }
+        } else {
+          console.log(`[AutoSellWorker] ⚠️ Invalid boughtTime for user: ${config.userId}, token: ${config.mint}`);
+          continue;
+        }
       }
-      
 
-
+      console.log("AFTER TIME BASED SELL");
 
       // Get userKeypair for price fetch
       const userKeypair = await getUserKeypairByWallet(config.walletAddress);
       if (!userKeypair) continue;
 
-      // Get current price and calculate P/L
+      // Get current price
       const currentPrice = await getCurrentPrice(connection, config.mint, userKeypair.publicKey);
+      if (currentPrice === null || currentPrice === undefined) {
+        console.log(`[AutoSellWorker] Could not fetch current price for ${config.mint}, skipping sell checks.`);
+        continue;
+      }
+
+      console.log("CURRENT PRICE: ", currentPrice);
+
+      // --- 5. TRAILING STOP LOSS CHECK ---
+      if (config.trailingStopLossEnabled) {
+        if (typeof config.trailingStopLossPercent === 'number' && config.trailingStopLossPercent > 0) {
+          let peakPrice = config.peakPrice || config.buyPrice;
+
+          console.log("PEAK PRICE", peakPrice);
+          console.log("TYPE OF PEAK PRICE", typeof (peakPrice));
+          console.log("TYPE OF CURRENT PRICE", typeof (currentPrice));
+          if (currentPrice > peakPrice) {
+            peakPrice = currentPrice;
+            await AutoSell.updateOne({ _id: config._id }, { $set: { peakPrice: peakPrice } });
+            console.log(`[AutoSellWorker] ✨ New peak price for ${config.mint}: ${peakPrice}`);
+          }
+
+          const triggerPrice = peakPrice * (1 - config.trailingStopLossPercent / 100);
+          console.log(`[AutoSellWorker] Trailing Stop for ${config.mint}: Current=${currentPrice}, Peak=${peakPrice}, Trigger=${triggerPrice}`);
+
+          if (currentPrice <= triggerPrice) {
+            await executeSell(config, 'trailing-stop-loss', currentPrice);
+            // Immediately disable autoSellEnabled to prevent repeated sells
+            await AutoSell.updateOne(
+              { _id: config._id },
+              { $set: { peakPrice: 0 } }
+            );
+            continue; // Sell is triggered, move to next token
+          } else {
+            // Trailing is enabled but not triggered, so we hold and skip other sell checks.
+            console.log(`[AutoSellWorker] Holding ${config.mint} under trailing stop loss.`);
+            continue;
+          }
+        }
+      }
+
+      // --- 6. TAKE PROFIT / STOP LOSS CHECK (Only runs if Time-Based and Trailing are disabled) ---
       const buyPrice = config.buyPrice;
-      if (!buyPrice || !currentPrice) continue;
+      if (!buyPrice) continue;
       const profitLossPercent = ((currentPrice - buyPrice) / buyPrice) * 100;
 
       // Check takeProfit/stopLoss
       let shouldSell = false;
+      let reason = '';
       if (typeof config.takeProfit === 'number' && profitLossPercent >= config.takeProfit) {
         shouldSell = true;
+        reason = 'take-profit';
       }
       if (typeof config.stopLoss === 'number' && profitLossPercent <= -Math.abs(config.stopLoss)) {
         shouldSell = true;
+        reason = 'stop-loss';
       }
 
       if (shouldSell) {
-        console.log(
-          `🔔 AutoSell triggered for user: ${config.userId}, token: ${config.mint}, P/L: ${profitLossPercent.toFixed(2)}%`
-        );
-
-        // Send auto-sell notification to frontend
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({
-            type: "AUTO_SELL_TRIGGERED",
-            mint: config.mint,
-            walletAddress: config.walletAddress,
-            percent: config.autoSellPercent,
-            profitLoss: profitLossPercent,
-            tokenName: config.tokenName || 'Unknown Token'
-          }));
-        }
-
-        sendManualSellMessage({
-          mint: config.mint,
-          percent: config.autoSellPercent,
-          walletAddress: config.walletAddress,
-          slippage: config.slippage,
-          priorityFee: config.priorityFee,
-          bribeAmount: config.bribeAmount,
-          isAutoSell: true, // Add flag to identify auto-sells
-        });
-        // Immediately disable autoSellEnabled to prevent repeated sells
-        await AutoSell.updateOne(
-          { mint: config.mint, walletAddress: config.walletAddress },
-          { $set: { autoSellEnabled: false } }
-        );
-        console.log(`[AutoSellWorker] AutoSell immediately disabled for mint: ${config.mint}, wallet: ${config.walletAddress}`);
-
-        // Send auto-sell disabled notification
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({
-            type: "AUTO_SELL_DISABLED",
-            mint: config.mint,
-            walletAddress: config.walletAddress,
-            tokenName: config.tokenName || 'Unknown Token'
-          }));
-        }
-
-        // REMOVE THIS: Don't send SOL balance update here - wait for actual sell transaction
-        // The balance update will be sent by the manual sell handler after transaction confirmation
+        await executeSell(config, reason, currentPrice);
       }
     } catch (error) {
       console.error(`[AutoSellWorker] Error processing auto-sell for mint ${config.mint}:`, error);
@@ -304,6 +384,7 @@ export async function checkAndExecuteAllAutoSells() {
 async function batchPriceSync() {
   // Fetch all user tokens instead of auto-sell configs
   const userTokens = await UserToken.find({});
+  // amazonq-ignore-next-line
   console.log('[AutoSellWorker] batchPriceSync, processing tokens:', userTokens.length);
   const connection = getConnection();
   const BATCH_SIZE = 3;

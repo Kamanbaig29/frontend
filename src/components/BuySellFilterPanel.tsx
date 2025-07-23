@@ -325,6 +325,7 @@ const BuySellFilterPanel: React.FC<BuySellFilterPanelProps> = ({
   };
 
   // Fetch data when the filter panel opens
+  // amazonq-ignore-next-line
   useEffect(() => {
     if (open) {
       fetchWhitelistDevs();

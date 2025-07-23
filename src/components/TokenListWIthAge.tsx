@@ -106,8 +106,8 @@ const TokenListWithAge: React.FC = () => {
   const [trailingStopLossEnabledState, setTrailingStopLossEnabledState] = useState<{ [mint: string]: boolean }>({});
   const [timeBasedSellState, setTimeBasedSellState] = useState<{ [mint: string]: string }>({});
   const [timeBasedSellEnabledState, setTimeBasedSellEnabledState] = useState<{ [mint: string]: boolean }>({});
-  const [ageEnabledState, setAgeEnabledState] = useState<{ [mint: string]: boolean }>({});
-  const [ageValueState, setAgeValueState] = useState<{ [mint: string]: string }>({});
+  //const [ageEnabledState, setAgeEnabledState] = useState<{ [mint: string]: boolean }>({});
+  //const [ageValueState, setAgeValueState] = useState<{ [mint: string]: string }>({});
   const [waitForBuyersState, setWaitForBuyersState] = useState<{ [mint: string]: string }>({});
   const [waitForBuyersEnabledState, setWaitForBuyersEnabledState] = useState<{ [mint: string]: boolean }>({});
 

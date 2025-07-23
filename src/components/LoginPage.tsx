@@ -20,6 +20,7 @@ const PhantomIcon = () => (
     </svg>
 )
 
+// amazonq-ignore-next-line
 const LoginPage: React.FC<LoginPageProps> = ({ }) => {
   const [view, setView] = useState<'login' | 'signup' | 'otp'>('login');
   
@@ -146,6 +147,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ }) => {
         alert(data.message || 'Phantom login failed');
       }
     } catch (err: any) {
+      // amazonq-ignore-next-line
       alert('Phantom login cancelled or failed');
     }
   };

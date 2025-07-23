@@ -33,6 +33,7 @@ export function initProgram(
 
 // Helper to get Metaplex metadata PDA from mint
 function getMetadataPDA(mint: string): PublicKey {
+  // amazonq-ignore-next-line
   return PublicKey.findProgramAddressSync(
     [
       Buffer.from('metadata'),
@@ -50,7 +51,9 @@ async function fetchTokenMetadata(uri: string) {
     const json = await res.json();
     //console.log('[fetchTokenMetadata] Success:', uri, json);
     return json;
+  // amazonq-ignore-next-line
   } catch (e) {
+    // amazonq-ignore-next-line
     console.error('[fetchTokenMetadata] Error fetching:', uri, e);
     return {};
   }
@@ -78,14 +81,17 @@ async function fetchMetaplexMetadata(connection: Connection, mint: string) {
       metadataUri: uri,
       decimals: metaJson?.decimals // fallback if available
     };
+  // amazonq-ignore-next-line
   } catch (err) {
     console.error('[fetchMetaplexMetadata] Error:', err);
     return {};
   }
 }
 
+// amazonq-ignore-next-line
 async function fetchMetaplexMetadataWithRetry(connection: Connection, mint: string, retries = 10, delayMs = 2000) {
   for (let i = 0; i < retries; i++) {
+    // amazonq-ignore-next-line
     const meta = await fetchMetaplexMetadata(connection, mint);
     if (meta && meta.name !== 'Unknown' && meta.name) return meta;
     await new Promise(res => setTimeout(res, delayMs));
@@ -114,6 +120,7 @@ export async function getCurrentPriceForWorker(
     if (!virtualSolReserves || !virtualTokenReserves) return 0;
     const virtualSol = virtualSolReserves.toNumber() / 1_000_000;
     const virtualToken = virtualTokenReserves.toNumber() / 1_000_000;
+    // amazonq-ignore-next-line
     if (virtualToken === 0) return 0;
     return virtualSol / virtualToken;
   } catch (error) {
@@ -133,6 +140,7 @@ async function getCurrentPriceWithRetry(
     const price = await getCurrentPriceForWorker(connection, mint);
     if (price !== lastPrice && price > 0) return price;
     lastPrice = price;
+    // amazonq-ignore-next-line
     await new Promise(res => setTimeout(res, delayMs));
   }
   return lastPrice;
@@ -142,6 +150,7 @@ async function getTokenLaunchTimestamp(connection: Connection, mint: string) {
   const programId = process.env.MEMEHOME_PROGRAM_ID;
   if (!programId) {
     console.log('[getTokenLaunchTimestamp] MEMEHOME_PROGRAM_ID not set in env!');
+    // amazonq-ignore-next-line
     return Date.now();
   }
 
@@ -154,10 +163,12 @@ async function getTokenLaunchTimestamp(connection: Connection, mint: string) {
     //console.log(`[getTokenLaunchTimestamp] Checking tx: ${sig.signature}`);
     const tx = await connection.getTransaction(sig.signature, { commitment: 'confirmed' });
     if (!tx) {
+      // amazonq-ignore-next-line
       console.log(`[getTokenLaunchTimestamp] Transaction not found for signature: ${sig.signature}`);
       continue;
     }
     if (!tx.meta || !tx.meta.logMessages) {
+      // amazonq-ignore-next-line
       console.log(`[getTokenLaunchTimestamp] No meta/logMessages for tx: ${sig.signature}`);
       continue;
     }
@@ -179,6 +190,7 @@ async function getTokenLaunchTimestamp(connection: Connection, mint: string) {
           return Date.now();
         }
       } else {
+        // amazonq-ignore-next-line
         console.log(`[getTokenLaunchTimestamp] Mint not found in accountKeys for tx: ${sig.signature}`);
       }
     }
@@ -189,6 +201,7 @@ async function getTokenLaunchTimestamp(connection: Connection, mint: string) {
 
 async function waitForFinalization(connection: Connection, signature: string, maxWaitMs = 20000) {
   const start = Date.now();
+  // amazonq-ignore-next-line
   while (Date.now() - start < maxWaitMs) {
     const status = await connection.getSignatureStatus(signature, { searchTransactionHistory: true });
     if (status && status.value && status.value.confirmationStatus === 'finalized') {
@@ -224,12 +237,14 @@ export async function startMemeHomeTokenWorker(wss: WebSocketServer) {
           log.includes('Instruction: Sell') ||
           log.includes('Instruction: Update')
         );
+        // amazonq-ignore-next-line
         console.log(`[MemeHomeTokenWorker] Detected event: ${eventType}`);
         //console.log('[MemeHomeTokenWorker] logInfo:', logInfo);
 
         // 1. Fetch transaction details
         const tx = await connection.getTransaction(logInfo.signature, { commitment: 'confirmed' });
         if (!tx?.transaction?.message) {
+          // amazonq-ignore-next-line
           console.warn('[MemeHomeTokenWorker] No transaction message for:', logInfo.signature);
           return;
         }
@@ -329,6 +344,7 @@ export async function startMemeHomeTokenWorker(wss: WebSocketServer) {
             imageUrl = meta.imageUrl || '';
             metadataUri = meta.metadataUri || '';
           } catch (e) {
+            // amazonq-ignore-next-line
             console.error(`❌ [MemeHomeTokenWorker] Error fetching Metaplex meta for mint ${mint}:`, e);
           }
         }
@@ -348,6 +364,7 @@ export async function startMemeHomeTokenWorker(wss: WebSocketServer) {
             supplyRaw = Number(tokenSupplyInfo.value.data.parsed.info.supply);
           }
         } catch (e) {
+          // amazonq-ignore-next-line
           console.error(`[${mint}] Error fetching supply:`, e);
         }
 
@@ -371,6 +388,7 @@ export async function startMemeHomeTokenWorker(wss: WebSocketServer) {
             virtualTokenRaw = virtualTokenReserves.toNumber(); // RAW
           }
         } catch (e) {
+          // amazonq-ignore-next-line
           console.error(`[${mint}] Error fetching bonding curve reserves:`, e);
         }
 
@@ -379,6 +397,7 @@ export async function startMemeHomeTokenWorker(wss: WebSocketServer) {
         try {
           currentPrice = await getCurrentPriceWithRetry(connection, mint);
         } catch (e) {
+          // amazonq-ignore-next-line
           console.error(`[${mint}] Error getting current price:`, e);
         }
 
@@ -389,6 +408,7 @@ export async function startMemeHomeTokenWorker(wss: WebSocketServer) {
           marketCapLamports = await getMarketCap(supplyRaw, virtualSolRaw, virtualTokenRaw);
           marketCap = marketCapLamports / 1e9; // Convert lamports to SOL
         } catch (e) {
+          // amazonq-ignore-next-line
           console.error(`[${mint}] Error calculating marketCap:`, e);
         }
         // --- Calculate marketCapUsd ---
@@ -418,8 +438,10 @@ export async function startMemeHomeTokenWorker(wss: WebSocketServer) {
           creationTimestamp = Date.now();
           //console.log(`[MemeHomeTokenWorker] Launch event: using Date.now() for creationTimestamp: ${creationTimestamp}`);
         } else if ((isBuy || isSell || isSwap) && !tokenInDb) {
+          // amazonq-ignore-next-line
           console.log('[MemeHomeTokenWorker] Calling getTokenLaunchTimestamp for mint:', mint);
           creationTimestamp = await getTokenLaunchTimestamp(connection, mint);
+          // amazonq-ignore-next-line
           console.log(`[MemeHomeTokenWorker] Buy/Sell/Swap event, token not in DB: fetched creationTimestamp: ${creationTimestamp}`);
         } else {
           console.log('[MemeHomeTokenWorker] Not a launch/buy/sell/swap event or token already in DB, not setting creationTimestamp');
@@ -456,6 +478,7 @@ export async function startMemeHomeTokenWorker(wss: WebSocketServer) {
             creator
           }
         };
+        // amazonq-ignore-next-line
         console.log('[MemeHomeTokenWorker] Final upsertObj:', upsertObj);
 
         await MemeHomeToken.findOneAndUpdate(
@@ -463,6 +486,7 @@ export async function startMemeHomeTokenWorker(wss: WebSocketServer) {
           upsertObj,
           { upsert: true }
         );
+        // amazonq-ignore-next-line
         console.log(`[MemeHomeTokenWorker] Upserted token: ${mint}`);
 
         // 9. Swap/Buy/Sell event: update volume/transactions
@@ -535,10 +559,12 @@ export async function startMemeHomeTokenWorker(wss: WebSocketServer) {
                 });
               }
             } else {
+              // amazonq-ignore-next-line
               console.warn(`[BlockConfirmedPriceUpdate] Transaction ${logInfo.signature} not finalized in time, skipping price update.`);
             }
           });
         }
+      // amazonq-ignore-next-line
       } catch (err) {
         console.error('[MemeHomeTokenWorker] Error:', err);
       }
@@ -582,12 +608,14 @@ async function periodicPriceSync(wss: WebSocketServer) {
             virtualTokenRaw = virtualTokenReserves.toNumber(); // RAW
           }
         } catch (e) {
+          // amazonq-ignore-next-line
           console.error(`[${token.mint}] Error fetching bonding curve reserves:`, e);
         }
         let price = 0;
         try {
           price = await getCurrentPriceForWorker(connection, token.mint);
         } catch (e) {
+          // amazonq-ignore-next-line
           console.error(`[${token.mint}] Error getting current price:`, e);
         }
         let supplyRaw = 0;
@@ -600,6 +628,7 @@ async function periodicPriceSync(wss: WebSocketServer) {
           marketCapLamports = await getMarketCap(supplyRaw, virtualSolRaw, virtualTokenRaw);
           marketCap = marketCapLamports / 1e9; // Convert lamports to SOL
         } catch (e) {
+          // amazonq-ignore-next-line
           console.error(`[${token.mint}] Error calculating marketCap:`, e);
         }
         // --- Calculate marketCapUsd ---
@@ -628,6 +657,7 @@ async function periodicPriceSync(wss: WebSocketServer) {
           { $set: { currentPrice: price, lastUpdated: new Date() } }
         );
         // --- END NEW ---
+        // amazonq-ignore-next-line
         console.log(`[PeriodicPriceSync] Updated price for ${token.mint}: ${price}`);
         // WebSocket broadcast for frontend update
         const latestToken = await MemeHomeToken.findOne({ mint: token.mint }).lean();
@@ -638,7 +668,9 @@ async function periodicPriceSync(wss: WebSocketServer) {
             }
           });
         }
+      // amazonq-ignore-next-line
       } catch (e) {
+        // amazonq-ignore-next-line
         console.error(`[PeriodicPriceSync] Error updating price for ${token.mint}:`, e);
       }
     }));

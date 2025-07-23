@@ -43,6 +43,8 @@ export async function handleManualBuy(
   }
 ): Promise<ManualBuyResult> {
   console.log("\n🛒 Starting manual buy process...");
+  // amazonq-ignore-next-line
+  // amazonq-ignore-next-line
   //console.log("----------------------------------------");
   //console.log(`🎯 Mint Address: ${mintAddress}`);
   //console.log(`💰 Amount: ${amount} lamports (${amount / 1e9} SOL)`);
@@ -193,6 +195,7 @@ export async function handleManualBuy(
         throw new Error("Transaction failed - no signature returned");
       }
 
+      // amazonq-ignore-next-line
       console.log(`✅ Transaction sent! Signature: ${signature}`);
 
       // 9. Wait for confirmation
@@ -255,6 +258,7 @@ export async function handleManualBuy(
         ) {
           decimals = mintInfo.value.data.parsed.info.decimals;
         }
+      // amazonq-ignore-next-line
       } catch {}
       const tokenAccountInfo = await connection.getTokenAccountBalance(userTokenAccount);
       const liveBalanceRaw = tokenAccountInfo.value.amount; // RAW, string

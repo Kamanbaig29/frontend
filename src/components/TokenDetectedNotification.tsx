@@ -23,7 +23,7 @@ const TokenDetectedNotification = () => {
     <div
       style={{
         position: "fixed",
-        top: "4.5rem", // ya 72px, ya jitna bhi aapke preset bar ki height ho
+        top: "4.5rem",
         left: "50%",
         transform: "translateX(-50%)",
         zIndex: 50,

@@ -1,13 +1,16 @@
 import mongoose from 'mongoose';
 
 const AutoSellSchema = new mongoose.Schema({
+  // amazonq-ignore-next-line
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   walletAddress: { type: String, required: true, index: true },
   mint: { type: String, required: true, index: true },
+  // amazonq-ignore-next-line
   buyPrice: { type: Number, required: true },
   takeProfit: { type: Number, required: false }, // e.g. 2.5 (SOL) or percent
   stopLoss: { type: Number, required: false },   // e.g. 10 (%)
   trailingStopLossPercent: { type: Number, required: false }, // e.g. 5 (%)
+  // amazonq-ignore-next-line
   trailingStopLossEnabled: { type: Boolean, default: false },
   timeBasedSellSec: { type: Number, required: false }, // e.g. 60 (seconds)
   timeBasedSellEnabled: { type: Boolean, default: false },

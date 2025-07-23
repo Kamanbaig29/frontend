@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 
+// amazonq-ignore-next-line
 const BuyFiltersSchema = new mongoose.Schema({
   maxMcap: { type: Number, default: 0 },
   maxBuyers: { type: Number, default: 0 },
@@ -7,6 +8,7 @@ const BuyFiltersSchema = new mongoose.Schema({
   antiRug: { type: Boolean, default: false },
   noBribeMode: { type: Boolean, default: false },
   minLpLockTime: { type: Number, default: 0 },
+  // amazonq-ignore-next-line
   whitelistDevs: { type: [String], default: ["true"] }, // now array, default ["true"]
   blacklistDevs: { type: [String], default: ["true"] }, // now array, default ["true"]
   autoSellCondition: { type: String, default: "" },

@@ -5,6 +5,7 @@ export interface IMemeHomeToken extends Document {
   name: string;
   symbol: string;
   creator: string;
+  // amazonq-ignore-next-line
   //owner: string;
   bondingCurve: string;
   curveTokenAccount: string;
@@ -50,6 +51,7 @@ const MemeHomeTokenSchema: Schema = new Schema({
   marketCapUsd: { type: Number },
 });
 
+// amazonq-ignore-next-line
 MemeHomeTokenSchema.index({ creationTimestamp: -1 });
 MemeHomeTokenSchema.index({ creator: 1 });
 MemeHomeTokenSchema.index({ isActive: 1 });

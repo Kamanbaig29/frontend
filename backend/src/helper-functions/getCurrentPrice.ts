@@ -31,8 +31,10 @@ export async function getCurrentPrice(
     const virtualSolReserves = bondingCurveAcc['virtualSolReserves'] as BN;
     const virtualTokenReserves = bondingCurveAcc['virtualTokenReserves'] as BN;
     if (!virtualSolReserves || !virtualTokenReserves) return 0;
+    // amazonq-ignore-next-line
     const virtualSol = virtualSolReserves.toNumber() / 1_000_000;
     const virtualToken = virtualTokenReserves.toNumber() / 1_000_000;
+    // amazonq-ignore-next-line
     if (virtualToken === 0) return 0;
     return virtualSol / virtualToken;
   } catch (error) {

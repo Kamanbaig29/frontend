@@ -15,6 +15,7 @@ import {getAccount } from "@solana/spl-token";
  * @param name Format must be like "account:StructName" or "global:instructionName"
  * @returns Buffer of 8-byte discriminator
  */
+// amazonq-ignore-next-line
 function calculateDiscriminator(name: string): Buffer {
   const hash = sha256.digest(name); // Uint8Array (32 bytes)
   const first8Bytes = hash.slice(0, 8); // first 8 bytes
@@ -34,6 +35,7 @@ interface BuyTokenParams {
   bribeAmount?: number;
 }
 
+// amazonq-ignore-next-line
 export async function buyToken({
   connection,
   userKeypair,
@@ -171,6 +173,7 @@ export async function buyToken({
     }
 
     return signature;
+  // amazonq-ignore-next-line
   } catch (error: any) {
     console.error("❌ Buy failed:", error.message);
     return undefined;

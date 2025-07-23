@@ -66,7 +66,7 @@ const reducer = (state: State, action: Action): State => {
         )
       };
     case "RESET":
-      return { ...initialState }; // <-- Yeh line use karein
+      return { ...initialState };
     default:
       return state;
   }

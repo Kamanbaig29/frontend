@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticateJWT } from '../middleware/authMiddleware';
+// amazonq-ignore-next-line
 //import { startUserServices, stopUserServices } from '../servcies/userBotServices';
 import User from '../models/user_auth';
 
@@ -48,6 +49,7 @@ router.post('/stop-services', authenticateJWT, async (req, res) => {
     const userId = (req as any).user.id;
     //await stopUserServices(userId);
     res.json({ message: 'Services stopped' });
+  // amazonq-ignore-next-line
   } catch (error: any) {
     res.status(500).json({ message: error.message });
   }

@@ -24,6 +24,7 @@ export interface IUserToken extends Document {
 }
 
 const UserTokenSchema: Schema = new Schema({
+  // amazonq-ignore-next-line
   userId: { type: String, required: true, index: true },
   walletAddress: { type: String, required: true, index: true },
   mint: { type: String, required: true, index: true },

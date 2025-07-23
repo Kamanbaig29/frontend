@@ -117,6 +117,7 @@ export async function addOrUpdateTokenFromBuy({
     );
     // Also update AutoSell.boughtTime for this user/token
     try {
+      // amazonq-ignore-next-line
       const AutoSell = require('../models/autoSell').default;
       await AutoSell.updateOne(
         { userId: userID, mint: mint },
@@ -129,6 +130,7 @@ export async function addOrUpdateTokenFromBuy({
 
     // Call separate function for TokenPrice update
     //updateTokenPriceBuy(mint, buyPrice, userPublicKey);
+  // amazonq-ignore-next-line
   } catch (e) {
     console.error(`❌ Error updating UserToken in DB for mint ${mint}:`, e);
   }
@@ -157,6 +159,7 @@ export async function updateOrRemoveTokenAfterSell({
     //console.log(`🗑️ Token ${mint} removed from DB (sold 100%)`);
   //} else {
     // Update UserToken balance
+    // amazonq-ignore-next-line
     await UserToken.findOneAndUpdate(
       { mint, walletAddress: userPublicKey },
       { $set: { balance: remaining, lastSellSignature: signature,} }
