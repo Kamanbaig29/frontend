@@ -9,6 +9,7 @@ import { BotProvider } from './context/BotContext';
 import { WebSocketProvider, useWebSocket } from './context/webSocketContext';
 //import { AutomaticSellDashboard } from './components/AutomaticSellDashboard';
 import LoginPage from './components/LoginPage';
+import LandingPage from './components/LandingPage';
 import TokenListWithAge from './components/TokenListWIthAge';
 import { Typography } from '@mui/material';
 import ActivePresetBar from "./components/ActivePresetBar";
@@ -39,7 +40,7 @@ const AppContent = () => {
     | 'manualSell'
     | 'automaticSell'
     | 'stats'
-  >('login');
+  >('landing');
 
   const { ws, isAuthenticated, status } = useWebSocket();
   const token = localStorage.getItem('token');
@@ -114,7 +115,7 @@ const AppContent = () => {
 
     localStorage.removeItem('token');
     setIsLoggedIn(false);
-    setCurrentView('login');
+    setCurrentView('landing');
   };
 
   useEffect(() => {
@@ -123,6 +124,22 @@ const AppContent = () => {
       setCurrentView('tokenList');
     }
   }, [isLoggedIn, isAuthenticated]);
+
+  // Lock body scroll when login modal is open
+  useEffect(() => {
+    if (currentView === 'login') {
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'auto';
+      document.documentElement.style.overflow = 'auto';
+    }
+    
+    return () => {
+      document.body.style.overflow = 'auto';
+      document.documentElement.style.overflow = 'auto';
+    };
+  }, [currentView]);
 
   useEffect(() => {
     if (!token) setIsLoggedIn(false);
@@ -201,11 +218,21 @@ const AppContent = () => {
           alignItems: 'center',
           justifyContent: 'center',
           background: '#1a1a1a',
-          paddingTop: '40px',
+          paddingTop: '0px',
         }}
       >
         {!token ? (
-          <LoginPage onLoginSuccess={() => setIsLoggedIn(true)} />
+          <>
+            <div style={{ filter: currentView === 'login' ? 'blur(5px)' : 'none', overflow: currentView === 'login' ? 'hidden' : 'auto', height: currentView === 'login' ? '100vh' : 'auto' }}>
+              <LandingPage onEnterApp={() => setCurrentView('login')} hideNavbar={currentView === 'login'} />
+            </div>
+            {currentView === 'login' && (
+              <LoginPage 
+                onLoginSuccess={() => setIsLoggedIn(true)} 
+                onClose={() => setCurrentView('landing')}
+              />
+            )}
+          </>
         ) : !isAuthenticated || status !== "connected" ? (
           <div style={{ color: 'white' }}>Loading...</div>
         ) : (
