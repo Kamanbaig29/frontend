@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@mui/material';
+import './App.css';
 import { BotProvider } from './context/BotContext';
 //import { LandingPage } from './components/LandingPage';
 //import { Dashboard } from './components/Dashboard';
@@ -9,10 +10,11 @@ import { BotProvider } from './context/BotContext';
 import { WebSocketProvider, useWebSocket } from './context/webSocketContext';
 //import { AutomaticSellDashboard } from './components/AutomaticSellDashboard';
 import LoginPage from './components/LoginPage';
-import LandingPage from './components/LandingPage';
+import LandingPage from './components/landingPage';
 import TokenListWithAge from './components/TokenListWIthAge';
+//import Navbar from './components/Navbar';
 import { Typography } from '@mui/material';
-import ActivePresetBar from "./components/ActivePresetBar";
+//import ActivePresetBar from "./components/ActivePresetBar";
 import PresetModal from "./components/PresetModal";
 import TokenDetectedNotification from "./components/TokenDetectedNotification";
 
@@ -31,6 +33,7 @@ import TokenDetectedNotification from "./components/TokenDetectedNotification";
 const AppContent = () => {
   const [currentView, setCurrentView] = useState<
     | 'login'
+    | 'signup'
     | 'tokenList'
     | 'landing'
     | 'selectBuyMode'
@@ -99,24 +102,24 @@ const AppContent = () => {
   //   setIsLoggedIn(true);
   // };
 
-  const handleLogout = () => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      fetch(`${import.meta.env.VITE_API_BASE_URL}/api/bot/stop-services`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }).then(res => res.json())
-        .then(data => console.log('Bot services stopped:', data))
-        .catch(err => console.error('Failed to stop bot services:', err));
-    }
+  // const handleLogout = () => {
+  //   const token = localStorage.getItem('token');
+  //   if (token) {
+  //     fetch(`${import.meta.env.VITE_API_BASE_URL}/api/bot/stop-services`, {
+  //       method: 'POST',
+  //       headers: {
+  //         'Authorization': `Bearer ${token}`,
+  //         'Content-Type': 'application/json'
+  //       }
+  //     }).then(res => res.json())
+  //       .then(data => console.log('Bot services stopped:', data))
+  //       .catch(err => console.error('Failed to stop bot services:', err));
+  //   }
 
-    localStorage.removeItem('token');
-    setIsLoggedIn(false);
-    setCurrentView('landing');
-  };
+  //   localStorage.removeItem('token');
+  //   setIsLoggedIn(false);
+  //   setCurrentView('landing');
+  // };
 
   useEffect(() => {
     if (isLoggedIn && isAuthenticated) {
@@ -223,21 +226,57 @@ const AppContent = () => {
       >
         {!token ? (
           <>
-            <div style={{ filter: currentView === 'login' ? 'blur(5px)' : 'none', overflow: currentView === 'login' ? 'hidden' : 'auto', height: currentView === 'login' ? '100vh' : 'auto' }}>
-              <LandingPage onEnterApp={() => setCurrentView('login')} hideNavbar={currentView === 'login'} />
+            <div style={{ filter: (currentView === 'login' || currentView === 'signup') ? 'blur(5px)' : 'none', overflow: (currentView === 'login' || currentView === 'signup') ? 'hidden' : 'auto', height: (currentView === 'login' || currentView === 'signup') ? '100vh' : 'auto' }}>
+              <LandingPage 
+              onEnterApp={() => setCurrentView('login')} 
+              hideNavbar={currentView === 'login'} 
+              onLogin={() => setCurrentView('login')}
+              onSignup={() => setCurrentView('signup')}
+            />
             </div>
-            {currentView === 'login' && (
+            {(currentView === 'login' || currentView === 'signup') && (
               <LoginPage 
                 onLoginSuccess={() => setIsLoggedIn(true)} 
                 onClose={() => setCurrentView('landing')}
+                initialView={currentView === 'signup' ? 'signup' : 'login'}
               />
             )}
           </>
         ) : !isAuthenticated || status !== "connected" ? (
-          <div style={{ color: 'white' }}>Loading...</div>
+          <div style={{
+            minHeight: '100vh',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: '#1a1a1a'
+          }}>
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              animation: 'fadeInOut 2s ease-in-out infinite'
+            }}>
+              <img 
+                src="/tokenx-logo/t-transparent.png" 
+                alt="TOKENX" 
+                style={{ height: '80px', width: 'auto', marginBottom: '20px' }}
+              />
+              <div style={{
+                color: 'white',
+                fontSize: '24px',
+                fontWeight: 'bold',
+                background: 'linear-gradient(135deg, #1a237e 0%, #3f51b5 50%, #00bcd4 100%)',
+                backgroundClip: 'text',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent'
+              }}>
+                TOKENX
+              </div>
+            </div>
+          </div>
         ) : (
           <>
-            <ActivePresetBar
+            {/* <ActivePresetBar
               activeBuyPreset={activeBuyPreset}
               activeSellPreset={activeSellPreset}
               buyPresets={buyPresets}
@@ -248,7 +287,7 @@ const AppContent = () => {
               walletAddress={walletAddress}
               solBalance={solBalance}
               onLogout={handleLogout}
-            />
+            /> */}
             <PresetModal
               open={presetModalOpen}
               onClose={() => setPresetModalOpen(false)}

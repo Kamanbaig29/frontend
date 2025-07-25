@@ -1,0 +1,29 @@
+:root {
+  /* Primary Colors */
+  --primary-color: #1a237e;
+  --secondary-color: #3f51b5;
+  --accent-color: #00bcd4;
+  --gold-color: #ffc107;
+  
+  /* Background Colors */
+  --dark-bg: #0a0e27;
+  --dark-grey-bg: #1a1a2e;
+  --light-bg: #ffffff;
+  
+  /* Glow Effects */
+  --glow-color: #00e5ff;
+  
+  /* Gradients */
+  --primary-gradient: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 50%, var(--accent-color) 100%);
+  --hover-gradient: linear-gradient(135deg, var(--secondary-color) 0%, var(--accent-color) 50%, var(--gold-color) 100%);
+  --background-gradient: radial-gradient(circle at 50% 0%, rgba(26, 35, 126, 0.3), transparent 60%), radial-gradient(circle at 80% 20%, rgba(0, 188, 212, 0.2), transparent 40%), radial-gradient(circle at 20% 80%, rgba(255, 193, 7, 0.1), transparent 50%);
+  
+  /* Shadows */
+  --glow-shadow: 0 0 10px var(--glow-color);
+  --glow-shadow-hover: 0 0 15px var(--glow-color);
+  --modal-shadow: 0 0 30px rgba(0, 229, 255, 0.4), 0 0 60px rgba(0, 229, 255, 0.2);
+  
+  /* Borders */
+  --border-color: rgba(26, 35, 126, 0.3);
+  --border-color-strong: rgba(26, 35, 126, 0.5);
+}

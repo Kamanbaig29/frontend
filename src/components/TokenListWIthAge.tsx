@@ -9,6 +9,9 @@ import { useWebSocket } from '../context/webSocketContext';
 //import SettingsIcon from '@mui/icons-material/Settings';
 import BuySellFilterPanel, { type BuyFilters, type SellFilters } from './BuySellFilterPanel';
 import FilterListIcon from '@mui/icons-material/FilterList'; // or your icon
+import Navbar from './Navbar';
+import DepositModal from './DepositModal';
+import WithdrawModal from './WithdrawModal';
 //import { WebSocketContext } from "../context/webSocketContext";
 
 type Token = {
@@ -110,6 +113,28 @@ const TokenListWithAge: React.FC = () => {
   //const [ageValueState, setAgeValueState] = useState<{ [mint: string]: string }>({});
   const [waitForBuyersState, setWaitForBuyersState] = useState<{ [mint: string]: string }>({});
   const [waitForBuyersEnabledState, setWaitForBuyersEnabledState] = useState<{ [mint: string]: boolean }>({});
+  const [depositModalOpen, setDepositModalOpen] = useState(false);
+  const [withdrawModalOpen, setWithdrawModalOpen] = useState(false);
+  const [withdrawNotification, setWithdrawNotification] = useState<{show: boolean, message: string, type: 'success'|'error'}>({show: false, message: '', type: 'success'});
+  const [solBalance, setSolBalance] = useState<number>(0);
+
+  // Disable scroll when deposit modal is open
+  useEffect(() => {
+    if (depositModalOpen) {
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.width = '100%';
+    } else {
+      document.body.style.overflow = 'auto';
+      document.body.style.position = 'static';
+      document.body.style.width = 'auto';
+    }
+    return () => {
+      document.body.style.overflow = 'auto';
+      document.body.style.position = 'static';
+      document.body.style.width = 'auto';
+    };
+  }, [depositModalOpen]);
 
   // Preset state (copied from App.tsx ic)
   const {
@@ -710,6 +735,14 @@ const TokenListWithAge: React.FC = () => {
           )
         );
       }
+      if (data.type === "SOL_BALANCE_UPDATE") {
+        console.log('[SOL_BALANCE_UPDATE] New balance:', data.balance);
+        setSolBalance(data.balance);
+      }
+      if (data.type === "WITHDRAW_SUCCESS") {
+        console.log('[WITHDRAW SUCCESS] New balance:', data.newBalance);
+        setSolBalance(data.newBalance);
+      }
     };
 
     ws.addEventListener("message", handleMessage);
@@ -1175,6 +1208,28 @@ const TokenListWithAge: React.FC = () => {
 
   return (
     <>
+      <Navbar 
+        showMyTokens={showMyTokens}
+        onMyTokensClick={handleMyTokensClick}
+        onDepositClick={() => setDepositModalOpen(true)}
+        onWithdrawClick={() => setWithdrawModalOpen(true)}
+        onLogout={() => {
+          const token = localStorage.getItem('token');
+          if (token) {
+            fetch(`${import.meta.env.VITE_API_BASE_URL}/api/bot/stop-services`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              }
+            });
+          }
+          localStorage.removeItem('token');
+          localStorage.removeItem('userId');
+          window.location.href = '/';
+        }}
+        solBalance={solBalance}
+      />
       {/* Wallet details + Logout (below the fixed bar) */}
       {walletAddress && (
         <span style={{ color: '#FFD700', fontWeight: 600, fontSize: 16, marginLeft: 16 }}>
@@ -2026,6 +2081,27 @@ const TokenListWithAge: React.FC = () => {
         onChangeBuyFilters={filters => setBuyFilters(prev => ({ ...prev, [userId]: filters }))}
         onChangeSellFilters={filters => setSellFilters(prev => ({ ...prev, [userId]: filters }))}
       />
+      
+      <DepositModal 
+        open={depositModalOpen}
+        onClose={() => setDepositModalOpen(false)}
+        walletAddress={walletAddress}
+        solBalance={solBalance}
+      />
+      <WithdrawModal 
+        open={withdrawModalOpen}
+        onClose={() => setWithdrawModalOpen(false)}
+        walletAddress={walletAddress}
+        solBalance={solBalance}
+        onNotification={setWithdrawNotification}
+      />
+      
+      {/* Global withdraw notification */}
+      {withdrawNotification.show && (
+        <div className={`withdraw-notification-global ${withdrawNotification.type}`}>
+          {withdrawNotification.message}
+        </div>
+      )}
     </>
   );
 };

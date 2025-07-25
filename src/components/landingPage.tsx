@@ -1,5 +1,6 @@
 // src/components/LandingPage.tsx
 import { useState, useEffect, useRef } from "react";
+import "../assets/theme.css";
 import "../assets/landingPageCSS/timeline.css";
 import {
   Button,
@@ -10,37 +11,47 @@ import {
 import { styled } from "@mui/material/styles";
 import "../assets/landingPageCSS/navbar.css";
 
-// Theme colors based on new scheme
+// Theme colors - Professional trust-building gradient
 const themeColors = {
-  primary: "#8A00A8", // Dark purple
-  secondary: "#D100FF", // Purple accent
-  dark: "#030303", // Darker black
-  darkGrey: "#1A1A1A", // Darker grey
+  primary: "#1a237e", // Deep blue
+  secondary: "#3f51b5", // Royal blue
+  accent: "#00bcd4", // Cyan accent
+  gold: "#ffc107", // Gold for premium feel
+  dark: "#0a0e27", // Deep navy
+  darkGrey: "#1a1a2e", // Dark blue-grey
   light: "#FFFFFF",
-  glow: "#9900CC", // Glow color
+  glow: "#00e5ff", // Cyan glow
 };
 
 // Styled components
 const GradientText = styled(Typography)(() => ({
-  background: `linear-gradient(90deg, ${themeColors.primary} 0%, ${themeColors.secondary} 100%)`,
+  background: `linear-gradient(135deg, ${themeColors.primary} 0%, ${themeColors.secondary} 50%, ${themeColors.accent} 100%)`,
   WebkitBackgroundClip: "text",
   WebkitTextFillColor: "transparent",
   backgroundClip: "text",
   textFillColor: "transparent",
   fontWeight: 700,
-  textShadow: `0 0 10px ${themeColors.glow}80`,
 }));
 
 const GradientButton = styled(Button)(() => ({
-  background: `linear-gradient(90deg, ${themeColors.primary} 0%, ${themeColors.secondary} 100%)`,
+  background: `linear-gradient(135deg, ${themeColors.primary} 0%, ${themeColors.secondary} 50%, ${themeColors.accent} 100%)`,
   color: "white",
   fontWeight: 600,
   padding: "8px 16px",
   borderRadius: "6px",
-  boxShadow: `0 0 10px ${themeColors.glow}`,
   "&:hover": {
-    background: `linear-gradient(90deg, ${themeColors.primary} 20%, ${themeColors.secondary} 80%)`,
-    boxShadow: `0 0 15px ${themeColors.glow}`,
+    "&::before": {
+      content: '""',
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(255, 255, 255, 0.1)',
+      borderRadius: '6px',
+      pointerEvents: 'none',
+    },
+    position: 'relative',
   },
 }));
 
@@ -53,12 +64,12 @@ const FeatureCard = styled(Box)(() => ({
   transition: "transform 0.3s ease, box-shadow 0.3s ease",
   "&:hover": {
     transform: "translateY(-5px)",
-    boxShadow: `0 10px 30px ${themeColors.glow}40`,
+    boxShadow: "0 10px 30px rgba(0, 0, 0, 0.3)",
   },
 }));
 
 // Navbar component
-const Navbar = ({ onEnterApp }: { onEnterApp: () => void }) => {
+const Navbar = ({ onEnterApp, onLogin, onSignup }: { onEnterApp: () => void; onLogin?: () => void; onSignup?: () => void }) => {
   return (
     <Box
       className="navbar-container"
@@ -81,7 +92,7 @@ const Navbar = ({ onEnterApp }: { onEnterApp: () => void }) => {
       <Box sx={{ display: "flex", alignItems: "center" }}>
         <img
           className="navbar-logo"
-          src="/src/assets/tokenx-logo/t-transparent.png"
+          src="/tokenx-logo/t-transparent.png"
           alt="TOKONX"
           style={{ height: "40px", marginRight: "10px" }}
         />
@@ -103,26 +114,27 @@ const Navbar = ({ onEnterApp }: { onEnterApp: () => void }) => {
         <Button
           variant="outlined"
           size="small"
-          onClick={onEnterApp}
+          onClick={onLogin || onEnterApp}
           sx={{
-            color: themeColors.primary,
-            borderColor: themeColors.primary,
+            color: themeColors.light,
+            borderColor: themeColors.secondary,
             marginRight: 2,
+            backgroundColor: "rgba(63, 81, 181, 0.1)",
             "&:hover": {
-              borderColor: themeColors.secondary,
-              backgroundColor: "rgba(90, 0, 110, 0.1)",
+              borderColor: themeColors.accent,
+              backgroundColor: "rgba(63, 81, 181, 0.2)",
             },
           }}
         >
           Login
         </Button>
-        <GradientButton size="small" onClick={onEnterApp}>Sign Up</GradientButton>
+        <GradientButton size="small" onClick={onSignup || onEnterApp}>Sign Up</GradientButton>
       </Box>
     </Box>
   );
 };
 
-const LandingPage = ({ onEnterApp, hideNavbar }: { onEnterApp: () => void; hideNavbar?: boolean }) => {
+const LandingPage = ({ onEnterApp, hideNavbar, onLogin, onSignup }: { onEnterApp: () => void; hideNavbar?: boolean; onLogin?: () => void; onSignup?: () => void }) => {
   const [loading, setLoading] = useState(true);
   const [visibleItems, setVisibleItems] = useState<number[]>([]);
   const [sparkPosition, setSparkPosition] = useState(0);
@@ -201,7 +213,7 @@ const LandingPage = ({ onEnterApp, hideNavbar }: { onEnterApp: () => void; hideN
           }}
         >
           <img 
-            src="/src/assets/tokenx-logo/t-transparent.png" 
+            src="/tokenx-logo/t-transparent.png" 
             alt="TOKONX Loading" 
             style={{ height: '200px', width: 'auto' }} 
           />
@@ -217,7 +229,7 @@ const LandingPage = ({ onEnterApp, hideNavbar }: { onEnterApp: () => void; hideN
         width: "100vw",
         maxWidth: "100%",
         background: themeColors.dark,
-        backgroundImage: `radial-gradient(circle at 50% 0%, rgba(90, 0, 110, 0.2), transparent 60%), radial-gradient(circle at 80% 20%, rgba(153, 0, 204, 0.1), transparent 40%)`,
+        backgroundImage: `radial-gradient(circle at 50% 0%, rgba(26, 35, 126, 0.3), transparent 60%), radial-gradient(circle at 80% 20%, rgba(0, 188, 212, 0.2), transparent 40%), radial-gradient(circle at 20% 80%, rgba(255, 193, 7, 0.1), transparent 50%)`,
         color: themeColors.light,
         overflow: loading ? "hidden" : "auto",
         margin: 0,
@@ -225,7 +237,7 @@ const LandingPage = ({ onEnterApp, hideNavbar }: { onEnterApp: () => void; hideN
         paddingTop: "0px", // Remove padding to prevent grey bar
       }}
     >
-      {!loading && !hideNavbar && <Navbar onEnterApp={onEnterApp} />}
+      {!loading && !hideNavbar && <Navbar onEnterApp={onEnterApp} onLogin={onLogin} onSignup={onSignup} />}
       <Container
         maxWidth={false}
         sx={{ width: "100%", px: { xs: 2, sm: 3, md: 4, lg: 5 } }}
@@ -261,7 +273,7 @@ const LandingPage = ({ onEnterApp, hideNavbar }: { onEnterApp: () => void; hideN
               TOKONX brings automation, speed, and strategy together for smarter
               Solana trading
             </Typography>
-            <GradientButton size="small" onClick={onEnterApp}>
+            <GradientButton size="small" onClick={onSignup || onEnterApp}>
               Launch App
             </GradientButton>
           </Box>
@@ -287,7 +299,7 @@ const LandingPage = ({ onEnterApp, hideNavbar }: { onEnterApp: () => void; hideN
                   background:
                     i % 2 ? `rgba(90, 0, 110, 0.15)` : `rgba(153, 0, 204, 0.1)`,
                   filter: "blur(100px)",
-                  boxShadow: `0 0 40px ${themeColors.glow}30`,
+                  boxShadow: "0 0 40px rgba(0, 0, 0, 0.2)",
                   top: `${Math.random() * 100}%`,
                   left: `${Math.random() * 100}%`,
                   animation: `float ${
@@ -304,7 +316,7 @@ const LandingPage = ({ onEnterApp, hideNavbar }: { onEnterApp: () => void; hideN
           <Typography variant="h3" sx={{ textAlign: "center", mb: 6 }}>
             Key{" "}
             <GradientText
-              component="span"
+              // component="span"
               sx={{ fontSize: "inherit", fontWeight: "inherit" }}
             >
               Features
@@ -322,7 +334,7 @@ const LandingPage = ({ onEnterApp, hideNavbar }: { onEnterApp: () => void; hideN
                 sx={{ top: `${sparkPosition}px` }}
               >
                 <img 
-                  src="/src/assets/tokenx-logo/t-transparent.png" 
+                  src="/tokenx-logo/t-transparent.png" 
                   alt="TOKONX Logo" 
                 />
               </Box>
@@ -403,7 +415,7 @@ const LandingPage = ({ onEnterApp, hideNavbar }: { onEnterApp: () => void; hideN
           >
             Join thousands of smart traders using TOKONX to discover hidden gems on Solana before the crowd.
           </Typography>
-          <GradientButton size="small" onClick={onEnterApp}>
+          <GradientButton size="small" onClick={onLogin || onEnterApp}>
             Enter Dashboard
           </GradientButton>
         </Box>
@@ -412,21 +424,21 @@ const LandingPage = ({ onEnterApp, hideNavbar }: { onEnterApp: () => void; hideN
         <Box
           sx={{
             py: 4,
-            borderTop: `1px solid rgba(90, 0, 110, 0.2)`,
+            borderTop: `1px solid rgba(26, 35, 126, 0.2)`,
           }}
         >
           {/* Desktop Layout */}
           <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', justifyContent: 'space-between' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <img 
-                src="/src/assets/tokenx-logo/t-transparent.png" 
+                src="/tokenx-logo/t-transparent.png" 
                 alt="TOKONX" 
                 style={{ height: '30px' }} 
               />
               <Typography variant="h6" sx={{ color: themeColors.light, fontWeight: 600 }}>
                 TOKONX
               </Typography>
-              <Typography variant="body2" sx={{ color: "rgba(153, 0, 204, 0.5)" }}>
+              <Typography variant="body2" sx={{ color: themeColors.secondary }}>
                 © {new Date().getFullYear()} All rights reserved.
               </Typography>
             </Box>
@@ -486,7 +498,7 @@ const LandingPage = ({ onEnterApp, hideNavbar }: { onEnterApp: () => void; hideN
                   }}
                 >
                   <img 
-                    src="/src/assets/footerIcon/x.svg" 
+                    src="/footerIcon/x.svg" 
                     alt="X (Twitter)" 
                     style={{ width: '20px', height: '20px' }} 
                   />
@@ -511,7 +523,7 @@ const LandingPage = ({ onEnterApp, hideNavbar }: { onEnterApp: () => void; hideN
                   }}
                 >
                   <img 
-                    src="/src/assets/footerIcon/discord.svg" 
+                    src="/footerIcon/discord.svg" 
                     alt="Discord" 
                     style={{ width: '20px', height: '20px' }} 
                   />
@@ -525,7 +537,7 @@ const LandingPage = ({ onEnterApp, hideNavbar }: { onEnterApp: () => void; hideN
             {/* Row 1: Logo and TOKONX */}
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, mb: 2 }}>
               <img 
-                src="/src/assets/tokenx-logo/t-transparent.png" 
+                src="/tokenx-logo/t-transparent.png" 
                 alt="TOKONX" 
                 style={{ height: '30px' }} 
               />
@@ -583,16 +595,16 @@ const LandingPage = ({ onEnterApp, hideNavbar }: { onEnterApp: () => void; hideN
                     width: 32,
                     height: 32,
                     borderRadius: '50%',
-                    backgroundColor: 'rgba(90, 0, 110, 0.1)',
+                    backgroundColor: 'rgba(26, 35, 126, 0.1)',
                     '&:hover': {
-                      backgroundColor: 'rgba(90, 0, 110, 0.2)',
+                      backgroundColor: 'rgba(26, 35, 126, 0.2)',
                       transform: 'scale(1.1)'
                     },
                     transition: 'all 0.2s ease'
                   }}
                 >
                   <img 
-                    src="/src/assets/footerIcon/x.svg" 
+                    src="/footerIcon/x.svg" 
                     alt="X (Twitter)" 
                     style={{ width: '20px', height: '20px' }} 
                   />
@@ -608,16 +620,16 @@ const LandingPage = ({ onEnterApp, hideNavbar }: { onEnterApp: () => void; hideN
                     width: 32,
                     height: 32,
                     borderRadius: '50%',
-                    backgroundColor: 'rgba(90, 0, 110, 0.1)',
+                    backgroundColor: 'rgba(26, 35, 126, 0.1)',
                     '&:hover': {
-                      backgroundColor: 'rgba(90, 0, 110, 0.2)',
+                      backgroundColor: 'rgba(26, 35, 126, 0.2)',
                       transform: 'scale(1.1)'
                     },
                     transition: 'all 0.2s ease'
                   }}
                 >
                   <img 
-                    src="/src/assets/footerIcon/discord.svg" 
+                    src="/footerIcon/discord.svg" 
                     alt="Discord" 
                     style={{ width: '20px', height: '20px' }} 
                   />
@@ -627,7 +639,7 @@ const LandingPage = ({ onEnterApp, hideNavbar }: { onEnterApp: () => void; hideN
             
             {/* Row 3: Copyright centered */}
             <Box sx={{ textAlign: 'center' }}>
-              <Typography variant="body2" sx={{ color: "rgba(153, 0, 204, 0.5)" }}>
+              <Typography variant="body2" sx={{ color: themeColors.secondary }}>
                 © {new Date().getFullYear()} All rights reserved.
               </Typography>
             </Box>

@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
 import bs58 from 'bs58';
-import './LoginPage.css';
+import '../assets/theme.css';
+import '../assets/LoginPage.css';
 
 interface LoginPageProps {
   onLoginSuccess: () => void;
   onClose?: () => void;
+  initialView?: 'login' | 'signup';
 }
 
 // amazonq-ignore-next-line
-const LoginPage: React.FC<LoginPageProps> = ({ onClose }) => {
-  const [view, setView] = useState<'login' | 'signup' | 'otp'>('login');
+const LoginPage: React.FC<LoginPageProps> = ({ onClose, initialView = 'login' }) => {
+  const [view, setView] = useState<'login' | 'signup' | 'otp'>(initialView);
   
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -19,13 +21,13 @@ const LoginPage: React.FC<LoginPageProps> = ({ onClose }) => {
 
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
   //const WS_URL = import.meta.env.VITE_WS_URL; // If needed for WebSocket
 
   const handleApiCall = async (url: string, payload: object, successMessage: string) => {
     setError('');
-    setMessage('');
     try {
       const response = await fetch(`${API_BASE_URL}${url}`, {
         method: 'POST',
@@ -56,22 +58,27 @@ const LoginPage: React.FC<LoginPageProps> = ({ onClose }) => {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
+    setMessage('Please wait, sending OTP...');
     try {
       const data = await handleApiCall('/api/auth/signup', { name, email, password }, 'OTP sent!');
       if (data.otp) {
         setDevOtp(data.otp);
       }
       setView('otp'); // Switch to OTP view on success
+      // Clear message after a delay to show success briefly
+      setTimeout(() => setMessage(''), 2000);
     } catch (error) {
       // Error is already set by handleApiCall
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await handleApiCall('/api/auth/verify-otp', { email, otp }, 'Verification successful!');
-      alert('Account verified! Please log in.');
+      await handleApiCall('/api/auth/verify-otp', { email, otp }, 'Account verified! Please log in.');
       setView('login'); // Switch to login view on success
       setOtp('');
     } catch (error) {
@@ -143,18 +150,40 @@ const LoginPage: React.FC<LoginPageProps> = ({ onClose }) => {
     if (view === 'otp') {
       return (
         <form className="space-y-4 mb-6" onSubmit={handleVerify}>
-          <div className="relative">
-            <input id="otp" name="otp" type="text" required
-              className="w-full px-4 py-3 rounded-lg text-gray-100 placeholder-gray-400 focus:outline-none transition text-center text-lg tracking-widest"
-              style={{ 
-                background: 'rgba(26, 26, 26, 0.8)',
-                border: '1px solid rgba(90, 0, 110, 0.3)'
-              }}
-              placeholder="Enter OTP" value={otp} onChange={(e) => setOtp(e.target.value)} />
+          <div className="otp-container">
+            {[0, 1, 2, 3, 4, 5].map((index) => (
+              <React.Fragment key={index}>
+                <input
+                  type="text"
+                  maxLength={1}
+                  className="otp-digit"
+                  value={otp[index] || ''}
+                  onChange={(e) => {
+                    const newOtp = otp.split('');
+                    newOtp[index] = e.target.value;
+                    setOtp(newOtp.join(''));
+                    
+                    // Auto focus next input
+                    if (e.target.value && index < 5) {
+                      const nextInput = document.querySelectorAll('.otp-digit')[index + 1] as HTMLInputElement;
+                      nextInput?.focus();
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    // Auto focus previous input on backspace
+                    if (e.key === 'Backspace' && !otp[index] && index > 0) {
+                      const prevInput = document.querySelectorAll('.otp-digit')[index - 1] as HTMLInputElement;
+                      prevInput?.focus();
+                    }
+                  }}
+                />
+                {index < 5 && <span className="otp-dot">•</span>}
+              </React.Fragment>
+            ))}
           </div>
           {/* Show dev OTP for development only */}
           {devOtp && (
-            <div className="mt-2 text-center text-yellow-400 text-lg font-bold">
+            <div className="dev-otp">
               Dev OTP: {devOtp}
             </div>
           )}
@@ -224,7 +253,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onClose }) => {
           {/* Logo */}
           <div className="logo-container">
             <img 
-              src="/src/assets/tokenx-logo/t-transparent.png" 
+              src="/tokenx-logo/t-transparent.png" 
               alt="TOKONX" 
               className="logo"
             />
@@ -232,7 +261,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onClose }) => {
 
           {view === 'otp' ? (
             <>
-              <p className="text-center text-sm text-gray-400 mb-6">
+              <p className="otp-info">
                 An OTP has been sent to {email}
               </p>
               {renderForm()}
@@ -242,12 +271,14 @@ const LoginPage: React.FC<LoginPageProps> = ({ onClose }) => {
               {/* Email and Password inputs */}
               {renderForm()}
               
+              <div className="divider">or</div>
+              
               {/* Google Button */}
               <button className="button-social">
                 <img 
-                  src="/src/assets/footerIcon/google.svg" 
+                  src="/loginStyles/google.svg" 
                   alt="Google" 
-                  style={{ width: '20px', height: '20px' }} 
+                  style={{ width: '12px', height: '12px' }} 
                 />
                 <span>Continue with Google</span>
               </button>
@@ -255,27 +286,36 @@ const LoginPage: React.FC<LoginPageProps> = ({ onClose }) => {
               {/* Phantom Button */}
               <button onClick={handlePhantomLogin} className="button-social">
                 <img 
-                  src="/src/assets/footerIcon/phantom.svg" 
+                  src="/loginStyles/phantom.svg" 
                   alt="Phantom" 
-                  style={{ width: '20px', height: '20px' }} 
+                  style={{ width: '12px', height: '12px' }} 
                 />
                 <span>Continue with Phantom</span>
               </button>
               
               {/* Sign up link */}
-              <p className="text-sm text-center text-gray-400">
+              <p className="signup-link">
                 {view === 'login' ? "Don't have an account?" : "Already have an account?"}
-                <button onClick={() => setView(view === 'login' ? 'signup' : 'login')} className="ml-1 font-bold hover:underline" style={{ color: '#D100FF' }}>
+                <button onClick={() => setView(view === 'login' ? 'signup' : 'login')} className="signup-button">
                   {view === 'login' ? 'Sign up' : 'Sign in'}
                 </button>
               </p>
             </>
           )}
-          
-          {error && <p className="text-sm text-red-500 text-center pt-4">{error}</p>}
-          {message && <p className="text-sm text-green-500 text-center pt-4">{message}</p>}
         </div>
       </div>
+      
+      {error && (
+        <div className="notification error">
+          {error}
+        </div>
+      )}
+      {message && (
+        <div className={`notification ${loading ? 'loading' : 'success'}`}>
+          {loading && <div className="loading-spinner"></div>}
+          {message}
+        </div>
+      )}
     </>
   );
 };

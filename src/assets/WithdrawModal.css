@@ -1,0 +1,329 @@
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(5px);
+  z-index: 2000;
+}
+
+.withdraw-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(26, 26, 26, 0.95);
+  border: 1px solid rgba(63, 81, 181, 0.3);
+  border-radius: 8px;
+  width: 320px;
+  max-width: 90vw;
+  z-index: 2001;
+  backdrop-filter: blur(10px);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.modal-header h3 {
+  color: white;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.close-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.modal-content {
+  padding: 16px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.withdraw-modal-button {
+  background: rgba(63, 81, 181, 0.2);
+  border: 1px solid rgba(63, 81, 181, 0.4);
+  color: #3f51b5;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 5px 60px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.withdraw-modal-button:hover {
+  background: rgba(63, 81, 181, 0.3);
+  border: 1px solid rgba(63, 81, 181, 0.6);
+}
+
+.balance-boxes {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.balance-box {
+  flex: 1;
+  background: rgba(128, 128, 128, 0.1);
+  border: 1px solid rgba(128, 128, 128, 0.2);
+  border-radius: 6px;
+  padding: 6px 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+}
+
+.balance-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.warning-text {
+  margin-top: 16px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+  text-align: left;
+  font-style: italic;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.warning-sol-icon {
+  width: 12px;
+  height: 12px;
+}
+
+.withdraw-amount-box {
+  margin-top: 16px;
+  background: rgba(128, 128, 128, 0.1);
+  border: 1px solid rgba(128, 128, 128, 0.2);
+  border-radius: 6px;
+  padding: 12px;
+  position: relative;
+}
+
+.withdraw-amount-label {
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.withdraw-amount-input-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 20px;
+}
+
+.withdraw-amount-input {
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 16px;
+  font-weight: 500;
+  outline: none;
+  flex: 1;
+}
+
+.withdraw-amount-input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.withdraw-currency {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.withdraw-sol-icon {
+  width: 16px;
+  height: 16px;
+}
+.arrow-down {
+  display: flex;
+  justify-content: center;
+  margin: 12px 0;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 18px;
+}
+.destination-address-input {
+  width: 100%;
+  background: rgba(128, 128, 128, 0.1);
+  border: 1px solid rgba(128, 128, 128, 0.2);
+  border-radius: 6px;
+  padding: 12px;
+  color: white;
+  font-size: 14px;
+  outline: none;
+  margin-top: 12px;
+  box-sizing: border-box;
+}
+
+.destination-address-input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+.to-amount-box {
+  margin-top: 16px;
+  background: rgba(128, 128, 128, 0.1);
+  border: 1px solid rgba(128, 128, 128, 0.2);
+  border-radius: 6px;
+  padding: 12px;
+  position: relative;
+}
+
+.to-amount-label {
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.to-amount-input-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 20px;
+}
+
+.to-amount-input {
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  outline: none;
+  flex: 1;
+}
+
+.to-amount-input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+.to-currency {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.to-sol-icon {
+  width: 16px;
+  height: 16px;
+}
+.divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 16px auto;
+  width: 80%;
+}
+
+.send-button {
+  width: 100%;
+  background: rgba(63, 81, 181, 0.2);
+  border: 1px solid rgba(63, 81, 181, 0.4);
+  color: #3f51b5;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.send-button:hover {
+  background: rgba(63, 81, 181, 0.3);
+  border: 1px solid rgba(63, 81, 181, 0.6);
+}
+.withdraw-amount-input::-webkit-outer-spin-button,
+.withdraw-amount-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.withdraw-amount-input[type=number] {
+  -moz-appearance: textfield;
+}
+.send-button.disabled {
+  background: rgba(128, 128, 128, 0.2);
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  color: rgba(255, 255, 255, 0.5);
+  cursor: not-allowed;
+}
+
+.send-button.disabled:hover {
+  background: rgba(128, 128, 128, 0.2);
+  border: 1px solid rgba(128, 128, 128, 0.3);
+}
+.withdraw-notification-global {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 24px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 3000;
+  backdrop-filter: blur(10px);
+  animation: slideDown 0.3s ease-out;
+}
+
+.withdraw-notification-global.success {
+  background: rgba(76, 175, 80, 0.3);
+  border: 1px solid rgba(76, 175, 80, 0.6);
+  color: #2e7d32;
+}
+
+.withdraw-notification-global.error {
+  background: rgba(244, 67, 54, 0.8);
+  border: 1px solid rgba(244, 67, 54, 0.6);
+  color: white;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateX(-50%) translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
+}

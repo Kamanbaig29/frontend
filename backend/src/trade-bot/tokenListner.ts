@@ -1469,6 +1469,17 @@ wss.on("connection", (ws: WSWithUser) => {
           break;
         }
 
+        case "WITHDRAW_SUCCESS": {
+          // Send updated SOL balance after withdrawal
+          if (ws.userId && data.newBalance !== undefined) {
+            ws.send(JSON.stringify({
+              type: "SOL_BALANCE_UPDATE",
+              balance: data.newBalance
+            }));
+          }
+          break;
+        }
+
         default:
           console.log("⚠️ Unknown message type:", data.type);
           ws.send(
