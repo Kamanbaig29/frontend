@@ -14,14 +14,14 @@ import { UserToken } from '../models/userToken';
 // Define Metaplex Metadata Program ID
 const METADATA_PROGRAM_ID = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
 
-// If you have the IDL JSON, import it. Otherwise, you must provide it.
-const memeHomeIdl = require('../idl/meme_home_idl.json'); // Adjust path if needed
+
+const memeHomeIdl = require('../idl/meme_home_idl.json');
 
 export function initProgram(
   connection: Connection,
-  walletOrPublicKey: PublicKey // For worker, just pass a PublicKey (dummy or real)
+  walletOrPublicKey: PublicKey 
 ) {
-  // AnchorProvider expects an object with a publicKey property for read-only ops
+
   const dummyWallet = {
     publicKey: walletOrPublicKey,
     signAllTransactions: async (txs: any) => txs,
@@ -530,7 +530,6 @@ export async function startMemeHomeTokenWorker(wss: WebSocketServer) {
         }
 
         if (isLaunch && mint) {
-          // Turant notification ke liye message bhejein
           wss.clients.forEach(client => {
             if (client.readyState === 1) {
               client.send(JSON.stringify({ type: 'TOKEN_DETECTED', mint }));

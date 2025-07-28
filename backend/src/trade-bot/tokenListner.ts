@@ -147,412 +147,412 @@ const verifyToken = (token: string) => {
 
 // Auto snipe function - handles token detection and auto buying
 // amazonq-ignore-next-line
-const handleAutSnipe = async (
-  connection: Connection,
-  userPublicKey: PublicKey,
-  logInfo: any,
-  userId: string
-) => {
-  //console.log(`[DEBUG] 1. handleAutoSnipe called for user: ${userId}`);
-  try {
-    //console.log("📝 Received logs:", logInfo.logs);
+// const handleAutSnipe = async (
+//   connection: Connection,
+//   userPublicKey: PublicKey,
+//   logInfo: any,
+//   userId: string
+// ) => {
+//   //console.log(`[DEBUG] 1. handleAutoSnipe called for user: ${userId}`);
+//   try {
+//     //console.log("📝 Received logs:", logInfo.logs);
 
-    // Check if user is logged in
-    if (!userId) {
-      console.log("❌ No user logged in, skipping token detection");
-      return;
-    }
+//     // Check if user is logged in
+//     if (!userId) {
+//       console.log("❌ No user logged in, skipping token detection");
+//       return;
+//     }
 
-    // Get user session
-    const userSession = userSessions.get(userId);
-    if (!userSession || !userSession.ws.autoSnipeSettings?.autoBuyEnabled) {
-      console.log(
-        "❌ [TOKEN DETECTION] Auto-buy is disabled, skipping buy attempt"
-      );
-      return;
-    }
+//     // Get user session
+//     const userSession = userSessions.get(userId);
+//     if (!userSession || !userSession.ws.autoSnipeSettings?.autoBuyEnabled) {
+//       console.log(
+//         "❌ [TOKEN DETECTION] Auto-buy is disabled, skipping buy attempt"
+//       );
+//       return;
+//     }
 
-    console.log(
-      "✅ [TOKEN DETECTION] Auto-buy is enabled, proceeding with Buy Token..."
-    );
-    //console.log(
-    //  `[DEBUG] 2. Conditions met, proceeding to get transaction for signature: ${logInfo.signature}`
-    //);
+//     console.log(
+//       "✅ [TOKEN DETECTION] Auto-buy is enabled, proceeding with Buy Token..."
+//     );
+//     //console.log(
+//     //  `[DEBUG] 2. Conditions met, proceeding to get transaction for signature: ${logInfo.signature}`
+//     //);
 
-    const { logs, signature } = logInfo;
-    let mintAddress: string | undefined;
+//     const { logs, signature } = logInfo;
+//     let mintAddress: string | undefined;
 
-    // More specific token creation detection
-    const isCreateMint = logs.some((log: string) =>
-      log.includes("Program log: Instruction: InitializeMint2")
-    );
+//     // More specific token creation detection
+//     const isCreateMint = logs.some((log: string) =>
+//       log.includes("Program log: Instruction: InitializeMint2")
+//     );
 
-    const isLaunchInstruction = logs.some((log: string) =>
-      log.includes("Program log: Instruction: Launch")
-    );
+//     const isLaunchInstruction = logs.some((log: string) =>
+//       log.includes("Program log: Instruction: Launch")
+//     );
 
-    // Only proceed if both conditions are met
-    if (!isCreateMint || !isLaunchInstruction) {
-      return;
-    }
+//     // Only proceed if both conditions are met
+//     if (!isCreateMint || !isLaunchInstruction) {
+//       return;
+//     }
 
-    console.log("🎯 [TOKEN DETECTION] New token creation detected!");
+//     console.log("🎯 [TOKEN DETECTION] New token creation detected!");
 
-    await sleep(2000);
+//     await sleep(2000);
 
-    const tx = await connection.getTransaction(signature, {
-      commitment: "confirmed",
-      maxSupportedTransactionVersion: 0,
-    });
+//     const tx = await connection.getTransaction(signature, {
+//       commitment: "confirmed",
+//       maxSupportedTransactionVersion: 0,
+//     });
 
-    if (!tx?.transaction?.message) {
-      console.log("❌ Invalid transaction data");
-      return;
-    }
-    console.log(`[DEBUG] 3. Transaction data fetched successfully.`);
+//     if (!tx?.transaction?.message) {
+//       console.log("❌ Invalid transaction data");
+//       return;
+//     }
+//     console.log(`[DEBUG] 3. Transaction data fetched successfully.`);
 
-    const accountKeys = tx.transaction.message.getAccountKeys();
-    const accountKeysArray: PublicKey[] = [];
-    for (let i = 0; i < accountKeys.length; i++) {
-      const key = accountKeys.get(i);
-      if (key) accountKeysArray.push(key);
-    }
+//     const accountKeys = tx.transaction.message.getAccountKeys();
+//     const accountKeysArray: PublicKey[] = [];
+//     for (let i = 0; i < accountKeys.length; i++) {
+//       const key = accountKeys.get(i);
+//       if (key) accountKeysArray.push(key);
+//     }
 
-    // Collect all relevant addresses
-    const tokenData: TokenData = {
-      mint: accountKeysArray[1].toBase58(),
-      creator: accountKeysArray[0].toBase58(),
-      bondingCurve: accountKeysArray[3].toBase58(),
-      curveTokenAccount: accountKeysArray[2].toBase58(),
-      userTokenAccount: accountKeysArray[4].toBase58(),
-      metadata: accountKeysArray[9].toBase58(),
-      decimals: 9,
-    };
+//     // Collect all relevant addresses
+//     const tokenData: TokenData = {
+//       mint: accountKeysArray[1].toBase58(),
+//       creator: accountKeysArray[0].toBase58(),
+//       bondingCurve: accountKeysArray[3].toBase58(),
+//       curveTokenAccount: accountKeysArray[2].toBase58(),
+//       userTokenAccount: accountKeysArray[4].toBase58(),
+//       metadata: accountKeysArray[9].toBase58(),
+//       decimals: 9,
+//     };
 
-    // Log detailed token info
-    console.log("\n📋 Token Details:");
-    console.log("----------------------------------------");
-    console.log(`🎯 Mint Address:        ${tokenData.mint}`);
-    console.log(`👤 Creator:            ${tokenData.creator}`);
-    console.log("----------------------------------------\n");
+//     // Log detailed token info
+//     console.log("\n📋 Token Details:");
+//     console.log("----------------------------------------");
+//     console.log(`🎯 Mint Address:        ${tokenData.mint}`);
+//     console.log(`👤 Creator:            ${tokenData.creator}`);
+//     console.log("----------------------------------------\n");
 
-    // Add to user's tracked tokens
-    if (!userSession.ws.trackedTokens) {
-      userSession.ws.trackedTokens = [];
-    }
-    userSession.ws.trackedTokens.push(tokenData);
+//     // Add to user's tracked tokens
+//     if (!userSession.ws.trackedTokens) {
+//       userSession.ws.trackedTokens = [];
+//     }
+//     userSession.ws.trackedTokens.push(tokenData);
 
-    // Broadcast new token detection to specific user
-    userSession.ws.send(
-      JSON.stringify({
-        type: "NEW_TOKEN",
-        tokenData: {
-          mint: tokenData.mint,
-          creator: tokenData.creator,
-          bondingCurve: tokenData.bondingCurve,
-          curveTokenAccount: tokenData.curveTokenAccount,
-          userTokenAccount: tokenData.userTokenAccount,
-          metadata: tokenData.metadata,
-          decimals: tokenData.decimals,
-          supply: tokenData.supply,
-          status: "Detected",
-          detectionTime: new Date().toISOString(),
-          buyTime: null,
-          txSignature: null,
-        },
-      })
-    );
+//     // Broadcast new token detection to specific user
+//     userSession.ws.send(
+//       JSON.stringify({
+//         type: "NEW_TOKEN",
+//         tokenData: {
+//           mint: tokenData.mint,
+//           creator: tokenData.creator,
+//           bondingCurve: tokenData.bondingCurve,
+//           curveTokenAccount: tokenData.curveTokenAccount,
+//           userTokenAccount: tokenData.userTokenAccount,
+//           metadata: tokenData.metadata,
+//           decimals: tokenData.decimals,
+//           supply: tokenData.supply,
+//           status: "Detected",
+//           detectionTime: new Date().toISOString(),
+//           buyTime: null,
+//           txSignature: null,
+//         },
+//       })
+//     );
 
-    const detectionPrice = await getCurrentPrice(
-      connection,
-      tokenData.mint,
-      userPublicKey
-    );
+//     const detectionPrice = await getCurrentPrice(
+//       connection,
+//       tokenData.mint,
+//       userPublicKey
+//     );
 
-    mintAddress = tokenData.mint;
+//     mintAddress = tokenData.mint;
 
-    // Skip if already processed
-    if (processedMints.has(mintAddress)) {
-      console.log(`⏭️ Skipping: Already processed ${mintAddress}`);
-      return;
-    }
+//     // Skip if already processed
+//     if (processedMints.has(mintAddress)) {
+//       console.log(`⏭️ Skipping: Already processed ${mintAddress}`);
+//       return;
+//     }
 
-    // Validate mint address
-    const mintInfo = await connection.getParsedAccountInfo(
-      new PublicKey(mintAddress)
-    );
-    let mintType: string | undefined = undefined;
-    if (
-      mintInfo.value &&
-      typeof mintInfo.value.data === "object" &&
-      "parsed" in mintInfo.value.data
-    ) {
-      mintType = mintInfo.value.data.parsed.type;
-    }
-    if (mintType !== "mint") {
-      console.error(
-        "❌ Skipping: accountKeys[1] is not a valid SPL Token Mint."
-      );
-      return;
-    }
+//     // Validate mint address
+//     const mintInfo = await connection.getParsedAccountInfo(
+//       new PublicKey(mintAddress)
+//     );
+//     let mintType: string | undefined = undefined;
+//     if (
+//       mintInfo.value &&
+//       typeof mintInfo.value.data === "object" &&
+//       "parsed" in mintInfo.value.data
+//     ) {
+//       mintType = mintInfo.value.data.parsed.type;
+//     }
+//     if (mintType !== "mint") {
+//       console.error(
+//         "❌ Skipping: accountKeys[1] is not a valid SPL Token Mint."
+//       );
+//       return;
+//     }
 
-    // Get swap accounts
-    //console.log(`[DEBUG] 5. Getting swap accounts for mint: ${mintAddress}`);
-    const swapAccounts = await getSwapAccounts({
-      mintAddress,
-      buyer: userPublicKey,
-      connection,
-      programId: MEMEHOME_PROGRAM_ID,
-    });
-    //console.log(`[DEBUG] 6. Swap accounts fetched.`);
+//     // Get swap accounts
+//     //console.log(`[DEBUG] 5. Getting swap accounts for mint: ${mintAddress}`);
+//     const swapAccounts = await getSwapAccounts({
+//       mintAddress,
+//       buyer: userPublicKey,
+//       connection,
+//       programId: MEMEHOME_PROGRAM_ID,
+//     });
+//     //console.log(`[DEBUG] 6. Swap accounts fetched.`);
 
-    // Calculate curve token ATA
-    const curveTokenATA = await getAssociatedTokenAddress(
-      swapAccounts.tokenMint,
-      swapAccounts.bondingCurve,
-      true
-    );
+//     // Calculate curve token ATA
+//     const curveTokenATA = await getAssociatedTokenAddress(
+//       swapAccounts.tokenMint,
+//       swapAccounts.bondingCurve,
+//       true
+//     );
 
-    const ataInfo = await connection.getAccountInfo(curveTokenATA);
-    if (ataInfo) {
-      const parsed = await connection.getParsedAccountInfo(curveTokenATA);
-      if (
-        parsed.value &&
-        typeof parsed.value.data === "object" &&
-        "parsed" in parsed.value.data &&
-        parsed.value.data.parsed.type === "account"
-      ) {
-        console.log(
-          "curveTokenAccount already exists and is a valid token account, skipping creation."
-        );
-      } else {
-        console.error(
-          "❌ curveTokenAccount exists but is NOT a valid SPL Token Account. Skipping creation to avoid error."
-        );
-        return;
-      }
-    } else {
-      try {
-        //console.log("[DEBUG] 7. ATA does not exist. Attempting to create...");
-        const createAtaIx = createAssociatedTokenAccountInstruction(
-          userPublicKey,
-          curveTokenATA,
-          swapAccounts.bondingCurve,
-          swapAccounts.tokenMint
-        );
+//     const ataInfo = await connection.getAccountInfo(curveTokenATA);
+//     if (ataInfo) {
+//       const parsed = await connection.getParsedAccountInfo(curveTokenATA);
+//       if (
+//         parsed.value &&
+//         typeof parsed.value.data === "object" &&
+//         "parsed" in parsed.value.data &&
+//         parsed.value.data.parsed.type === "account"
+//       ) {
+//         console.log(
+//           "curveTokenAccount already exists and is a valid token account, skipping creation."
+//         );
+//       } else {
+//         console.error(
+//           "❌ curveTokenAccount exists but is NOT a valid SPL Token Account. Skipping creation to avoid error."
+//         );
+//         return;
+//       }
+//     } else {
+//       try {
+//         //console.log("[DEBUG] 7. ATA does not exist. Attempting to create...");
+//         const createAtaIx = createAssociatedTokenAccountInstruction(
+//           userPublicKey,
+//           curveTokenATA,
+//           swapAccounts.bondingCurve,
+//           swapAccounts.tokenMint
+//         );
 
-        const createAtaTx = new Transaction().add(createAtaIx);
-        createAtaTx.feePayer = userPublicKey;
-        createAtaTx.recentBlockhash = (
-          await connection.getLatestBlockhash()
-        ).blockhash;
+//         const createAtaTx = new Transaction().add(createAtaIx);
+//         createAtaTx.feePayer = userPublicKey;
+//         createAtaTx.recentBlockhash = (
+//           await connection.getLatestBlockhash()
+//         ).blockhash;
 
-        //console.log(`[DEBUG] 8. Fetching keypair for user ID: ${userId}`);
-        const userKeypair = await getUserKeypairById(userId);
-        //console.log(
-        //  `[DEBUG] 9. Keypair fetched. Signing ATA creation transaction.`
-        //);
-        createAtaTx.sign(userKeypair);
+//         //console.log(`[DEBUG] 8. Fetching keypair for user ID: ${userId}`);
+//         const userKeypair = await getUserKeypairById(userId);
+//         //console.log(
+//         //  `[DEBUG] 9. Keypair fetched. Signing ATA creation transaction.`
+//         //);
+//         createAtaTx.sign(userKeypair);
 
-        const signature = await connection.sendRawTransaction(
-          createAtaTx.serialize()
-        );
-        //console.log(
-        //  `[DEBUG] 10. ATA creation transaction sent. Signature: ${signature}`
-        //);
+//         const signature = await connection.sendRawTransaction(
+//           createAtaTx.serialize()
+//         );
+//         //console.log(
+//         //  `[DEBUG] 10. ATA creation transaction sent. Signature: ${signature}`
+//         //);
 
-        if (signature) {
-          await connection.confirmTransaction(signature);
-        }
-        //console.log(`[DEBUG] 11. ATA creation confirmed.`);
+//         if (signature) {
+//           await connection.confirmTransaction(signature);
+//         }
+//         //console.log(`[DEBUG] 11. ATA creation confirmed.`);
 
-        const newAtaInfo = await connection.getAccountInfo(curveTokenATA);
-        if (!newAtaInfo) {
-          throw new Error("ATA creation failed - account not found");
-        }
-      } catch (ataError) {
-        console.error(
-          "❌ [DEBUG] CRASH POINT? Failed to create ATA:",
-          ataError
-        );
-        return;
-      }
-    }
+//         const newAtaInfo = await connection.getAccountInfo(curveTokenATA);
+//         if (!newAtaInfo) {
+//           throw new Error("ATA creation failed - account not found");
+//         }
+//       } catch (ataError) {
+//         console.error(
+//           "❌ [DEBUG] CRASH POINT? Failed to create ATA:",
+//           ataError
+//         );
+//         return;
+//       }
+//     }
 
-    swapAccounts.curveTokenAccount = curveTokenATA;
+//     swapAccounts.curveTokenAccount = curveTokenATA;
 
-    if (!swapAccounts.userTokenAccount || !swapAccounts.curveTokenAccount) {
-      console.error("❌ Missing required token accounts");
-      return;
-    }
+//     if (!swapAccounts.userTokenAccount || !swapAccounts.curveTokenAccount) {
+//       console.error("❌ Missing required token accounts");
+//       return;
+//     }
 
-    try {
-      //console.log(`[DEBUG] 12. Preparing to execute buy transaction.`);
-      const settings = userSession.ws.autoSnipeSettings!;
-      const buyAmount = Number(settings.buyAmount);
+//     try {
+//       //console.log(`[DEBUG] 12. Preparing to execute buy transaction.`);
+//       const settings = userSession.ws.autoSnipeSettings!;
+//       const buyAmount = Number(settings.buyAmount);
 
-      // Get active buy preset from DB
-      const userPreset = await UserPreset.findOne({ userId });
-      const activePreset = (userPreset?.buyPresets?.[userPreset.activeBuyPreset] || {}) as { slippage?: number|string, priorityFee?: number|string, bribeAmount?: number|string };
+//       // Get active buy preset from DB
+//       const userPreset = await UserPreset.findOne({ userId });
+//       const activePreset = (userPreset?.buyPresets?.[userPreset.activeBuyPreset] || {}) as { slippage?: number|string, priorityFee?: number|string, bribeAmount?: number|string };
 
-      // Use preset values for fees
-      const slippage = Number(activePreset.slippage) || 1;
-      const priorityFee = Math.floor(Number(activePreset.priorityFee || 0) * 1_000_000_000);
-      const bribeAmount = Math.floor(Number(activePreset.bribeAmount || 0) * 1_000_000_000);
+//       // Use preset values for fees
+//       const slippage = Number(activePreset.slippage) || 1;
+//       const priorityFee = Math.floor(Number(activePreset.priorityFee || 0) * 1_000_000_000);
+//       const bribeAmount = Math.floor(Number(activePreset.bribeAmount || 0) * 1_000_000_000);
 
-      // Log for debugging
-      console.log(`[AUTO SNIPE] Using preset #${userPreset?.activeBuyPreset ?? 0}:`);
-      console.log(`  Slippage: ${slippage}`);
-      console.log(`  Priority Fee: ${priorityFee}`);
-      console.log(`  Bribe Amount: ${bribeAmount}`);
+//       // Log for debugging
+//       console.log(`[AUTO SNIPE] Using preset #${userPreset?.activeBuyPreset ?? 0}:`);
+//       console.log(`  Slippage: ${slippage}`);
+//       console.log(`  Priority Fee: ${priorityFee}`);
+//       console.log(`  Bribe Amount: ${bribeAmount}`);
 
-      console.log("\n=== [AUTO SNIPE BUY PARAMETERS] ===");
-      console.log(`Active Buy Preset Index: ${userPreset?.activeBuyPreset ?? 0}`);
-      console.log(`Preset Object:`, activePreset);
-      console.log(`Buy Amount (lamports): ${buyAmount} (${buyAmount / 1e9} SOL)`);
-      console.log(`Slippage: ${slippage}`);
-      console.log(`Priority Fee (lamports): ${priorityFee} (${priorityFee / 1e9} SOL)`);
-      console.log(`Bribe Amount (lamports): ${bribeAmount} (${bribeAmount / 1e9} SOL)`);
-      console.log("====================================\n");
+//       console.log("\n=== [AUTO SNIPE BUY PARAMETERS] ===");
+//       console.log(`Active Buy Preset Index: ${userPreset?.activeBuyPreset ?? 0}`);
+//       console.log(`Preset Object:`, activePreset);
+//       console.log(`Buy Amount (lamports): ${buyAmount} (${buyAmount / 1e9} SOL)`);
+//       console.log(`Slippage: ${slippage}`);
+//       console.log(`Priority Fee (lamports): ${priorityFee} (${priorityFee / 1e9} SOL)`);
+//       console.log(`Bribe Amount (lamports): ${bribeAmount} (${bribeAmount / 1e9} SOL)`);
+//       console.log("====================================\n");
 
-      const totalRequired = buyAmount + priorityFee + bribeAmount + 10_000_000;
+//       const totalRequired = buyAmount + priorityFee + bribeAmount + 10_000_000;
 
-      const balance = await connection.getBalance(userPublicKey);
-      if (balance < totalRequired) {
-        console.error(
-          `❌ Insufficient balance. Need ${totalRequired / 1e9} SOL (including fees)`
-        );
-        return;
-      }
+//       const balance = await connection.getBalance(userPublicKey);
+//       if (balance < totalRequired) {
+//         console.error(
+//           `❌ Insufficient balance. Need ${totalRequired / 1e9} SOL (including fees)`
+//         );
+//         return;
+//       }
 
-      //console.log("\n=== 💰 TRANSACTION BREAKDOWN ===");
-      //console.log(`Priority Fee: ${priorityFee / 1e9} SOL`);
-      //console.log(`Bribe Amount: ${bribeAmount / 1e9} SOL`);
-      //console.log(`Network Fee Buffer: 0.01 SOL`);
-      //console.log(`Slippage: ${settings.slippage}%`);
-      //console.log("==============================\n");
+//       //console.log("\n=== 💰 TRANSACTION BREAKDOWN ===");
+//       //console.log(`Priority Fee: ${priorityFee / 1e9} SOL`);
+//       //console.log(`Bribe Amount: ${bribeAmount / 1e9} SOL`);
+//       //console.log(`Network Fee Buffer: 0.01 SOL`);
+//       //console.log(`Slippage: ${settings.slippage}%`);
+//       //console.log("==============================\n");
 
-      const buyPriceAtDetection = await getCurrentPrice(
-        connection,
-        mintAddress,
-        userPublicKey
-      );
+//       const buyPriceAtDetection = await getCurrentPrice(
+//         connection,
+//         mintAddress,
+//         userPublicKey
+//       );
 
-      //console.log(
-        //`[DEBUG] 13. Fetching keypair for buy transaction for user ID: ${userId}`
-        //);
-      const autoBuyStartTime = Date.now();
-      const signature = await buyToken({
-        connection,
-        userKeypair: await getUserKeypairById(userId),
-        programId: MEMEHOME_PROGRAM_ID,
-        amount: buyAmount,
-        minOut: MIN_OUT_AMOUNT,
-        direction: DIRECTION,
-        swapAccounts,
-        slippage: slippage,
-        priorityFee: priorityFee,
-        bribeAmount: bribeAmount,
-      });
-      console.log(
-        `[DEBUG] 14. buyToken function returned with signature: ${signature}`
-      );
+//       //console.log(
+//         //`[DEBUG] 13. Fetching keypair for buy transaction for user ID: ${userId}`
+//         //);
+//       const autoBuyStartTime = Date.now();
+//       const signature = await buyToken({
+//         connection,
+//         userKeypair: await getUserKeypairById(userId),
+//         programId: MEMEHOME_PROGRAM_ID,
+//         amount: buyAmount,
+//         minOut: MIN_OUT_AMOUNT,
+//         direction: DIRECTION,
+//         swapAccounts,
+//         slippage: slippage,
+//         priorityFee: priorityFee,
+//         bribeAmount: bribeAmount,
+//       });
+//       console.log(
+//         `[DEBUG] 14. buyToken function returned with signature: ${signature}`
+//       );
 
-      if (!signature) {
-        console.error("❌ Buy transaction rejected due to validation failure");
-        return;
-      }
+//       if (!signature) {
+//         console.error("❌ Buy transaction rejected due to validation failure");
+//         return;
+//       }
 
-      const autoBuyEndTime = Date.now();
-      const txDetails = await connection.getTransaction(signature, {
-        commitment: "confirmed",
-        maxSupportedTransactionVersion: 0,
-      });
+//       const autoBuyEndTime = Date.now();
+//       const txDetails = await connection.getTransaction(signature, {
+//         commitment: "confirmed",
+//         maxSupportedTransactionVersion: 0,
+//       });
 
-      if (txDetails?.meta) {
-        const accountKeys = txDetails.transaction.message.getAccountKeys();
-        const accountKeysArray: PublicKey[] = [];
-        for (let i = 0; i < accountKeys.length; i++) {
-          const key = accountKeys.get(i);
-          if (key) accountKeysArray.push(key);
-        }
+//       if (txDetails?.meta) {
+//         const accountKeys = txDetails.transaction.message.getAccountKeys();
+//         const accountKeysArray: PublicKey[] = [];
+//         for (let i = 0; i < accountKeys.length; i++) {
+//           const key = accountKeys.get(i);
+//           if (key) accountKeysArray.push(key);
+//         }
 
-        const userTokenAccount = swapAccounts.userTokenAccount;
-        const userTokenAccountIndex = accountKeysArray.findIndex(
-          (key) => key.toBase58() === userTokenAccount.toBase58()
-        );
+//         const userTokenAccount = swapAccounts.userTokenAccount;
+//         const userTokenAccountIndex = accountKeysArray.findIndex(
+//           (key) => key.toBase58() === userTokenAccount.toBase58()
+//         );
 
-        const preTokenBalance =
-          txDetails.meta.preTokenBalances?.find(
-            (balance) => balance.accountIndex === userTokenAccountIndex
-          )?.uiTokenAmount.uiAmount || 0;
+//         const preTokenBalance =
+//           txDetails.meta.preTokenBalances?.find(
+//             (balance) => balance.accountIndex === userTokenAccountIndex
+//           )?.uiTokenAmount.uiAmount || 0;
 
-        const postTokenBalance =
-          txDetails.meta.postTokenBalances?.find(
-            (balance) => balance.accountIndex === userTokenAccountIndex
-          )?.uiTokenAmount.uiAmount || 0;
+//         const postTokenBalance =
+//           txDetails.meta.postTokenBalances?.find(
+//             (balance) => balance.accountIndex === userTokenAccountIndex
+//           )?.uiTokenAmount.uiAmount || 0;
 
-        const tokensReceived = postTokenBalance - preTokenBalance;
+//         const tokensReceived = postTokenBalance - preTokenBalance;
 
-        console.log("\n=== 💸 TRANSACTION DETAILS ===");
-        console.log(`Transaction Signature: ${signature}`);
-        console.log(`Status: ✅ Confirmed`);
-        console.log(`Block: ${txDetails.slot}`);
-        console.log(`Tokens Received: ${tokensReceived}`);
+//         console.log("\n=== 💸 TRANSACTION DETAILS ===");
+//         console.log(`Transaction Signature: ${signature}`);
+//         console.log(`Status: ✅ Confirmed`);
+//         console.log(`Block: ${txDetails.slot}`);
+//         console.log(`Tokens Received: ${tokensReceived}`);
 
-        const autoBuyDuration = autoBuyEndTime - autoBuyStartTime;
+//         const autoBuyDuration = autoBuyEndTime - autoBuyStartTime;
 
-        userSession.ws.send(
-          JSON.stringify({
-            type: "AUTO_BUY_SUCCESS",
-            signature: signature,
-            details: {
-              mint: mintAddress,
-              buyPrice: buyPriceAtDetection,
-              tokenAmount: tokensReceived,
-              executionTimeMs: autoBuyDuration,
-              status: "Bought",
-              buyTime: autoBuyDuration,
-              txSignature: signature,
-              creator: tokenData.creator,
-              bondingCurve: tokenData.bondingCurve,
-              curveTokenAccount: tokenData.curveTokenAccount,
-              metadata: tokenData.metadata,
-              decimals: tokenData.decimals,
-              supply: tokenData.supply,
-            },
-          })
-        );
+//         userSession.ws.send(
+//           JSON.stringify({
+//             type: "AUTO_BUY_SUCCESS",
+//             signature: signature,
+//             details: {
+//               mint: mintAddress,
+//               buyPrice: buyPriceAtDetection,
+//               tokenAmount: tokensReceived,
+//               executionTimeMs: autoBuyDuration,
+//               status: "Bought",
+//               buyTime: autoBuyDuration,
+//               txSignature: signature,
+//               creator: tokenData.creator,
+//               bondingCurve: tokenData.bondingCurve,
+//               curveTokenAccount: tokenData.curveTokenAccount,
+//               metadata: tokenData.metadata,
+//               decimals: tokenData.decimals,
+//               supply: tokenData.supply,
+//             },
+//           })
+//         );
 
-        // ADD THIS: Send updated SOL balance
-        const updatedBalance = await connection.getBalance(userPublicKey);
-        userSession.ws.send(JSON.stringify({
-          type: "SOL_BALANCE_UPDATE",
-          balance: updatedBalance / 1e9,
-        }));
+//         // ADD THIS: Send updated SOL balance
+//         const updatedBalance = await connection.getBalance(userPublicKey);
+//         userSession.ws.send(JSON.stringify({
+//           type: "SOL_BALANCE_UPDATE",
+//           balance: updatedBalance / 1e9,
+//         }));
 
-        console.log(`💰 Token detection price: ${detectionPrice} SOL`);
+//         console.log(`💰 Token detection price: ${detectionPrice} SOL`);
 
-        //await addOrUpdateTokenFromBuy({
-          //mint: mintAddress,
-          //buyPrice: buyPriceAtDetection,
-          //amount: tokensReceived.toString(),
-          //userPublicKey: userPublicKey.toBase58(),
-        //});
-      }
-    } catch (error) {
-      console.error("❌ [DEBUG] CRASH POINT? Buy transaction failed:", error);
-      if (error instanceof Error) {
-        console.error("Error details:", {
-          message: error.message,
-          stack: error.stack,
-        });
-      }
-    }
-  } catch (error) {
-    console.error("❌ [DEBUG] CRASH POINT? Error in handleAutoSnipe:", error);
-  }
-};
+//         //await addOrUpdateTokenFromBuy({
+//           //mint: mintAddress,
+//           //buyPrice: buyPriceAtDetection,
+//           //amount: tokensReceived.toString(),
+//           //userPublicKey: userPublicKey.toBase58(),
+//         //});
+//       }
+//     } catch (error) {
+//       console.error("❌ [DEBUG] CRASH POINT? Buy transaction failed:", error);
+//       if (error instanceof Error) {
+//         console.error("Error details:", {
+//           message: error.message,
+//           stack: error.stack,
+//         });
+//       }
+//     }
+//   } catch (error) {
+//     console.error("❌ [DEBUG] CRASH POINT? Error in handleAutoSnipe:", error);
+//   }
+// };
 
 // // Start token listener for a specific user
 // const startTokenListener = async (userId: string, userPublicKey: PublicKey) => {
@@ -616,6 +616,11 @@ wss.on("connection", (ws: WSWithUser) => {
   ws.on("message", async (message: string) => {
     try {
       const data = JSON.parse(message);
+
+      if (data.type === "PING" && typeof data.pingSent === "number") {
+          ws.send(JSON.stringify({ type: "PONG", pingSent: data.pingSent }));
+          return; // baaki code skip karo
+      }
       // amazonq-ignore-next-line
       console.log("📨 Received message type:", data.type);
       // amazonq-ignore-next-line
@@ -628,7 +633,6 @@ wss.on("connection", (ws: WSWithUser) => {
             ws.send(JSON.stringify({ type: "AUTH_ERROR", error: "No token provided" }));
             return;
           }
-
           // Special case for auto-sell worker
           // amazonq-ignore-next-line
           if (authToken === 'auto-sell-worker') {

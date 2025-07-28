@@ -30,6 +30,50 @@ router.get('/protected', authenticateJWT, (req, res) => {
   res.json({ message: 'You are authenticated!', user: (req as any).user });
 });
 
+// User profile info endpoint
+router.get('/profile-info', authenticateJWT, async (req, res) => {
+  try {
+    const user = await User.findById((req as any).user.id);
+    if (!user) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+    
+    // Determine display name based on login method
+    let displayName = '';
+    if (user.name) {
+      // User logged in with email and has a name
+      displayName = user.name;
+    } else if (user.botWalletPublicKey) {
+      // User logged in with wallet, show shortened address
+      displayName = `${user.botWalletPublicKey.slice(0, 6)}...${user.botWalletPublicKey.slice(-4)}`;
+    } else {
+      // Fallback
+      displayName = 'Unknown User';
+    }
+    
+    // Format user ID as 123...908
+    const userIdString = (user._id as any).toString();
+    const formattedUserId = `${userIdString.slice(0, 3)}...${userIdString.slice(-3)}`;
+    
+    res.json({
+      userId: (user._id as any).toString(),
+      formattedUserId: formattedUserId,
+      displayName: displayName,
+      fullName: user.name || null,
+      solanaAddress: user.solanaAddress || null,
+      botWalletAddress: user.botWalletPublicKey || null,
+      email: user.email || null,
+      isWalletUser: !!user.solanaAddress && !user.email,
+      isEmailUser: !!user.email,
+      hasBotWallet: !!user.botWalletPublicKey
+    });
+  } catch (error) {
+    console.error('Error fetching profile info:', error);
+    res.status(500).json({ message: 'Error fetching profile info' });
+  }
+});
+
 // Wallet info endpoint
 router.get('/wallet-info', authenticateJWT, async (req, res) => {
   try {

@@ -12,6 +12,7 @@ import FilterListIcon from '@mui/icons-material/FilterList'; // or your icon
 import Navbar from './Navbar';
 import DepositModal from './DepositModal';
 import WithdrawModal from './WithdrawModal';
+import FooterBar from './FooterBar';
 //import { WebSocketContext } from "../context/webSocketContext";
 
 type Token = {
@@ -2098,10 +2099,19 @@ const TokenListWithAge: React.FC = () => {
       
       {/* Global withdraw notification */}
       {withdrawNotification.show && (
-        <div className={`withdraw-notification-global ${withdrawNotification.type}`}>
-          {withdrawNotification.message}
+        <div className={`withdraw-notification-global${withdrawNotification.type === 'error' ? ' error' : ''}`}>
+          <span style={{ flex: 1 }}>{withdrawNotification.message}</span>
+          <button
+            className="withdraw-notification-close"
+            onClick={() => setWithdrawNotification({ show: false, message: '', type: 'success' })}
+            aria-label="Close notification"
+            title="Close"
+          >
+            ×
+          </button>
         </div>
       )}
+      <FooterBar onOpenSettings={() => setPresetModalOpen(true)} />
     </>
   );
 };

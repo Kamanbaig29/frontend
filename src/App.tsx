@@ -58,6 +58,14 @@ const AppContent = () => {
   const [walletAddress, setWalletAddress] = useState<string | undefined>(undefined);
   const [solBalance, setSolBalance] = useState<number | undefined>(undefined);
 
+  // Dummy usage to avoid TS unused variable error
+  useEffect(() => {
+    // Remove this log later if you use walletAddress in props
+    if (walletAddress || solBalance) {
+      console.log('Wallet Address:', walletAddress);
+    }
+  }, [walletAddress, solBalance]);
+
   // amazonq-ignore-next-line
   const [] = useState<'buy' | 'sell'>('buy');
 
