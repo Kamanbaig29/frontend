@@ -1,0 +1,553 @@
+.container {
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 30px;
+}
+
+.title {
+  font-size: 24px;
+  font-weight: 600;
+  color: white;
+  margin: 0;
+}
+
+.controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.button {
+  background-color: #483D8B;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.button:hover {
+  background-color: #372B7A;
+}
+
+.sortButton {
+  background-color: transparent;
+  border: 1px solid #666;
+  border-radius: 4px;
+  padding: 8px;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.sortButton:hover {
+  border-color: #888;
+}
+
+.filterButton {
+  background-color: transparent;
+  border: 1px solid #666;
+  border-radius: 4px;
+  padding: 8px;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.filterButton:hover {
+  border-color: #888;
+}
+
+.autoBuySection {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.tokenGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.tokenCard {
+  border: 1px solid #333;
+  border-radius: 12px;
+  padding: 20px;
+  background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  cursor: pointer;
+}
+
+.tokenCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+}
+
+.tokenImageContainer {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.tokenImage {
+  width: 80px;
+  height: 80px;
+  border-radius: 12px;
+  object-fit: cover;
+  border: 2px solid #333;
+}
+
+.tokenName {
+  font-weight: 600;
+  font-size: 18px;
+  color: white;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.tokenSymbol {
+  font-size: 14px;
+  color: #888;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.tokenCreator {
+  font-size: 12px;
+  color: #FFD700;
+  margin-bottom: 6px;
+  text-align: center;
+  word-break: break-all;
+}
+
+.tokenMint {
+  font-size: 11px;
+  color: #666;
+  word-break: break-all;
+  margin-bottom: 12px;
+  font-family: monospace;
+}
+
+.tokenAge {
+  font-size: 16px;
+  color: #4CAF50;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.tokenPrice {
+  font-size: 16px;
+  color: #2196F3;
+  font-weight: 600;
+  text-align: center;
+}
+
+.buyControls {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.buyButton {
+  background-color: #483D8B;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  flex: 1;
+  min-width: 0;
+  transition: background-color 0.2s ease;
+}
+
+.buyButton:hover {
+  background-color: #372B7A;
+}
+
+.sellControls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.sellPercentButton {
+  background-color: #1E1E1E;
+  color: white;
+  border: 1px solid #666;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sellPercentButton:hover {
+  border-color: #888;
+}
+
+.sellPercentButtonActive {
+  background-color: #483D8B;
+  border-color: #483D8B;
+}
+
+.sellButton {
+  background-color: #B22222;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.sellButton:hover {
+  background-color: #8B0000;
+}
+
+.autoSellSection {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #333;
+}
+
+.autoSellHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.autoSellTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+}
+
+.inputGroup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.amountInput {
+  flex: 1;
+  min-width: 0;
+}
+
+.sellPercentSelect {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  background: #23242a;
+  color: white;
+  border: 1px solid #ff6b6b;
+  border-radius: 6px;
+  padding: 0 12px;
+  font-weight: 600;
+  font-size: 16px;
+  outline: none;
+  appearance: none;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+}
+
+.tradingControls {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.tradingInput {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  background: #23242a;
+  border-radius: 6px;
+  padding: 0 12px;
+  font-weight: 500;
+  font-size: 15px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.trailingStopLossControls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.trailingStopLossInput {
+  flex: 1;
+}
+
+.waitForBuyersControls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.waitForBuyersInput {
+  flex: 1;
+}
+
+.timeBasedSellControls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.timeBasedSellInput {
+  flex: 1;
+}
+
+.checkboxLabel {
+  color: #FFD700;
+  font-size: 13px;
+  margin-right: 4px;
+}
+
+.checkboxLabelDisabled {
+  color: #888;
+}
+
+.checkbox {
+  margin-left: 4px;
+  margin-right: 2px;
+}
+
+.noTokensMessage {
+  text-align: center;
+  padding: 40px;
+  color: #888;
+}
+
+.tokenMetrics {
+  margin: 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tokenMetrics > div:nth-child(1) {
+  color: #FFD700;
+  font-weight: 500;
+  font-size: 15px;
+}
+
+.tokenMetrics > div:nth-child(2) {
+  color: #00BFFF;
+  font-size: 14px;
+}
+
+.tokenMetrics > div:nth-child(3) {
+  color: #2196F3;
+  font-size: 14px;
+}
+
+.tokenMetrics > div:nth-child(4) {
+  color: #888;
+  font-size: 13px;
+}
+
+.tokenMetrics > div:nth-child(5) {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.tokenBuyTime {
+  color: #FFD700;
+  font-size: 13px;
+  text-align: center;
+  margin-bottom: 6px;
+}
+
+.withdrawNotification {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #4CAF50;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+}
+
+.withdrawNotificationError {
+  background-color: #B22222;
+}
+
+.withdrawNotificationClose {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 20px;
+  cursor: pointer;
+  margin-left: 10px;
+}
+
+.pageBlockScroll {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 20, 20, 0.98);
+  z-index: 100;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tokenSectionsBox {
+  background: #222;
+  border-radius: 18px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  padding: 32px 18px;
+  display: flex;
+  gap: 24px;
+  width: 90vw;
+  max-width: 1400px;
+  min-height: 70vh;
+  justify-content: center;
+}
+
+.tokenSection {
+  flex: 1 1 0;
+  min-width: 340px;
+  max-width: 420px;
+  background: #181818;
+  border-radius: 12px;
+  padding: 12px 8px;
+  overflow-y: auto;
+  max-height: 65vh;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.tokenSectionTitle {
+  color: #FFD700;
+  font-size: 18px;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 12px;
+  letter-spacing: 1px;
+}
+
+@media (max-width: 768px) {
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .tokenGrid {
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .tokenGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1100px) {
+  .tokenSectionsBox {
+    flex-direction: column;
+    gap: 18px;
+    min-height: unset;
+    max-width: 98vw;
+    padding: 18px 6px;
+  }
+  .tokenSection {
+    max-width: unset;
+    min-width: unset;
+    max-height: 40vh;
+  }
+}
+
+.tokenSectionsContainer {
+  display: flex;
+  gap: 20px;
+  width: 100%;
+}
+
+.tokenSection {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
+  border-radius: 12px;
+  padding: 15px;
+  max-height: 70vh;
+}
+
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #333;
+}
+
+.sectionTitle {
+  font-size: 18px;
+  color: #FFD700;
+  font-weight: 600;
+}
+
+.tokenSection .tokenGrid {
+  flex: 1;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 15px;
+}
+
+@media (max-width: 1100px) {
+  .tokenSectionsContainer {
+    flex-direction: column;
+    gap: 18px;
+  }
+  
+  .tokenSection {
+    max-height: 40vh;
+  }
+}

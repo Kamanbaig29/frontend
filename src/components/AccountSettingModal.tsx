@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faUser, faShield, faBell, faPalette, faLanguage, faQuestionCircle, faWallet, faArrowRightFromBracket, faCopy, faChevronDown } from '@fortawesome/free-solid-svg-icons';
+import {faLanguage, faQuestionCircle, faWallet, faArrowRightFromBracket, faCopy, faChevronDown } from '@fortawesome/free-solid-svg-icons';
 import '../assets/AccountSettingsModal.css';
 
 interface AccountSettingsModalProps {

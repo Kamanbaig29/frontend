@@ -1,9 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import {
-  Dialog, DialogTitle, DialogContent, DialogActions, Button,
-  ToggleButtonGroup, ToggleButton, Box, Typography, TextField, Checkbox, FormControlLabel
-} from '@mui/material';
 import { useWebSocket } from '../context/webSocketContext';
+import styles from '../assets/PresetModal.module.css';
 
 interface PresetModalProps {
   open: boolean;
@@ -16,82 +13,118 @@ interface PresetModalProps {
   setActiveSellPreset: (idx: number) => void;
 }
 
-// const mevModes = [
-//   { value: "off", label: "Off" },
-//   { value: "reduced", label: "Reduced" },
-//   { value: "secure", label: "Secure" }
-// ];
+// Define form state interface
+interface FormState {
+  autoFee: boolean;
+  priorityFee: string;
+  bribeAmount: string;
+  maxFee: string;
+  slippage: string;
+  mevMode: string;
+  rpcUrl: string;
+  [key: string]: any; // For any additional properties
+}
 
 const PresetModal: React.FC<PresetModalProps> = ({
   open, onClose, buyPresets, sellPresets, activeBuyPreset, activeSellPreset,
   setActiveBuyPreset, setActiveSellPreset
 }) => {
   const [mode, setMode] = useState<'buy' | 'sell'>('buy');
-  const [form, setForm] = useState<any>({});
-  // amazonq-ignore-next-line
+  const [form, setForm] = useState<FormState>({} as FormState);
   const { ws } = useWebSocket();
-
-  // Add a ref to track autoFee subscription
   const autoFeeSubscribed = useRef(false);
+  const lastAutoFeeValue = useRef<boolean | null>(null);
 
-  // Update form when preset or mode changes
+  // Initialize lastAutoFeeValue on component mount
+  useEffect(() => {
+    // Set initial value based on current preset
+    if (mode === 'buy' && buyPresets && buyPresets[activeBuyPreset]) {
+      lastAutoFeeValue.current = !!buyPresets[activeBuyPreset].autoFee;
+    } else if (mode === 'sell' && sellPresets && sellPresets[activeSellPreset]) {
+      lastAutoFeeValue.current = !!sellPresets[activeSellPreset].autoFee;
+    }
+  }, []); // Empty dependency array means this runs once on mount
+
   useEffect(() => {
     if (mode === 'buy' && buyPresets && buyPresets[activeBuyPreset]) {
-      setForm({ ...buyPresets[activeBuyPreset] });
+      // Preserve autoFee value when switching presets
+      setForm(() => ({ 
+        ...buyPresets[activeBuyPreset],
+        // Keep autoFee value if it was explicitly set before
+        autoFee: lastAutoFeeValue.current !== null ? lastAutoFeeValue.current : buyPresets[activeBuyPreset].autoFee
+      }));
     }
     if (mode === 'sell' && sellPresets && sellPresets[activeSellPreset]) {
-      setForm({ ...sellPresets[activeSellPreset] });
+      // Preserve autoFee value when switching presets
+      setForm(() => ({ 
+        ...sellPresets[activeSellPreset],
+        // Keep autoFee value if it was explicitly set before
+        autoFee: lastAutoFeeValue.current !== null ? lastAutoFeeValue.current : sellPresets[activeSellPreset].autoFee
+      }));
     }
-    // eslint-disable-next-line
-  }, [mode, activeBuyPreset, activeSellPreset]);
+  }, [mode, activeBuyPreset, activeSellPreset, buyPresets, sellPresets]);
 
-  // --- NEW: Listen for AUTO_FEE_UPDATE messages and update form ---
   useEffect(() => {
     if (!ws) return;
 
-    // amazonq-ignore-next-line
     const handleMessage = (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
+        // Only update if autoFee is enabled and we have the data
         if (data.type === "AUTO_FEE_UPDATE" && form.autoFee) {
-          setForm((prev: any) => ({
-            ...prev,
-            priorityFee: data.priorityFee,
-            bribeAmount: data.bribeAmount,
-          }));
+          setForm((prev: FormState) => {
+            // Don't update if autoFee was turned off
+            if (!prev.autoFee) return prev;
+            
+            return {
+              ...prev,
+              priorityFee: data.priorityFee,
+              bribeAmount: data.bribeAmount,
+              // Ensure autoFee stays enabled
+              autoFee: true
+            };
+          });
         }
-      } catch {}
+      } catch { }
     };
 
     ws.addEventListener("message", handleMessage);
     return () => ws.removeEventListener("message", handleMessage);
   }, [ws, form.autoFee]);
 
-  // --- NEW: Subscribe/Unsubscribe to auto fee updates ---
   useEffect(() => {
     if (!ws) return;
-    if (form.autoFee && !autoFeeSubscribed.current) {
-      ws.send(JSON.stringify({ type: "SUBSCRIBE_AUTO_FEE" }));
-      autoFeeSubscribed.current = true;
-    } else if (!form.autoFee && autoFeeSubscribed.current) {
-      ws.send(JSON.stringify({ type: "UNSUBSCRIBE_AUTO_FEE" }));
-      autoFeeSubscribed.current = false;
+    
+    // Only update subscription if autoFee value has actually changed
+    if (lastAutoFeeValue.current !== form.autoFee) {
+      // Update our tracking ref
+      lastAutoFeeValue.current = !!form.autoFee;
+      
+      // Subscribe if needed
+      if (form.autoFee && !autoFeeSubscribed.current) {
+        console.log('Subscribing to auto fee updates');
+        ws.send(JSON.stringify({ type: "SUBSCRIBE_AUTO_FEE" }));
+        autoFeeSubscribed.current = true;
+      } 
+      // Unsubscribe if needed
+      else if (!form.autoFee && autoFeeSubscribed.current) {
+        console.log('Unsubscribing from auto fee updates');
+        ws.send(JSON.stringify({ type: "UNSUBSCRIBE_AUTO_FEE" }));
+        autoFeeSubscribed.current = false;
+      }
     }
-    // Unsubscribe on unmount
+
     return () => {
       if (autoFeeSubscribed.current && ws) {
         ws.send(JSON.stringify({ type: "UNSUBSCRIBE_AUTO_FEE" }));
         autoFeeSubscribed.current = false;
       }
     };
-    // eslint-disable-next-line
   }, [form.autoFee, ws]);
-
 
   useEffect(() => {
     if (!ws) return;
     if (!form.autoFee) return;
-    // Only send if both values are present
     if (form.priorityFee && form.bribeAmount) {
       ws.send(JSON.stringify({
         type: "UPDATE_PRESET",
@@ -103,338 +136,230 @@ const PresetModal: React.FC<PresetModalProps> = ({
         }
       }));
     }
-    // Jab bhi mode ya preset index change ho, backend ko update bhejo
   }, [form.priorityFee, form.bribeAmount, form.autoFee, ws, mode, activeBuyPreset, activeSellPreset]);
 
-  const handlePresetChange = (_: any, newPreset: number) => {
-    if (newPreset !== null) {
-      if (mode === 'buy') setActiveBuyPreset(newPreset);
-      else setActiveSellPreset(newPreset);
-      if (ws) {
-        ws.send(JSON.stringify({ type: "APPLY_PRESET", mode, presetIndex: newPreset }));
-        ws.send(JSON.stringify({ type: "GET_PRESETS" }));
-      }
-    }
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const target = e.target as HTMLInputElement;
-    const { name, value, type, checked } = target;
-    const newForm = {
-      ...form,
-      [name]: type === "checkbox" ? checked : value
-    };
-    setForm(newForm);
-
+  const handlePresetChange = (newPreset: number) => {
+    if (mode === 'buy') setActiveBuyPreset(newPreset);
+    else setActiveSellPreset(newPreset);
     if (ws) {
-      ws.send(JSON.stringify({
-        type: "UPDATE_PRESET",
-        mode,
-        presetIndex: mode === 'buy' ? activeBuyPreset : activeSellPreset,
-        settings: newForm
-      }));
+      ws.send(JSON.stringify({ type: "APPLY_PRESET", mode, presetIndex: newPreset }));
+      ws.send(JSON.stringify({ type: "GET_PRESETS" }));
     }
   };
 
-  const handleMevModeChange = (_event: React.MouseEvent<HTMLElement>, value: string) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value, type, checked } = e.target;
+    const newValue = type === "checkbox" ? checked : value;
+    
+    // If autoFee checkbox is changed, update the ref
+    if (name === 'autoFee') {
+      lastAutoFeeValue.current = checked;
+    }
+
+    setForm((prev: FormState) => {
+      const updatedForm = { ...prev, [name]: newValue };
+
+      // Small delay for autoFee updates to prevent race conditions
+      setTimeout(() => {
+        if (ws) {
+          ws.send(JSON.stringify({
+            type: "UPDATE_PRESET",
+            mode,
+            presetIndex: mode === 'buy' ? activeBuyPreset : activeSellPreset,
+            settings: updatedForm
+          }));
+        }
+      }, 50);
+
+      return updatedForm;
+    });
+  };
+
+  const handleMevModeChange = (value: string) => {
     if (!value) return;
-    setForm((prev: any) => ({
-      ...prev,
-      mevMode: value
-    }));
-    if (ws) {
-      ws.send(JSON.stringify({
-        type: "UPDATE_PRESET",
-        mode,
-        presetIndex: mode === 'buy' ? activeBuyPreset : activeSellPreset,
-        settings: { ...form, mevMode: value }
-      }));
-    }
+
+    setForm((prev: FormState) => {
+      const updatedForm = { ...prev, mevMode: value };
+
+      if (ws) {
+        ws.send(JSON.stringify({
+          type: "UPDATE_PRESET",
+          mode,
+          presetIndex: mode === 'buy' ? activeBuyPreset : activeSellPreset,
+          settings: updatedForm
+        }));
+      }
+
+      return updatedForm;
+    });
   };
 
-  // const handleSave = () => {
-  //   // Send update to backend
-  //   if (ws) {
-  //     ws.send(JSON.stringify({
-  //       type: "UPDATE_PRESET",
-  //       mode,
-  //       presetIndex: mode === 'buy' ? activeBuyPreset : activeSellPreset,
-  //       settings: form
-  //     }));
-  //   }
-  // };
-
-  // const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-  //   const target = e.target as HTMLInputElement;
-  //   const { name, value } = target;
-  //   const defaultFields = ["buyAmount", "priorityFee", "bribeAmount", "maxFee"];
-  //   if (defaultFields.includes(name) && (!value || value.trim() === "")) {
-  //     const newForm = { ...form, [name]: "0.001" };
-  //     setForm(newForm);
-  //     if (ws) {
-  //       ws.send(JSON.stringify({
-  //         type: "UPDATE_PRESET",
-  //         mode,
-  //         presetIndex: mode === 'buy' ? activeBuyPreset : activeSellPreset,
-  //         settings: newForm
-  //       }));
-  //     }
-  //   }
-  // };
+  if (!open) return null;
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle sx={{ bgcolor: "#181A20", color: "#fff" }}>Trading Presets</DialogTitle>
-      <DialogContent sx={{ bgcolor: "#181A20", color: "#fff" }}>
-        {/* Preset Tabs */}
-        <ToggleButtonGroup
-          value={mode === "buy" ? activeBuyPreset : activeSellPreset}
-          exclusive
-          onChange={handlePresetChange}
-          sx={{ mb: 2, width: "100%" }}
-        >
-          <ToggleButton value={0} sx={{
-            flex: 1,
-            color: "#fff",
-            border: "1px solid #444",
-            '&.Mui-selected': {
-              color: "#fff",
-              backgroundColor: "#23242a",
-              border: "2px solid #fff"
-            }
-          }}>PRESET 1</ToggleButton>
-          <ToggleButton value={1} sx={{
-            flex: 1,
-            color: "#fff",
-            border: "1px solid #444",
-            '&.Mui-selected': {
-              color: "#fff",
-              backgroundColor: "#23242a",
-              border: "2px solid #fff"
-            }
-          }}>PRESET 2</ToggleButton>
-          <ToggleButton value={2} sx={{
-            flex: 1,
-            color: "#fff",
-            border: "1px solid #444",
-            '&.Mui-selected': {
-              color: "#fff",
-              backgroundColor: "#23242a",
-              border: "2px solid #fff"
-            }
-          }}>PRESET 3</ToggleButton>
-        </ToggleButtonGroup>
+    <div className={styles.presetBackdrop} onClick={onClose}>
+      <div className={styles.presetModal} onClick={e => e.stopPropagation()}>
+        <div className={styles.presetHeader}>
+          <h3>Trading Presets</h3>
+          <button className={styles.presetCloseButton} onClick={onClose}>×</button>
+        </div>
 
-        {/* Buy/Sell Toggle */}
-        <ToggleButtonGroup
-          value={mode}
-          exclusive
-          onChange={(_, val) => val && setMode(val)}
-          sx={{ mb: 2, width: "100%" }}
-        >
-          <ToggleButton value="buy" sx={{
-            flex: 1,
-            color: "#fff",
-            border: "1px solid #444",
-            '&.Mui-selected': {
-              color: "#fff",
-              backgroundColor: "#23242a",
-              border: "2px solid #fff"
-            }
-          }}>Buy Settings</ToggleButton>
-          <ToggleButton value="sell" sx={{
-            flex: 1,
-            color: "#fff",
-            border: "1px solid #444",
-            '&.Mui-selected': {
-              color: "#fff",
-              backgroundColor: "#23242a",
-              border: "2px solid #fff"
-            }
-          }}>Sell Settings</ToggleButton>
-        </ToggleButtonGroup>
+        <div className={styles.presetContent}>
+          <div className={styles.presetToggleGroup}>
+            {[0, 1, 2].map(index => (
+              <button
+                key={index}
+                className={`${styles.presetToggleButton} ${(mode === 'buy' ? activeBuyPreset : activeSellPreset) === index
+                  ? styles.presetToggleActive : ''
+                  }`}
+                onClick={() => handlePresetChange(index)}
+              >
+                PRESET {index + 1}
+              </button>
+            ))}
+          </div>
 
-        {/* Input Fields Row */}
-        <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
-          <Box sx={{ flex: 1 }}>
-            <TextField
-              label=""
-              name="slippage"
-              value={form.slippage || ""}
-              onChange={handleChange}
-              InputProps={{
-                startAdornment: <span style={{ opacity: 0.6 }}>⚡</span>,
-                style: { color: "#fff" }
-              }}
-              inputProps={{ style: { color: "#fff" } }}
-              InputLabelProps={{ style: { color: "#fff" } }}
-              fullWidth
-              size="small"
-              sx={{ bgcolor: "#23242a", borderRadius: 1, color: "#fff" }}
-            />
-            <Typography variant="caption" sx={{ color: "#fff" }}>SLIPPAGE</Typography>
-          </Box>
-          <Box sx={{ flex: 1 }}>
-            <TextField
-              label=""
-              name="priorityFee"
-              value={form.priorityFee || ""}
-              onChange={handleChange}
-              disabled={!!form.autoFee}
-              InputProps={{
-                startAdornment: <span style={{ opacity: 0.6 }}>🏷️</span>,
-                style: { color: !!form.autoFee ? "#aaa" : "#fff" }
-              }}
-              inputProps={{ style: { color: !!form.autoFee ? "#aaa" : "#fff" } }}
-              InputLabelProps={{ style: { color: "#fff" } }}
-              fullWidth
-              size="small"
-              sx={{
-                bgcolor: "#23242a",
-                borderRadius: 1,
-                color: "#fff",
-                '& .MuiInputBase-input.Mui-disabled': {
-                  color: '#aaa !important',
-                  WebkitTextFillColor: '#aaa !important',
-                  opacity: 1,
-                }
-              }}
-            />
-            <Typography variant="caption" sx={{ color: "#fff" }}>PRIORITY</Typography>
-          </Box>
-          <Box sx={{ flex: 1 }}>
-            <TextField
-              label=""
-              name="bribeAmount"
-              value={form.bribeAmount || ""}
-              onChange={handleChange}
-              disabled={!!form.autoFee}
-              InputProps={{
-                startAdornment: <span style={{ opacity: 0.6 }}>💸</span>,
-                style: { color: !!form.autoFee ? "#aaa" : "#fff" }
-              }}
-              inputProps={{ style: { color: !!form.autoFee ? "#aaa" : "#fff" } }}
-              InputLabelProps={{ style: { color: "#fff" } }}
-              fullWidth
-              size="small"
-              sx={{
-                bgcolor: "#23242a",
-                borderRadius: 1,
-                color: "#fff",
-                '& .MuiInputBase-input.Mui-disabled': {
-                  color: '#aaa !important',
-                  WebkitTextFillColor: '#aaa !important',
-                  opacity: 1,
-                }
-              }}
-            />
-            <Typography variant="caption" sx={{ color: "#fff" }}>BRIBE</Typography>
-          </Box>
-        </Box>
+          <div className={styles.presetModeToggle}>
+            <button
+              className={`${styles.modeToggleButton} ${mode === 'buy' ? styles.modeToggleActiveBuy : ''}`}
+              onClick={() => setMode('buy')}
+            >
+              Buy Settings
+            </button>
+            <button
+              className={`${styles.modeToggleButton} ${mode === 'sell' ? styles.modeToggleActiveSell : ''}`}
+              onClick={() => setMode('sell')}
+            >
+              Sell Settings
+            </button>
+          </div>
 
-        {/* Auto Fee and Max Fee */}
-        <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={!!form.autoFee}
+
+          <div className={styles.presetPartitionLine}></div>
+
+          <div className={styles.presetInputSection}>
+            <div className={styles.presetInputRow}>
+              <div className={styles.presetInputGroup}>
+                <div className={styles.presetInputWrapper}>
+                  <span className={styles.presetInputIcon}>⚡</span>
+                  <input
+                    className={styles.presetInputField}
+                    name="slippage"
+                    value={form.slippage || ""}
+                    onChange={handleChange}
+                    placeholder="Slippage"
+                  />
+                </div>
+                <div className={styles.presetInputLabel}>SLIPPAGE</div>
+              </div>
+
+              <div className={styles.presetInputGroup}>
+                <div className={styles.presetInputWrapper}>
+                  <span className={styles.presetInputIcon}>🏷️</span>
+                  <input
+                    className={styles.presetInputField}
+                    name="priorityFee"
+                    value={form.priorityFee || ""}
+                    onChange={handleChange}
+                    disabled={!!form.autoFee}
+                    placeholder="Priority"
+                  />
+                </div>
+                <div className={styles.presetInputLabel}>PRIORITY</div>
+              </div>
+
+              <div className={styles.presetInputGroup}>
+                <div className={styles.presetInputWrapper}>
+                  <span className={styles.presetInputIcon}>💸</span>
+                  <input
+                    className={styles.presetInputField}
+                    name="bribeAmount"
+                    value={form.bribeAmount || ""}
+                    onChange={handleChange}
+                    disabled={!!form.autoFee}
+                    placeholder="Bribe"
+                  />
+                </div>
+                <div className={styles.presetInputLabel}>BRIBE</div>
+              </div>
+            </div>
+
+            <div className={styles.presetAutoFeeSection}>
+              <label className={styles.presetCheckboxContainer}>
+                <input
+                  type="checkbox"
+                  checked={!!form.autoFee}
+                  onChange={handleChange}
+                  onClick={(e) => e.stopPropagation()}
+                  name="autoFee"
+                />
+                <span className={styles.presetCheckmark}></span>
+                Auto Fee
+              </label>
+
+              <div className={styles.presetMaxFeeWrapper}>
+                <div className={styles.presetInputWrapper}>
+                  <input
+                    className={styles.presetInputField}
+                    name="maxFee"
+                    value={form.maxFee || ""}
+                    onChange={handleChange}
+                    disabled={!form.autoFee}
+                    placeholder="Max Fee"
+                  />
+                </div>
+                <div className={styles.presetInputLabel}>MAX FEE</div>
+              </div>
+            </div>
+          </div>
+
+          <div className={styles.presetPartitionLine}></div>
+
+          <div className={styles.presetMevSection}>
+            <div className={styles.presetSectionTitle}>MEV Mode</div>
+            <div className={styles.presetMevButtons}>
+              <button
+                className={`${styles.presetMevButton} ${form.mevMode === 'off' ? styles.presetMevButtonActive : ''}`}
+                onClick={() => handleMevModeChange('off')}
+              >
+                ⛔ Off
+              </button>
+              <button
+                className={`${styles.presetMevButton} ${form.mevMode === 'reduced' ? styles.presetMevButtonActive : ''}`}
+                onClick={() => handleMevModeChange('reduced')}
+              >
+                🛡️ Reduced
+              </button>
+              <button
+                className={`${styles.presetMevButton} ${form.mevMode === 'secure' ? styles.presetMevButtonActive : ''}`}
+                onClick={() => handleMevModeChange('secure')}
+              >
+                🛡️ Secure
+              </button>
+            </div>
+          </div>
+
+          <div className={styles.presetPartitionLine}></div>
+
+          <div className={styles.presetRpcSection}>
+            <div className={styles.presetInputWrapper}>
+              <input
+                className={styles.presetInputField}
+                name="rpcUrl"
+                value={form.rpcUrl || ""}
                 onChange={handleChange}
-                name="autoFee"
-                sx={{ color: "#fff" }}
+                placeholder="RPC URL"
               />
-            }
-            label={<span style={{ color: "#fff" }}>Auto Fee</span>}
-            sx={{ color: "#fff" }}
-          />
-          <TextField
-            label=""
-            name="maxFee"
-            value={form.maxFee || ""}
-            onChange={handleChange}
-            disabled={!form.autoFee}
-            InputProps={{
-              style: { color: !form.autoFee ? "#aaa" : "#fff" }
-            }}
-            inputProps={{
-              style: { color: !form.autoFee ? "#aaa" : "#fff" }
-            }}
-            InputLabelProps={{ style: { color: "#fff" } }}
-            fullWidth
-            size="small"
-            sx={{
-              bgcolor: "#23242a",
-              borderRadius: 1,
-              color: "#fff",
-              '& .MuiInputBase-input.Mui-disabled': {
-                color: '#aaa !important',
-                WebkitTextFillColor: '#aaa !important',
-                opacity: 1,
-              }
-            }}
-          />
-          <Typography variant="caption" sx={{ color: "#fff", ml: 1 }}>MAX FEE</Typography>
-        </Box>
+            </div>
+            <div className={styles.presetInputLabel}>RPC</div>
+          </div>
 
-        {/* MEV Mode */}
-        <Typography sx={{ color: "#fff", mb: 1 }}>MEV Mode</Typography>
-        <ToggleButtonGroup
-          value={form.mevMode || "off"}
-          exclusive
-          onChange={handleMevModeChange}
-          sx={{ mb: 2, width: "100%" }}
-        >
-          <ToggleButton value="off" sx={{
-            flex: 1,
-            color: "#fff",
-            border: "1px solid #444",
-            '&.Mui-selected': {
-              color: "#fff",
-              backgroundColor: "#23242a",
-              border: "2px solid #fff"
-            }
-          }}>⛔ Off</ToggleButton>
-          <ToggleButton value="reduced" sx={{
-            flex: 1,
-            color: "#fff",
-            border: "1px solid #444",
-            '&.Mui-selected': {
-              color: "#fff",
-              backgroundColor: "#23242a",
-              border: "2px solid #fff"
-            }
-          }}>🛡️ Reduced</ToggleButton>
-          <ToggleButton value="secure" sx={{
-            flex: 1,
-            color: "#fff",
-            border: "1px solid #444",
-            '&.Mui-selected': {
-              color: "#fff",
-              backgroundColor: "#23242a",
-              border: "2px solid #fff"
-            }
-          }}>🛡️ Secure</ToggleButton>
-        </ToggleButtonGroup>
-
-        {/* RPC Field */}
-        <TextField
-          label="RPC"
-          name="rpcUrl"
-          value={form.rpcUrl || ""}
-          onChange={handleChange}
-          InputProps={{ style: { color: "#fff" } }}
-          inputProps={{ style: { color: "#fff" } }}
-          InputLabelProps={{ style: { color: "#fff" } }}
-          fullWidth
-          size="small"
-          sx={{ bgcolor: "#23242a", borderRadius: 1, color: "#fff", mb: 2 }}
-        />
-      </DialogContent>
-      <DialogActions sx={{ bgcolor: "#181A20" }}>
-        <Button onClick={onClose} variant="contained" sx={{ bgcolor: "#4CAF50" }}>
-          Continue
-        </Button>
-      </DialogActions>
-    </Dialog>
+          <button className={styles.presetContinueButton} onClick={onClose}>
+            Continue
+          </button>
+        </div>
+      </div>
+    </div>
   );
 };
 

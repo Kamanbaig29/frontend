@@ -2,7 +2,6 @@ import React, { useEffect, useState, useRef } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faWallet,
-  faBolt,
   faCheckCircle,
   faBook,
 } from "@fortawesome/free-solid-svg-icons";

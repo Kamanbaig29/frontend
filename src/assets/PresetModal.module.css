@@ -1,0 +1,342 @@
+/* PRESET MODAL SPECIFIC STYLES - WON'T AFFECT OTHER COMPONENTS */
+.presetBackdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(5px);
+  z-index: 2000;
+  opacity: 0;
+  animation: presetFadeIn 0.25s cubic-bezier(0.4, 0.2, 0.2, 1) forwards;
+}
+
+button:focus {
+  outline: none;
+}
+
+@keyframes presetFadeIn {
+  to { opacity: 1; }
+}
+
+.presetModal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.95);
+  background: rgba(26, 26, 26, 0.95);
+  border: 1px solid rgba(63, 81, 181, 0.3);
+  border-radius: 8px;
+  width: 340px;
+  max-width: 90vw;
+  z-index: 2001;
+  backdrop-filter: blur(10px);
+  opacity: 0;
+  animation: presetPopIn 0.25s cubic-bezier(0.4, 0.2, 0.2, 1) forwards;
+}
+
+@keyframes presetPopIn {
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+.presetHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.presetHeader h3 {
+  color: white;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.presetCloseButton {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.presetCloseButton:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.presetContent {
+  padding: 16px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.presetToggleGroup {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.presetToggleButton {
+  flex: 1;
+  padding: 8px;
+  background: rgba(128, 128, 128, 0.1);
+  border: 1px solid rgba(128, 128, 128, 0.2);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.presetToggleActive {
+  background: rgba(63, 81, 181, 0.3);
+  border: 1px solid rgba(63, 81, 181, 0.6);
+  color: #3f51b5;
+  font-weight: 500;
+}
+
+.presetModeToggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.modeToggleButton {
+  flex: 1;
+  padding: 8px;
+  background: rgba(128, 128, 128, 0.1);
+  border: 1px solid rgba(128, 128, 128, 0.2);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+/* NEW: Buy Active Style */
+.modeToggleActiveBuy {
+  background: rgba(76, 175, 80, 0.2); /* Green transparent */
+  border: 1px solid #4caf50;         /* Green outline */
+  color: #4caf50;                    /* Green text */
+  font-weight: 500;
+}
+
+/* NEW: Sell Active Style */
+.modeToggleActiveSell {
+  background: rgba(244, 67, 54, 0.2); /* Red transparent */
+  border: 1px solid #f44336;         /* Red outline */
+  color: #f44336;                    /* Red text */
+  font-weight: 500;
+}
+
+.modeToggleActive {
+  background: rgba(63, 81, 181, 0.3);
+  border: 1px solid rgba(63, 81, 181, 0.6);
+  color: #3f51b5;
+  font-weight: 500;
+}
+
+.presetPartitionLine {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 16px 0;
+}
+
+.presetInputSection {
+  margin: 16px 0;
+}
+
+.presetInputRow {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.presetInputGroup {
+  flex: 1;
+  position: relative; /* Ensure the group is a positioning context for the label */
+}
+
+.presetInputWrapper {
+  position: relative;
+}
+
+.presetInputIcon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 14px;
+}
+
+.presetInputField {
+  padding: 10px 12px 10px 30px; /* Adjusted padding for label space */
+  background: rgba(128, 128, 128, 0.1);
+  border: 1px solid rgba(128, 128, 128, 0.2);
+  border-radius: 6px;
+  color: white;
+  font-size: 12px;
+}
+
+/* Specific width for SLIPPAGE, PRIORITY, BRIBE */
+.presetInputRow .presetInputField {
+  width: 50%;
+}
+
+/* Specific width for MAX FEE and RPC */
+.presetMaxFeeWrapper .presetInputField,
+.presetRpcSection .presetInputField {
+  width: 80%;
+}
+
+.presetInputField:disabled {
+  background: rgba(128, 128, 128, 0.05);
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.presetInputLabel {
+  position: absolute;
+  top: -5px; /* Position on top border */
+  left: 10px; /* Align with input padding */
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 8px;
+  padding: 0 4px; /* Small padding to cover border */
+  text-align: left; /* Align with input */
+}
+
+.presetAutoFeeSection {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.presetCheckboxContainer {
+  display: flex;
+  align-items: center;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.presetCheckboxContainer input {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.presetCheckmark {
+  position: relative;
+  height: 16px;
+  width: 16px;
+  background-color: rgba(128, 128, 128, 0.1);
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 3px;
+  margin-right: 8px;
+}
+
+.presetCheckboxContainer input:checked ~ .presetCheckmark {
+  background-color: rgba(63, 81, 181, 0.3);
+}
+
+.presetCheckmark:after {
+  content: "";
+  position: absolute;
+  display: none;
+}
+
+.presetCheckboxContainer input:checked ~ .presetCheckmark:after {
+  display: block;
+}
+
+.presetCheckboxContainer .presetCheckmark:after {
+  left: 5px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid #3f51b5;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.presetMaxFeeWrapper {
+  flex: 1;
+  position: relative; /* Ensure positioning context for maxFee label */
+}
+
+.presetMevSection {
+  margin: 16px 0;
+}
+
+.presetSectionTitle {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.presetMevButtons {
+  display: flex;
+  gap: 8px;
+}
+
+.presetMevButton {
+  flex: 1;
+  padding: 8px;
+  background: rgba(128, 128, 128, 0.1);
+  border: 1px solid rgba(128, 128, 128, 0.2);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.presetMevButtonActive {
+  background: rgba(63, 81, 181, 0.3);
+  border: 1px solid rgba(63, 81, 181, 0.6);
+  color: #3f51b5;
+  font-weight: 500;
+}
+
+.presetRpcSection {
+  margin: 16px 0;
+  position: relative; /* Ensure positioning context for RPC label */
+}
+
+.presetContinueButton {
+  width: 100%;
+  padding: 10px;
+  background: rgba(63, 81, 181, 0.3);
+  border: 1px solid rgba(63, 81, 181, 0.6);
+  color: #3f51b5;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 8px;
+}
+
+.presetContinueButton:hover {
+  background: rgba(63, 81, 181, 0.4);
+  border: 1px solid rgba(63, 81, 181, 0.8);
+}
+
+input:focus {
+  outline: none;
+}

@@ -1,0 +1,608 @@
+/* =================================================================
+   Buy-Sell Filter Modal  –  Glass-morphism theme (PresetModal clone)
+   ================================================================= */
+:root {
+  --bsfm-bg: rgba(26, 26, 26, 0.95);
+  --bsfm-border: 1px solid rgba(63, 81, 181, 0.3);
+  --bsfm-radius: 8px;
+  --bsfm-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  --bsfm-text: rgba(255, 255, 255, 0.8);
+  --bsfm-primary: #3f51b5;
+  --bsfm-gold: #ffd700;
+  --bsfm-danger: #f44336;
+  --bsfm-input-bg: rgba(128, 128, 128, 0.1);
+  --bsfm-input-border: 1px solid rgba(128, 128, 128, 0.2);
+  --bsfm-info-bg: rgba(40, 40, 40, 0.63);
+}
+
+/* Tabs */
+.bsfm-tabs {
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  padding: 8px;
+}
+.bsfm-tabs-center {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  margin: 12px 0 8px 0;
+}
+.bsfm-tab {
+  margin-right: 8px;
+  background: rgba(63, 81, 181, 0.13);
+  color: #fff;
+  border: 1px solid rgba(63, 81, 181, 0.18);
+  border-radius: 6px;
+  padding: 8px 15px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s, border 0.18s;
+  outline: none;
+}
+.bsfm-tab--active {
+  background: rgba(63, 81, 181, 0.3);
+  border: 1px solid rgba(63, 81, 181, 0.6);
+  color: #3f51b5;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(63,81,181,0.10);
+}
+
+/* Modal Container */
+.bsfm-wrapper {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+}
+.bsfm-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(5px);
+  opacity: 0;
+  animation: bsfmFadeIn 0.25s cubic-bezier(0.4, 0.2, 0.2, 1) forwards;
+}
+@keyframes bsfmFadeIn {
+  to { opacity: 1; }
+}
+.bsfm-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.95);
+  background: var(--bsfm-bg);
+  border: var(--bsfm-border);
+  border-radius: var(--bsfm-radius);
+  width: 360px;
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  backdrop-filter: blur(10px);
+  z-index: 2001;
+  color: var(--bsfm-text);
+  font-family: inherit;
+  opacity: 0;
+  animation: bsfmPopIn 0.25s cubic-bezier(0.4, 0.2, 0.2, 1) forwards;
+  overflow-x: hidden;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.bsfm-modal::-webkit-scrollbar {
+  display: none;
+}
+@keyframes bsfmPopIn {
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+/* Header */
+.bsfm-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+.bsfm-header h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+}
+.bsfm-close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--bsfm-text);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background 0.2s ease;
+}
+.bsfm-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+/* Body Sections */
+.bsfm-section {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.bsfm-section:last-child {
+  border-bottom: none;
+}
+
+/* Form Rows */
+.bsfm-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.bsfm-row--inline {
+  flex-wrap: nowrap;
+  gap: 16px;
+  justify-content: center;
+  margin: 3px 0;
+}
+.bsfm-row--inline label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 0;
+}
+.bsfm-row--inline input[type="checkbox"] {
+  margin-left: 4px;
+  margin-right: 0;
+}
+.bsfm-row label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 140px;
+  font-size: 12px;
+  color: var(--bsfm-text);
+}
+.bsfm-row input[type='number'],
+.bsfm-row input[type='text'] {
+  flex: 1;
+  padding: 10px 12px 10px 30px;
+  background: var(--bsfm-input-bg);
+  border: var(--bsfm-input-border);
+  border-radius: var(--bsfm-radius);
+  color: #fff;
+  font-size: 12px;
+  -moz-appearance: textfield;
+}
+.bsfm-row input[type='number']::-webkit-outer-spin-button,
+.bsfm-row input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Custom Checkbox */
+.bsfm-row input[type="checkbox"] {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  background: rgba(63, 81, 181, 0.13);
+  border: 1px solid rgba(63, 81, 181, 0.18);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.18s, border 0.18s;
+  position: relative;
+}
+.bsfm-row input[type="checkbox"]:not(:checked) {
+  background: rgba(63, 81, 181, 0.13);
+  border: 1px solid rgba(63, 81, 181, 0.18);
+}
+.bsfm-row input[type="checkbox"]:checked {
+  background: rgba(63, 81, 181, 0.3);
+  border: 1px solid rgba(63, 81, 181, 0.6);
+}
+.bsfm-row input[type="checkbox"]:checked::after {
+  content: "✓";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+.bsfm-row input[type="checkbox"]:hover {
+  box-shadow: 0 0 6px rgba(63, 81, 181, 0.35);
+}
+
+/* Buy Until Section */
+.bsfm-buy-until {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-left: 20px;
+}
+.bsfm-buy-until label {
+  font-size: 12px;
+}
+.bsfm-buy-until input {
+  width: 100%;
+  margin-top: 4px;
+}
+
+/* Dropdowns */
+.bsfm-dropdown {
+  position: relative;
+  min-width: 220px;
+}
+.bsfm-dropdown-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px;
+  background: var(--bsfm-input-bg);
+  border: var(--bsfm-input-border);
+  border-radius: var(--bsfm-radius);
+  cursor: pointer;
+  font-size: 12px;
+}
+.bsfm-arrow {
+  font-size: 14px;
+}
+.bsfm-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 100;
+  background: rgba(26, 26, 26, 0.95);
+  border: 1px solid rgba(63, 81, 181, 0.3);
+  border-radius: var(--bsfm-radius);
+  width: 160px;
+  max-width: 160px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+}
+.bsfm-dropdown--danger .bsfm-dropdown-toggle,
+.bsfm-dropdown--danger .bsfm-dropdown-menu {
+  border-color: var(--bsfm-danger);
+  color: var(--bsfm-danger);
+}
+
+/* Tags */
+.bsfm-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(63, 81, 181, 0.25);
+  color: #3f51b5;
+  border-radius: 5px;
+  padding: 2px 6px;
+  font-size: 11px;
+}
+.bsfm-tag--danger {
+  background: rgba(244, 67, 54, 0.25);
+  color: #f44336;
+}
+.bsfm-tag button {
+  background: none;
+  border: none;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  line-height: 1;
+  color: inherit;
+}
+.bsfm-tag span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  max-width: 100px;
+}
+
+/* Status Messages */
+.bsfm-loading,
+.bsfm-error {
+  text-align: center;
+  font-size: 12px;
+  color: var(--bsfm-gold);
+}
+
+/* Info Tooltip */
+
+/* .info-icon-tooltip {
+  position: absolute;
+  top: 120%;
+  left: 50%;
+  transform: translateX(-50%) scale(0.8);
+  width: 220px;
+  max-width: 90%;
+  background: var(--bsfm-input-bg);
+  color: var(--bsfm-gold);
+  border: var(--bsfm-input-border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 11px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  z-index: 10;
+}
+.info-icon-root:hover .info-icon-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) scale(1);
+} */
+
+/* Utilities */
+.bsfm-partition-line {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 16px 0;
+}
+button:focus {
+  outline: none !important;
+}
+
+/* Special Rows */
+.bsfm-row--lp {
+  position: relative;
+  margin-bottom: 0px;
+}
+.bsfm-row--lp input {
+  width: 100%;
+  padding: 10px 40px 10px 12px;
+  text-align: left;
+}
+.bsfm-row--lp input::placeholder {
+  color: transparent;
+}
+.bsfm-row--lp::after {
+  position: absolute;
+  right: 40px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: rgba(255,255,255,0.5);
+  pointer-events: none;
+}
+.bsfm-row--lp .info-icon-root {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.bsfm-row--wl {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: nowrap;
+  max-width: 100%;
+  margin-bottom: 0px;
+}
+.bsfm-row--wl label {
+  white-space: nowrap;
+  font-size: 12px;
+}
+.bsfm-row--wl .info-icon-root {
+  flex-shrink: 0;
+}
+.bsfm-dropdown--wl {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: calc(100% - 110px);
+}
+
+
+
+/* Style the informational icon with tooltip */
+.info-icon-root {
+  position: relative;
+  display: inline-block;
+  margin-left: 6px;
+  cursor: pointer;
+}
+
+.info-icon-circle {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(255, 215, 0, 0.13);
+  color: #ffd700;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  line-height: 16px;
+  transition: opacity 0.2s;
+}
+
+/* Tooltip style */
+
+
+/* Show tooltip on hover */
+
+
+
+
+/* General tooltip style */
+/* General tooltip style */
+.info-icon-tooltip {
+  position: absolute;
+  transform: translateX(-50%);
+   /* Adjust width based on content */
+  background: var(--bsfm-info-bg);
+  color: var(--bsfm-gold);
+  border-radius: 6px;
+  padding: 8px 12px; /* Adjusted padding */
+  font-size: 11px; /* Adjusted font size */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.2s, visibility 0.2s;
+  pointer-events: none;
+  white-space: normal;
+  z-index: 10000;
+  pointer-events: auto;
+}
+
+/* Specific tooltip style for AntiRug */
+.antirug-tooltip {
+  padding: 6px 10px; /* Reduced padding */
+  font-size: 10px; /* Slightly smaller font size */
+  color: #ffd700; /* Darker text color */
+  left: 60px;
+  top: 120%; /* Adjusted to appear below the icon */
+  width: 100px;
+}
+
+.noBribeMode-tooltip{
+  padding: 6px 10px; /* Reduced padding */
+  font-size: 10px; /* Slightly smaller font size */
+  color: #ffd700; /* Darker text color */
+  left: 20px;
+  top: 120%; /* Adjusted to appear below the icon */
+  width: 100px;
+}
+
+.lpLockTime-tooltip{
+  padding: 6px 10px; /* Reduced padding */
+  font-size: 10px; /* Slightly smaller font size */
+  color: #ffd700; /* Darker text color */
+  
+  right: -60px;
+  top: 120%; /* Adjusted to appear below the icon */
+  width: 100px;
+}
+
+.whitelistDevs-tooltip{
+  padding: 6px 10px; /* Reduced padding */
+  font-size: 10px; /* Slightly smaller font size */
+  color: #ffd700; /* Darker text color */
+  
+  left: 60px;
+  top: 120%; /* Adjusted to appear below the icon */
+  width: 100px;
+}
+
+.blacklistDevs-tooltip{
+  padding: 6px 10px; /* Reduced padding */
+  font-size: 10px; /* Slightly smaller font size */
+  color: #ffd700; /* Darker text color */
+  
+  left: 60px;
+  top: 120%; /* Adjusted to appear below the icon */
+  width: 100px;
+}
+
+.buyUntilReached-tooltip{
+   padding: 6px 10px; /* Reduced padding */
+  font-size: 10px; /* Slightly smaller font size */
+  color: #ffd700; /* Darker text color */
+  
+  left: 60px;
+  top: 120%; /* Adjusted to appear below the icon */
+  width: 100px;
+}
+
+.buyTimeout-tooltip{
+   padding: 6px 10px; /* Reduced padding */
+  font-size: 10px; /* Slightly smaller font size */
+  color: #ffd700; /* Darker text color */
+  
+  left: -40px;
+  top: -75px; /* Adjusted to appear below the icon */
+  width: 100px;
+}
+
+.minLiquidity-tooltip{
+    padding: 6px 10px; /* Reduced padding */
+  font-size: 10px; /* Slightly smaller font size */
+  color: #ffd700; /* Darker text color */
+  
+  left: -40px;
+  top: 120%; /* Adjusted to appear below the icon */
+  width: 100px;
+}
+
+.frontRunProtection-tooltip{
+    padding: 6px 10px; /* Reduced padding */
+  font-size: 10px; /* Slightly smaller font size */
+  color: #ffd700; /* Darker text color */
+  
+  left: 60px;
+  top: 120%; /* Adjusted to appear below the icon */
+  width: 100px;
+}
+
+.repeatableStrategy-tooltip{
+    padding: 6px 10px; /* Reduced padding */
+  font-size: 10px; /* Slightly smaller font size */
+  color: #ffd700; /* Darker text color */
+  
+  left: -40px;
+  top: 120%; /* Adjusted to appear below the icon */
+  width: 100px;
+}
+
+.blacklistDevs-tooltip{
+    padding: 6px 10px; /* Reduced padding */
+  font-size: 10px; /* Slightly smaller font size */
+  color: #ffd700; /* Darker text color */
+  
+  left: 60px;
+  top: -60px; /* Adjusted to appear below the icon */
+  width: 100px;
+}
+
+
+.info-icon-root:hover .info-icon-tooltip,
+.info-icon-tooltip:hover {
+  visibility: visible;
+  opacity: 1;
+}
+
+
+.form-group {
+  position: relative;
+}
+.form-group input {
+  width: 70%;
+  padding: 0.75rem;
+  border: 1px solid #ccc;
+}
+.form-group input::placeholder {
+  opacity: 0;
+}
+.form-group label {
+  position: absolute;
+  left: 0.75rem;
+  top: 0.75rem;
+  pointer-events: none;
+  color: #999;
+  transition: all 0.2s ease;
+}
+
+/* on focus OR when there's input value */
+.form-group input:focus + label,
+.form-group input:not(:placeholder-shown) + label {
+  transform: translateY(-90%) translateX(-10px) scale(0.8);
+  padding: 0 0.25rem;
+  color: #efefef;
+}
+

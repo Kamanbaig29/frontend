@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Button } from '@mui/material';
+//import { Button } from '@mui/material';
 import './App.css';
 import { BotProvider } from './context/BotContext';
 //import { LandingPage } from './components/LandingPage';
@@ -13,7 +13,7 @@ import LoginPage from './components/LoginPage';
 import LandingPage from './components/landingPage';
 import TokenListWithAge from './components/TokenListWIthAge';
 //import Navbar from './components/Navbar';
-import { Typography } from '@mui/material';
+//import { Typography } from '@mui/material';
 //import ActivePresetBar from "./components/ActivePresetBar";
 import PresetModal from "./components/PresetModal";
 import TokenDetectedNotification from "./components/TokenDetectedNotification";
@@ -69,22 +69,22 @@ const AppContent = () => {
   // amazonq-ignore-next-line
   const [] = useState<'buy' | 'sell'>('buy');
 
-  const handleModeSelect = (mode: 'manual' | 'automatic') => {
-    if (ws && isAuthenticated) {
-      console.log(`[AppContent] Sending SET_MODE: ${mode}`);
-      ws.send(JSON.stringify({ type: 'SET_MODE', mode }));
-      setCurrentView(mode);
-    } else {
-      console.error('[AppContent] Cannot send SET_MODE. WebSocket not open or user not authenticated.');
-    }
-  };
+  // const handleModeSelect = (mode: 'manual' | 'automatic') => {
+  //   if (ws && isAuthenticated) {
+  //     console.log(`[AppContent] Sending SET_MODE: ${mode}`);
+  //     ws.send(JSON.stringify({ type: 'SET_MODE', mode }));
+  //     setCurrentView(mode);
+  //   } else {
+  //     console.error('[AppContent] Cannot send SET_MODE. WebSocket not open or user not authenticated.');
+  //   }
+  // };
 
   //const handleGoToBuySelection = () => setCurrentView('selectBuyMode');
   //const handleGoToSellSelection = () => setCurrentView('selectSellMode');
   //const handleViewStats = () => setCurrentView('stats');
-  const handleManualSell = () => setCurrentView('manualSell');
-  const handleAutomaticSell = () => setCurrentView('automaticSell');
-  const handleBackHome = () => setCurrentView('landing');
+  // const handleManualSell = () => setCurrentView('manualSell');
+  // const handleAutomaticSell = () => setCurrentView('automaticSell');
+  // const handleBackHome = () => setCurrentView('landing');
   //const handleViewTokenList = () => setCurrentView('tokenList');
 
   // const handleLoginSuccess = () => {
@@ -315,7 +315,7 @@ const AppContent = () => {
               </div>
             )}
 
-            {currentView === 'selectBuyMode' && (
+            {/*currentView === 'selectBuyMode' && (
               <div className="text-center">
                 <Typography variant="h4" color="white" gutterBottom>Select Buy Mode</Typography>
                 <div className="space-x-4 mt-4">
@@ -337,9 +337,9 @@ const AppContent = () => {
                 {!isAuthenticated && <Typography sx={{ color: 'yellow', mt: 2 }}>Authenticating...</Typography>}
                 <Button onClick={handleBackHome} variant="text" sx={{ color: 'white', mt: 4 }}>Back</Button>
               </div>
-            )}
+            )*/}
 
-            {currentView === 'selectSellMode' && (
+            {/*currentView === 'selectSellMode' && (
               <div className="text-center">
                 <Typography variant="h4" color="white" gutterBottom>Select Sell Mode</Typography>
                 <div className="space-x-4 mt-4">
@@ -361,15 +361,7 @@ const AppContent = () => {
                 {!isAuthenticated && <Typography sx={{ color: 'yellow', mt: 2 }}>Authenticating...</Typography>}
                 <Button onClick={handleBackHome} variant="text" sx={{ color: 'white', mt: 4 }}>Back</Button>
               </div>
-            )}
-
-            {currentView === 'automatic' && (
-              <div>
-                {/* <Dashboard
-                  onBackHome={handleBackHome}
-                /> */}
-              </div>
-            )}
+            )*/}
 
             <TokenDetectedNotification />
           </>
