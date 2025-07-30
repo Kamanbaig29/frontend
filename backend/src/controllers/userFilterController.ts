@@ -265,8 +265,8 @@ export const getBuyFiltersByUserId = async (req: Request, res: Response): Promis
     // Use .lean() to get a plain JS object
     const preset = await UserFilterPreset.findOne({ userId }).lean();
     const buyFilters = { ...(preset?.buyFilters || {}) };
-    buyFilters.maxMcap = Number(buyFilters.maxMcap) || 0;
-    buyFilters.maxBuyers = Number(buyFilters.maxBuyers) || 0;
+    //buyFilters.maxMcap = Number(buyFilters.maxMcap) || 0;
+    //buyFilters.maxBuyers = Number(buyFilters.maxBuyers) || 0;
     res.json({ buyFilters });
   } catch (e) {
     res.status(500).json({ message: 'Failed to fetch buy filters by userId' });

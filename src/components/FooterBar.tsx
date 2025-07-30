@@ -25,7 +25,7 @@ const FooterBar: React.FC<FooterBarProps> = ({ onOpenSettings }) => {
 
   useEffect(() => {
     // WebSocket connect
-    const ws = new WebSocket(import.meta.env.VITE_WS_BASE_URL || "ws://localhost:4000");
+    const ws = new WebSocket(import.meta.env.VITE_WS_URL);
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -149,7 +149,8 @@ const FooterBar: React.FC<FooterBarProps> = ({ onOpenSettings }) => {
             icon={faCheckCircle}
             style={{ color: statusColor, fontSize: "12px", marginRight: 4 }}
           />
-          Connection is {statusText}
+          <span style={{ color: statusColor }}>Connection is {statusText}</span>
+          
           {wsConnected && latency !== null && (
             <span style={{ marginLeft: 8, fontWeight: 500, fontSize: 13, color: "#aaa" }}>
               {latency} ms

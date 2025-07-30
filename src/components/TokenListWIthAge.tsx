@@ -678,6 +678,7 @@ useEffect(() => {
 
         // 3. Only trigger auto-buy if eventType is 'launch'
         if (data.eventType === "launch") {
+          console.log("auto buy");
           if (
             autoBuyEnabledRef.current &&
             bufferAmountRef.current &&
@@ -685,6 +686,7 @@ useEffect(() => {
             Number(bufferAmountRef.current) > 0 &&
             ws
           ) {
+            console.log("auto buy inside");
             // --- BUY TIMEOUT LOGIC START ---
             const startTime = Date.now();
             // --- END BUY TIMEOUT LOGIC START ---
@@ -702,16 +704,12 @@ useEffect(() => {
                 );
                 const buyFiltersData = await buyFiltersRes.json();
                 const userBuyFilters = buyFiltersData.buyFilters || {};
-                const maxMcap = Number(userBuyFilters.maxMcap) || 0;
-                const maxBuyers = Number(userBuyFilters.maxBuyers) || 0;
+                //const maxMcap = Number(userBuyFilters.maxMcap) || 0;
+                //const maxBuyers = Number(userBuyFilters.maxBuyers) || 0;
                 // Debug log for buyFilters
                 console.log(
                   "[AutoBuy DEBUG] buyFiltersData:",
                   buyFiltersData,
-                  "Parsed maxMcap:",
-                  maxMcap,
-                  "Parsed maxBuyers:",
-                  maxBuyers
                 );
 
                 // 2. Fetch whitelist/blacklist from backend
@@ -748,45 +746,6 @@ useEffect(() => {
                 )
                   return;
 
-                // 3. Fetch metrics as before
-                const metricsRes = await fetch(
-                  `${import.meta.env.VITE_API_BASE_URL}/api/tokens/${
-                    data.token.mint
-                  }/metrics`
-                );
-                const metrics = await metricsRes.json();
-
-                // 4. Comparison logic
-                console.log("AutoBuy Filter:", {
-                  marketCapUsd: metrics.marketCapUsd,
-                  maxMcap,
-                  buyersCount: metrics.buyersCount,
-                  maxBuyers,
-                });
-
-                if (
-                  maxMcap > 0 &&
-                  metrics.marketCapUsd &&
-                  metrics.marketCapUsd > maxMcap
-                ) {
-                  setAutoBuySnackbar({
-                    open: true,
-                    message: `Auto-buy blocked: Market Cap $${metrics.marketCapUsd} > filter $${maxMcap}`,
-                  });
-                  return;
-                }
-                if (
-                  maxBuyers > 0 &&
-                  metrics.buyersCount &&
-                  metrics.buyersCount > maxBuyers
-                ) {
-                  setAutoBuySnackbar({
-                    open: true,
-                    message: `Auto-buy blocked: Buyers ${metrics.buyersCount} > filter ${maxBuyers}`,
-                  });
-                  return;
-                }
-
                 // Allow buy
                 const amountLamports = Math.floor(
                   Number(bufferAmountRef.current) * 1e9
@@ -794,19 +753,8 @@ useEffect(() => {
                 const toLamports = (val: string) =>
                   Math.floor(Number(val) * 1e9);
                 // After fetching userBuyFilters, add maxTokenAge logic before market cap/buyers check
-                const maxTokenAge = Number(userBuyFilters.maxTokenAge) || 0;
                 const noBribeMode = !!userBuyFilters.noBribeMode;
-                const tokenAgeSec =
-                  (Date.now() - data.token.creationTimestamp) / 1000;
-                if (maxTokenAge > 0 && tokenAgeSec > maxTokenAge) {
-                  setAutoBuySnackbar({
-                    open: true,
-                    message: `Auto-buy blocked: Token age ${Math.floor(
-                      tokenAgeSec
-                    )}s > filter ${maxTokenAge}s`,
-                  });
-                  return;
-                }
+
                 // --- BUY TIMEOUT LOGIC CHECK ---
                 const timeout = Number(userBuyFilters.timeout) || 0;
                 if (timeout > 0) {

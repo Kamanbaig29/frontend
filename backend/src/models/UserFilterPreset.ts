@@ -2,15 +2,15 @@ import mongoose from "mongoose";
 
 // amazonq-ignore-next-line
 const BuyFiltersSchema = new mongoose.Schema({
-  maxMcap: { type: Number, default: 0 },
-  maxBuyers: { type: Number, default: 0 },
-  maxTokenAge: { type: Number, default: 0 },
+  // maxMcap: { type: Number, default: 0 },
+  // maxBuyers: { type: Number, default: 0 },
+  // maxTokenAge: { type: Number, default: 0 },
   antiRug: { type: Boolean, default: false },
   noBribeMode: { type: Boolean, default: false },
   minLpLockTime: { type: Number, default: 0 },
   // amazonq-ignore-next-line
-  whitelistDevs: { type: [String], default: ["true"] }, // now array, default ["true"]
-  blacklistDevs: { type: [String], default: ["true"] }, // now array, default ["true"]
+  whitelistDevs: { type: [String], default: [] }, // now array, default ["true"]
+  blacklistDevs: { type: [String], default: [] }, // now array, default ["true"]
   autoSellCondition: { type: String, default: "" },
   timeout: { type: Number, default: 0 },
   buyUntilReached: { type: Boolean, default: false },
