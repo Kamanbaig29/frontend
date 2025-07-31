@@ -7,7 +7,7 @@ import {
   Snackbar,
   Alert,
 } from "@mui/material";
-import { FaSortAmountDown, FaSortAmountUp } from "react-icons/fa";
+//import { FaSortAmountDown, FaSortAmountUp } from "react-icons/fa";
 //import { WebSocketContext } from '../context/webSocketContext';
 //import { PublicKey, Connection } from '@solana/web3.js';
 import PresetModal from "./PresetModal";
@@ -18,12 +18,14 @@ import BuySellFilterPanel, {
   type BuyFilters,
   type SellFilters,
 } from "./BuySellFilterPanel";
-import FilterListIcon from "@mui/icons-material/FilterList"; // or your icon
+//import FilterListIcon from "@mui/icons-material/FilterList"; // or your icon
 import Navbar from "./Navbar";
 import DepositModal from "./DepositModal";
 import WithdrawModal from "./WithdrawModal";
 import FooterBar from "./FooterBar";
 import styles from "../assets/TokenListWithAge.module.css";
+import HomeSetting from "./homeSetting";
+import SectionFilters from "./sectionFilters";
 //import { WebSocketContext } from "../context/webSocketContext";
 
 type Token = {
@@ -92,7 +94,7 @@ const TokenListWithAge: React.FC = () => {
   const [now, setNow] = useState(Date.now());
   const [, setLoading] = useState(true);
   const [, setError] = useState("");
-  const [sortOrder,] = useState<"desc" | "asc">("desc"); // 'desc' = newest first
+  const [sortOrder] = useState<"desc" | "asc">("desc"); // 'desc' = newest first
   const [presetModalOpen, setPresetModalOpen] = useState(false);
   const [buyAmounts, setBuyAmounts] = useState<{ [key: string]: string }>({});
   const [showMyTokens, setShowMyTokens] = useState(false);
@@ -164,41 +166,41 @@ const TokenListWithAge: React.FC = () => {
   }>({ show: false, message: "", type: "success" });
   const [solBalance, setSolBalance] = useState<number>(0);
   // State variables
-const [sortOrder24h, setSortOrder24h] = useState('desc');
-const [sortOrder24_48h, setSortOrder24_48h] = useState('desc');
-const [sortOrder48h, setSortOrder48h] = useState('desc');
+  const [sortOrder24h, setSortOrder24h] = useState("desc");
+  const [sortOrder24_48h, setSortOrder24_48h] = useState("desc");
+  const [sortOrder48h, setSortOrder48h] = useState("desc");
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
 
-// Helper function
-const filterTokensByAge = (
-  tokens: Token[],
-  minHours: number,
-  maxHours: number,
-  sortOrder: string
-) => {
-  const now = Date.now();
-  const minMs = minHours * 60 * 60 * 1000;
-  const maxMs = maxHours * 60 * 60 * 1000;
+  // Helper function
+  const filterTokensByAge = (
+    tokens: Token[],
+    minHours: number,
+    maxHours: number,
+    sortOrder: string
+  ) => {
+    const now = Date.now();
+    const minMs = minHours * 60 * 60 * 1000;
+    const maxMs = maxHours * 60 * 60 * 1000;
 
-  return tokens
-    .filter((token) => {
-      const age = now - token.creationTimestamp;
-      return age >= minMs && age < maxMs;
-    })
-    .sort((a, b) => {
-      if (sortOrder === "desc") {
-        return b.creationTimestamp - a.creationTimestamp;
-      }
-      return a.creationTimestamp - b.creationTimestamp;
-    });
-};
-
-
-useEffect(() => {
-  document.body.style.overflow = "hidden";
-  return () => {
-    document.body.style.overflow = "auto";
+    return tokens
+      .filter((token) => {
+        const age = now - token.creationTimestamp;
+        return age >= minMs && age < maxMs;
+      })
+      .sort((a, b) => {
+        if (sortOrder === "desc") {
+          return b.creationTimestamp - a.creationTimestamp;
+        }
+        return a.creationTimestamp - b.creationTimestamp;
+      });
   };
-}, []);
+
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "auto";
+    };
+  }, []);
 
   // Disable scroll when deposit modal is open
   useEffect(() => {
@@ -255,6 +257,8 @@ useEffect(() => {
       [mint]: value,
     }));
   };
+
+  const handleSettingsClick = () => setSettingsModalOpen(true);
 
   // Handle buy button click
   const handleBuyClick = (token: Token) => {
@@ -707,10 +711,7 @@ useEffect(() => {
                 //const maxMcap = Number(userBuyFilters.maxMcap) || 0;
                 //const maxBuyers = Number(userBuyFilters.maxBuyers) || 0;
                 // Debug log for buyFilters
-                console.log(
-                  "[AutoBuy DEBUG] buyFiltersData:",
-                  buyFiltersData,
-                );
+                console.log("[AutoBuy DEBUG] buyFiltersData:", buyFiltersData);
 
                 // 2. Fetch whitelist/blacklist from backend
                 const token = localStorage.getItem("token");
@@ -1275,22 +1276,6 @@ useEffect(() => {
     return true;
   }
 
-  // 👇 Yeh context se notification state lein
-  // Removed unused destructured elements from WebSocketContext
-
-  // 👇 Yeh effect add karein (tokens array update hone par check kare)
-  // REMOVE the following useEffect (timer for notification):
-  // useEffect(() => {
-  //   let timer: NodeJS.Timeout;
-  //   if (showTokenDetectedNotification) {
-  //     timer = setTimeout(() => {
-  //       setShowTokenDetectedNotification(false);
-  //     }, 5000); // 5 seconds
-  //   }
-  //   return () => clearTimeout(timer);
-  // }, [showTokenDetectedNotification, setShowTokenDetectedNotification]);
-
-  // Clean up intervals on unmount
   useEffect(() => {
     return () => {
       Object.values(buyUntilReachedIntervals.current).forEach(clearInterval);
@@ -1614,54 +1599,35 @@ useEffect(() => {
         <div className={styles.header}>
           <h2 className={styles.title}>
             {showMyTokens ? "Portfolio" : "Trending Tokens"}
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={autoBuyEnabled}
-                  onChange={() => setAutoBuyEnabled((v) => !v)}
-                  color="primary"
-                />
-              }
-              label={
-                <span className={styles.checkboxLabel}>Auto Buy Enable</span>
-              }
-              labelPlacement="end"
-            />
-            <TextField
-              label="Buffer Amount (SOL)"
-              type="number"
-              size="small"
-              value={bufferAmount}
-              onChange={(e) => setBufferAmount(e.target.value)}
-              inputProps={{ min: 0, step: "any" }}
-              disabled={!autoBuyEnabled}
-            />
           </h2>
           <div className={styles.controls}>
             <Button
               variant="outlined"
+              style={{ border: "none" }}
               className={styles.filterButton}
               onClick={() => setShowFilters(true)}
             >
-              <FilterListIcon />
+              <img
+                src="./homePageIcons/filter.png"
+                height={20}
+                width={20}
+                alt="Filter Icon"
+              />
+            </Button>
+            <Button
+              style={{ border: "none", padding: 0 }}
+              variant="outlined"
+              className={styles.settingsButton}
+              onClick={handleSettingsClick}
+            >
+              <img
+                src="/homePageIcons/settings.png"
+                height={20}
+                width={20}
+                alt="Settings Icon"
+              />
             </Button>
           </div>
-          {/* <div className={styles.controls}>
-            <Button
-              variant={showMyTokens ? "outlined" : "contained"}
-              onClick={() => setShowMyTokens(false)}
-              className={styles.button}
-            >
-              All Tokens
-            </Button>
-            <Button
-              variant={showMyTokens ? "contained" : "outlined"}
-              onClick={() => setShowMyTokens(true)}
-              className={styles.button}
-            >
-              My Tokens
-            </Button>
-          </div> */}
         </div>
 
         {showMyTokens ? (
@@ -2038,24 +2004,13 @@ useEffect(() => {
             {/* Section 1: Tokens <= 24h */}
             <div className={styles.tokenSection}>
               <div className={styles.sectionHeader}>
-                <h3 className={styles.sectionTitle}>0-24h Tokens</h3>
-                <div className={styles.controls}>
-                  <span className={styles.title}>Sort:</span>
-                  <Button
-                    variant={sortOrder24h === "desc" ? "contained" : "outlined"}
-                    startIcon={<FaSortAmountDown />}
-                    onClick={() => setSortOrder24h("desc")}
-                  >
-                    Newest
-                  </Button>
-                  <Button
-                    variant={sortOrder24h === "asc" ? "contained" : "outlined"}
-                    startIcon={<FaSortAmountUp />}
-                    onClick={() => setSortOrder24h("asc")}
-                  >
-                    Oldest
-                  </Button>
-                </div>
+                <h3 className={styles.sectionTitle}>Fresh-Drops</h3>
+                <SectionFilters
+                  sortOrder={sortOrder24h}
+                  setSortOrder={setSortOrder24h}
+                  sectionTitle="Fresh-Drops"
+                  userId={userId}
+                />
               </div>
               <div className={styles.tokenGrid}>
                 {filterTokensByAge(sortedTokens, 0, 24, sortOrder24h).map(
@@ -2135,28 +2090,13 @@ useEffect(() => {
             {/* Section 2: Tokens 24h-48h */}
             <div className={styles.tokenSection}>
               <div className={styles.sectionHeader}>
-                <h3 className={styles.sectionTitle}>24-48h Tokens</h3>
-                <div className={styles.controls}>
-                  <span className={styles.title}>Sort:</span>
-                  <Button
-                    variant={
-                      sortOrder24_48h === "desc" ? "contained" : "outlined"
-                    }
-                    startIcon={<FaSortAmountDown />}
-                    onClick={() => setSortOrder24_48h("desc")}
-                  >
-                    Newest
-                  </Button>
-                  <Button
-                    variant={
-                      sortOrder24_48h === "asc" ? "contained" : "outlined"
-                    }
-                    startIcon={<FaSortAmountUp />}
-                    onClick={() => setSortOrder24_48h("asc")}
-                  >
-                    Oldest
-                  </Button>
-                </div>
+                <h3 className={styles.sectionTitle}>Heating-Up</h3>
+                <SectionFilters
+                  sortOrder={sortOrder24_48h}
+                  setSortOrder={setSortOrder24_48h}
+                  sectionTitle="Heating-Up"
+                  userId={userId}
+                />
               </div>
               <div className={styles.tokenGrid}>
                 {filterTokensByAge(sortedTokens, 24, 48, sortOrder24_48h).map(
@@ -2236,24 +2176,13 @@ useEffect(() => {
             {/* Section 3: Tokens > 48h */}
             <div className={styles.tokenSection}>
               <div className={styles.sectionHeader}>
-                <h3 className={styles.sectionTitle}>48h+ Tokens</h3>
-                <div className={styles.controls}>
-                  <span className={styles.title}>Sort:</span>
-                  <Button
-                    variant={sortOrder48h === "desc" ? "contained" : "outlined"}
-                    startIcon={<FaSortAmountDown />}
-                    onClick={() => setSortOrder48h("desc")}
-                  >
-                    Newest
-                  </Button>
-                  <Button
-                    variant={sortOrder48h === "asc" ? "contained" : "outlined"}
-                    startIcon={<FaSortAmountUp />}
-                    onClick={() => setSortOrder48h("asc")}
-                  >
-                    Oldest
-                  </Button>
-                </div>
+                <h3 className={styles.sectionTitle}>Battle-Tested</h3>
+                <SectionFilters
+                  sortOrder={sortOrder48h}
+                  setSortOrder={setSortOrder48h}
+                  sectionTitle="Battle-Tested"
+                  userId={userId}
+                />
               </div>
               <div className={styles.tokenGrid}>
                 {filterTokensByAge(
@@ -2335,6 +2264,14 @@ useEffect(() => {
           </div>
         )}
       </div>
+      <HomeSetting
+        open={settingsModalOpen}
+        onClose={() => setSettingsModalOpen(false)}
+        autoBuyEnabled={autoBuyEnabled}
+        setAutoBuyEnabled={setAutoBuyEnabled}
+        bufferAmount={bufferAmount}
+        setBufferAmount={setBufferAmount}
+      />
       <PresetModal
         open={presetModalOpen}
         onClose={() => setPresetModalOpen(false)}

@@ -13,6 +13,7 @@ import autoSellRoutes from './routes/autoSellRoutes';
 import userFilterRoutes from './routes/userFilterRoutes';
 import solPriceRoutes from './routes/solPrice';
 import withdrawRoutes from './routes/withdrawRoutes';
+import sectionFilterRouter from "./routes/sectionFilterRoutes";
 import path from 'path';
 
 // --- Existing Bot Imports ---
@@ -52,6 +53,7 @@ async function main() {
   app.use('/api/user-filters', userFilterRoutes);
   app.use('/api', solPriceRoutes);
   app.use('/api', withdrawRoutes);
+  app.use("/api/section-filters", sectionFilterRouter);
 
   // --- Serve React Frontend Build ---
   const frontendPath = path.join(__dirname, '../../dist'); // Adjust if needed

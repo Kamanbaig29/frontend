@@ -1,0 +1,168 @@
+.modalContainer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: 25%;
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+  padding: 32px;
+  box-shadow: -4px 0 12px rgba(0, 0, 0, 0.4);
+  overflow-y: auto;
+  transform: translateX(100%);
+  transition: transform 0.4s ease-in-out;
+  z-index: 1301;
+}
+
+.open {
+  transform: translateX(0);
+}
+
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  backdrop-filter: blur(5px);
+  background-color: rgba(0, 0, 0, 0.2);
+  z-index: 1300;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.modalHeaderTitle {
+  font-size: 30px;
+  font-weight: bold;
+  color: white;
+  background: linear-gradient(135deg, #1a237e 0%, #3f51b5 50%, #00bcd4 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin: 0;
+}
+
+.modalTitle {
+  font-size: 18px;
+  font-weight: bold;
+  color: white;
+  background: rgb(96, 96, 96);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin: 0;
+  margin-bottom: 18px;
+}
+
+/* ✅ NEW: Box around switch, input, and button */
+.autoBuyBox {
+  border: 1px solid #444;
+  padding: 16px;
+  border-radius: 8px;
+  background-color: #1f1f1f;
+  margin-bottom: 24px;
+  box-shadow: inset 0 0 8px rgba(255, 255, 255, 0.05);
+}
+
+.autoBuyBoxTitle {
+  color: #ffd700;
+  font-size: 16px;
+  font-weight: 500;
+  margin-bottom: 10px;
+}
+
+.switchLabel {
+  margin-bottom: 10px;
+}
+
+.switchText {
+  color: #ffd700;
+  font-weight: 500;
+}
+
+.inputField {
+  margin-top: 10px;
+}
+
+.toggleButton {
+  margin-top: 18px;
+  font-weight: bold;
+  letter-spacing: 0.5px;
+}
+
+.closeButton {
+  float: right;
+  margin-top: 16px;
+}
+
+
+.closeIcon {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+  z-index: 9999;
+  padding: 4px;
+  transition: color 0.2s;
+}
+
+.closeIcon:hover {
+  color: #ff5252;
+}
+
+.bufferInput {
+  margin-top: 10px;
+}
+
+.bufferInput .MuiOutlinedInput-root {
+  background-color: #2a2a2a;
+  border-radius: 8px;
+  color: #fff;
+  font-weight: 500;
+  transition: all 0.2s ease-in-out;
+}
+
+.bufferInput .MuiOutlinedInput-notchedOutline {
+  border-color: #555;
+}
+
+.bufferInput .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline {
+  border-color: #888;
+}
+
+.bufferInput .Mui-focused .MuiOutlinedInput-notchedOutline {
+  border-color: #ffd700;
+}
+
+.bufferInput .MuiInputLabel-root {
+  color: #bbb;
+}
+
+.bufferInput .Mui-focused.MuiInputLabel-root {
+  color: #ffd700;
+}
+
+
+/* 🔁 Responsive tweaks */
+@media screen and (max-width: 768px) {
+  .modalContainer {
+    width: 70%;
+
+  }
+
+  .modalHeaderTitle {
+    font-size: 20px;
+  }
+
+  .modalTitle {
+    font-size: 15px;
+  }
+}
