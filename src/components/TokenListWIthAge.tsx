@@ -7,18 +7,14 @@ import {
   Snackbar,
   Alert,
 } from "@mui/material";
-//import { FaSortAmountDown, FaSortAmountUp } from "react-icons/fa";
-//import { WebSocketContext } from '../context/webSocketContext';
-//import { PublicKey, Connection } from '@solana/web3.js';
+
 import PresetModal from "./PresetModal";
-//import ActivePresetBar from './ActivePresetBar';
 import { useWebSocket } from "../context/webSocketContext";
-//import SettingsIcon from '@mui/icons-material/Settings';
 import BuySellFilterPanel, {
   type BuyFilters,
   type SellFilters,
 } from "./BuySellFilterPanel";
-//import FilterListIcon from "@mui/icons-material/FilterList"; // or your icon
+import TokenDetails from "./TokenDetails";
 import Navbar from "./Navbar";
 import DepositModal from "./DepositModal";
 import WithdrawModal from "./WithdrawModal";
@@ -26,6 +22,27 @@ import FooterBar from "./FooterBar";
 import styles from "../assets/TokenListWithAge.module.css";
 import HomeSetting from "./homeSetting";
 import SectionFilters from "./sectionFilters";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faUser,
+  faGlobe,
+  faPills,
+  faMagnifyingGlass,
+  faUserTie,
+  faBolt,
+  faCopy,
+} from "@fortawesome/free-solid-svg-icons";
+
+import { faTelegram } from "@fortawesome/free-brands-svg-icons";
+
+import { faUsers } from "@fortawesome/free-solid-svg-icons";
+import { faArrowUp, faArrowDown } from "@fortawesome/free-solid-svg-icons";
+
+
+
+// import PersonIcon from "/public/tokenCardIcons/person.svg";
+// import { ReactComponent as PersonIcon } from "/public/tokenCardIcons/person.svg";
+
 //import { WebSocketContext } from "../context/webSocketContext";
 
 type Token = {
@@ -56,20 +73,39 @@ type Token = {
   buyTime?: number; // Added for backend sync
 };
 
-function getAgeString(ageMs: number) {
+function getAgeString(ageMs: number): string {
   const totalSeconds = Math.floor(ageMs / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  return `${hours}h ${minutes}m ${seconds}s`;
+
+  if (totalSeconds < 60) {
+    return `${totalSeconds}s`;
+  }
+
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  if (totalMinutes < 60) {
+    return `${totalMinutes}m`;
+  }
+
+  const totalHours = Math.floor(totalMinutes / 60);
+  if (totalHours < 24) {
+    return `${totalHours}h`;
+  }
+
+  const totalDays = Math.floor(totalHours / 24);
+  return `${totalDays}d`;
 }
 
-function toFullDecimalString(num: number) {
-  let str = num.toString();
-  if (str.includes("e") || str.includes("E")) {
-    return num.toFixed(20).replace(/\.?0+$/, "");
-  }
-  return str;
+
+function toFullDecimalString(num: number): string {
+  if (num === 0) return "0";
+  // Get fixed with high precision, then trim unnecessary zeros
+  return num.toFixed(20).replace(/\.?0+$/, "");
+}
+
+
+function formatPriceSmart(price: number): string {
+  if (price === 0) return "0";
+  if (price < 0.009) return price.toExponential(2); // e.g. 2.84e-8
+  return price.toFixed(6); // e.g. 0.012300
 }
 
 // function formatTokenBalance(balance: number, symbol: string) {
@@ -96,7 +132,7 @@ const TokenListWithAge: React.FC = () => {
   const [, setError] = useState("");
   const [sortOrder] = useState<"desc" | "asc">("desc"); // 'desc' = newest first
   const [presetModalOpen, setPresetModalOpen] = useState(false);
-  const [buyAmounts, setBuyAmounts] = useState<{ [key: string]: string }>({});
+
   const [showMyTokens, setShowMyTokens] = useState(false);
   const [walletTokens, setWalletTokens] = useState<Token[]>([]);
   const [autoSellConfigs, setAutoSellConfigs] = useState<any[]>([]);
@@ -170,6 +206,10 @@ const TokenListWithAge: React.FC = () => {
   const [sortOrder24_48h, setSortOrder24_48h] = useState("desc");
   const [sortOrder48h, setSortOrder48h] = useState("desc");
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [manualBuyAmount, setManualBuyAmount] = useState<string>("");
+  const [activeSection, setActiveSection] = useState<'fresh-drops' | 'heating-up' | 'battle-tested'>('fresh-drops');
+  const [selectedToken, setSelectedToken] = useState<Token | null>(null);
+  const [showTokenDetails, setShowTokenDetails] = useState(false);
 
   // Helper function
   const filterTokensByAge = (
@@ -250,21 +290,33 @@ const TokenListWithAge: React.FC = () => {
     activeBuyPresetRef.current = activeBuyPreset;
   }, [activeBuyPreset]);
 
-  // Handle buy amount input change
-  const handleBuyAmountChange = (mint: string, value: string) => {
-    setBuyAmounts((prev) => ({
-      ...prev,
-      [mint]: value,
-    }));
-  };
+
 
   const handleSettingsClick = () => setSettingsModalOpen(true);
 
+  const handleTokenClick = (token: Token) => {
+    // Check if this token exists in userTokens (portfolio) and merge data
+    const portfolioToken = userTokens.find(ut => ut.mint === token.mint);
+    const mergedToken = portfolioToken ? {
+      ...token,
+      ...portfolioToken, // Portfolio data overrides discover data
+      balance: portfolioToken.balance,
+      buyAmount: portfolioToken.buyAmount,
+      buyTime: portfolioToken.buyTime,
+      autoSellEnabled: portfolioToken.autoSellEnabled,
+      takeProfit: portfolioToken.takeProfit,
+      stopLoss: portfolioToken.stopLoss,
+      autoSellPercent: portfolioToken.autoSellPercent
+    } : token;
+    
+    setSelectedToken(mergedToken);
+    setShowTokenDetails(true);
+  };
+
   // Handle buy button click
   const handleBuyClick = (token: Token) => {
-    const amount = buyAmounts[token.mint];
-    if (!amount || parseFloat(amount) <= 0) {
-      alert("Please enter a valid amount");
+    if (!manualBuyAmount || parseFloat(manualBuyAmount) <= 0) {
+      alert("Please enter a valid amount in the Manual Buy section");
       return;
     }
     if (!ws) {
@@ -276,7 +328,7 @@ const TokenListWithAge: React.FC = () => {
       alert("No buy preset loaded! Please set your buy preset first.");
       return;
     }
-    const amountLamports = Math.floor(parseFloat(amount) * 1e9);
+    const amountLamports = Math.floor(parseFloat(manualBuyAmount) * 1e9);
 
     // Debug: See what is being sent
     console.log("Manual buy with preset:", preset);
@@ -543,7 +595,7 @@ const TokenListWithAge: React.FC = () => {
         tokenSymbol: token.symbol,
         trailingStopLossPercent:
           trailingStopLossState[token.mint] !== undefined &&
-          trailingStopLossState[token.mint] !== ""
+            trailingStopLossState[token.mint] !== ""
             ? Number(trailingStopLossState[token.mint])
             : 10,
         trailingStopLossEnabled:
@@ -552,7 +604,7 @@ const TokenListWithAge: React.FC = () => {
             : false,
         timeBasedSellSec:
           timeBasedSellState[token.mint] !== undefined &&
-          timeBasedSellState[token.mint] !== ""
+            timeBasedSellState[token.mint] !== ""
             ? Number(timeBasedSellState[token.mint])
             : 0,
         timeBasedSellEnabled:
@@ -702,8 +754,7 @@ const TokenListWithAge: React.FC = () => {
                 // 1. Fetch buyFilters from backend (new route, by userId)
                 const userId = localStorage.getItem("userId");
                 const buyFiltersRes = await fetch(
-                  `${
-                    import.meta.env.VITE_API_BASE_URL
+                  `${import.meta.env.VITE_API_BASE_URL
                   }/api/user-filters/buy-filters-by-user-id?userId=${userId}`
                 );
                 const buyFiltersData = await buyFiltersRes.json();
@@ -717,16 +768,14 @@ const TokenListWithAge: React.FC = () => {
                 const token = localStorage.getItem("token");
                 const [whitelistRes, blacklistRes] = await Promise.all([
                   fetch(
-                    `${
-                      import.meta.env.VITE_API_BASE_URL
+                    `${import.meta.env.VITE_API_BASE_URL
                     }/api/user-filters/whitelist-devs`,
                     {
                       headers: { Authorization: `Bearer ${token}` },
                     }
                   ),
                   fetch(
-                    `${
-                      import.meta.env.VITE_API_BASE_URL
+                    `${import.meta.env.VITE_API_BASE_URL
                     }/api/user-filters/blacklist-devs`,
                     {
                       headers: { Authorization: `Bearer ${token}` },
@@ -807,8 +856,7 @@ const TokenListWithAge: React.FC = () => {
                       try {
                         // Fetch latest metrics
                         const metricsRes = await fetch(
-                          `${import.meta.env.VITE_API_BASE_URL}/api/tokens/${
-                            data.token.mint
+                          `${import.meta.env.VITE_API_BASE_URL}/api/tokens/${data.token.mint
                           }/metrics`
                         );
                         const metrics = await metricsRes.json();
@@ -901,10 +949,6 @@ const TokenListWithAge: React.FC = () => {
       }
       if (data.type === "MANUAL_BUY_SUCCESS") {
         alert("Buy order placed successfully!");
-        setBuyAmounts((prev) => ({
-          ...prev,
-          [data.details.mint]: "",
-        }));
         // Show snackbar if this was an auto buy
         if (lastAutoBuyMint && data.details.mint === lastAutoBuyMint) {
           setAutoBuySnackbar({
@@ -924,9 +968,8 @@ const TokenListWithAge: React.FC = () => {
         // Auto-sell triggered notification
         setAutoBuySnackbar({
           open: true,
-          message: `Auto sell triggered for ${
-            data.tokenName || data.mint
-          }! P/L: ${data.profitLoss?.toFixed(2)}%`,
+          message: `Auto sell triggered for ${data.tokenName || data.mint
+            }! P/L: ${data.profitLoss?.toFixed(2)}%`,
         });
       }
       if (data.type === "AUTO_SELL_SUCCESS") {
@@ -1070,26 +1113,26 @@ const TokenListWithAge: React.FC = () => {
           config?.takeProfit !== undefined
             ? config.takeProfit
             : token.takeProfit !== undefined
-            ? token.takeProfit
-            : 10,
+              ? token.takeProfit
+              : 10,
         stopLoss:
           config?.stopLoss !== undefined
             ? config.stopLoss
             : token.stopLoss !== undefined
-            ? token.stopLoss
-            : 10,
+              ? token.stopLoss
+              : 10,
         autoSellPercent:
           config?.autoSellPercent !== undefined
             ? config.autoSellPercent
             : token.autoSellPercent !== undefined
-            ? token.autoSellPercent
-            : 100,
+              ? token.autoSellPercent
+              : 100,
         trailingStopLossPercent:
           config?.trailingStopLossPercent !== undefined
             ? config.trailingStopLossPercent
             : token.trailingStopLossPercent !== undefined
-            ? token.trailingStopLossPercent
-            : 10,
+              ? token.trailingStopLossPercent
+              : 10,
         trailingStopLossEnabled:
           config?.trailingStopLossEnabled ??
           token.trailingStopLossEnabled ??
@@ -1098,16 +1141,16 @@ const TokenListWithAge: React.FC = () => {
           config?.timeBasedSellSec !== undefined
             ? config.timeBasedSellSec
             : token.timeBasedSellSec !== undefined
-            ? token.timeBasedSellSec
-            : 0,
+              ? token.timeBasedSellSec
+              : 0,
         timeBasedSellEnabled:
           config?.timeBasedSellEnabled ?? token.timeBasedSellEnabled ?? false,
         waitForBuyersBeforeSell:
           config?.waitForBuyersBeforeSell !== undefined
             ? config.waitForBuyersBeforeSell
             : token.waitForBuyersBeforeSell !== undefined
-            ? token.waitForBuyersBeforeSell
-            : 5,
+              ? token.waitForBuyersBeforeSell
+              : 5,
         waitForBuyersBeforeSellEnabled:
           config?.waitForBuyersBeforeSellEnabled ??
           token.waitForBuyersBeforeSellEnabled ??
@@ -1139,7 +1182,7 @@ const TokenListWithAge: React.FC = () => {
           tokenSymbol: token.symbol,
           trailingStopLossPercent:
             trailingStopLossState[token.mint] !== undefined &&
-            trailingStopLossState[token.mint] !== ""
+              trailingStopLossState[token.mint] !== ""
               ? Number(trailingStopLossState[token.mint])
               : 10,
           trailingStopLossEnabled:
@@ -1148,7 +1191,7 @@ const TokenListWithAge: React.FC = () => {
               : false,
           timeBasedSellSec:
             timeBasedSellState[token.mint] !== undefined &&
-            timeBasedSellState[token.mint] !== ""
+              timeBasedSellState[token.mint] !== ""
               ? Number(timeBasedSellState[token.mint])
               : 0,
           timeBasedSellEnabled:
@@ -1630,379 +1673,181 @@ const TokenListWithAge: React.FC = () => {
           </div>
         </div>
 
+        {/* Section Buttons for mobile view */}
+        {!showMyTokens && (
+          <div className={styles.sectionButtons}>
+            <button
+              className={`${styles.sectionButton} ${activeSection === 'fresh-drops' ? styles.sectionButtonActive : ''}`}
+              onClick={() => setActiveSection('fresh-drops')}
+            >
+              Fresh-Drops
+            </button>
+            <button
+              className={`${styles.sectionButton} ${activeSection === 'heating-up' ? styles.sectionButtonActive : ''}`}
+              onClick={() => setActiveSection('heating-up')}
+            >
+              Heating-Up
+            </button>
+            <button
+              className={`${styles.sectionButton} ${activeSection === 'battle-tested' ? styles.sectionButtonActive : ''}`}
+              onClick={() => setActiveSection('battle-tested')}
+            >
+              Battle-Tested
+            </button>
+          </div>
+        )}
+
         {showMyTokens ? (
           /* MY TOKENS VIEW */
-          <div className={styles.tokenGrid}>
-            {sortedUserTokens.length === 0 ? (
-              <div className={styles.noTokensMessage}>
-                You don't have any tokens yet
+          <div className={styles.tokenSectionsContainer}>
+            <div className={styles.tokenSection}>
+              <div className={styles.sectionHeader}>
+                <h3 className={styles.sectionTitle}>Portfolio</h3>
               </div>
-            ) : (
-              sortedUserTokens.map((token) => {
-                const buyPrice = token.buyAmount;
-                const currentPrice = token.currentPrice;
-                const profitLoss = getProfitLossPercent(buyPrice, currentPrice);
-                const profitLossColor =
-                  profitLoss > 0
-                    ? "#4CAF50"
-                    : profitLoss < 0
-                    ? "#ff6b6b"
-                    : "#888";
-
-                return (
-                  <div
-                    key={token.mint}
-                    className={styles.tokenCard}
-                    style={{ position: "relative" }}
-                  >
-                    {/* Auto Sell Toggle */}
-                    <div
-                      style={{
-                        position: "absolute",
-                        top: 4,
-                        right: 12,
-                        zIndex: 2,
-                      }}
-                    >
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={!!autoSellEnabledState[token.mint]}
-                            onChange={() => handleAutoSellToggle(token)}
-                            color="primary"
-                            size="small"
-                          />
-                        }
-                        label="Auto Sell"
-                        labelPlacement="start"
-                        sx={{ color: "#FFD700", fontWeight: 500, fontSize: 13 }}
-                      />
-                    </div>
-
-                    {token.imageUrl && (
-                      <div className={styles.tokenImageContainer}>
-                        <img
-                          src={token.imageUrl}
-                          alt={token.name}
-                          className={styles.tokenImage}
-                          onError={(e) => {
-                            e.currentTarget.style.display = "none";
-                          }}
-                        />
-                      </div>
-                    )}
-
-                    <div className={styles.tokenName}>{token.name}</div>
-                    <div className={styles.tokenSymbol}>{token.symbol}</div>
-                    <div className={styles.tokenCreator}>
-                      Creator: {token.creator || token.devAddress || "-"}
-                    </div>
-                    <div className={styles.tokenMint}>
-                      Mint: {token.mint.substring(0, 8)}...
-                      {token.mint.substring(token.mint.length - 8)}
-                    </div>
-                    <div className={styles.tokenAge}>
-                      Age: {getAgeString(now - token.creationTimestamp)}
-                    </div>
-
-                    {token.currentPrice !== undefined && (
-                      <div className={styles.tokenPrice}>
-                        Price: ${toFullDecimalString(token.currentPrice)}
-                      </div>
-                    )}
-
-                    {/* Token Metrics */}
-                    <div className={styles.tokenMetrics}>
-                      <div>
-                        Balance: {token.balance} {token.symbol}
-                      </div>
-                      <div>Buy Price: {buyPrice ? `$${buyPrice}` : "-"}</div>
-                      <div>
-                        Current Price: {currentPrice ? `$${currentPrice}` : "-"}
-                      </div>
-                      <div>
-                        Last Updated:{" "}
-                        {token.lastUpdated
-                          ? new Date(token.lastUpdated).toLocaleString()
-                          : "-"}
-                      </div>
-                      <div style={{ color: profitLossColor }}>
-                        P/L: {profitLoss > 0 ? "+" : ""}
-                        {profitLoss.toFixed(2)}%
-                      </div>
-                    </div>
-
-                    {token.buyTime && (
-                      <div className={styles.tokenBuyTime}>
-                        Bought: {new Date(token.buyTime).toLocaleString()}
-                      </div>
-                    )}
-
-                    {/* Buy/Sell Controls */}
-                    <div className={styles.buyControls}>
-                      <TextField
-                        label="Amount (SOL)"
-                        type="number"
-                        variant="outlined"
-                        size="small"
-                        value={buyAmounts[token.mint] || ""}
-                        onChange={(e) =>
-                          handleBuyAmountChange(token.mint, e.target.value)
-                        }
-                        className={styles.amountInput}
-                      />
-                      <Button
-                        variant="contained"
-                        className={styles.buyButton}
-                        onClick={() => handleBuyClick(token)}
-                      >
-                        Buy
-                      </Button>
-                    </div>
-
-                    <div className={styles.sellControls}>
-                      <select
-                        value={sellPercentsState[token.mint] || 100}
-                        onChange={(e) =>
-                          handleSellPercentChange(
-                            token.mint,
-                            Number(e.target.value)
-                          )
-                        }
-                        className={styles.sellPercentSelect}
-                      >
-                        {sellPercents.map((p) => (
-                          <option key={p} value={p}>
-                            {p}%
-                          </option>
-                        ))}
-                      </select>
-                      <Button
-                        variant="outlined"
-                        className={styles.sellButton}
-                        onClick={() => handleSellClick(token)}
-                      >
-                        Sell
-                      </Button>
-                    </div>
-
-                    {/* Trading Controls */}
-                    <div className={styles.tradingControls}>
-                      <input
-                        type="number"
-                        placeholder="Take Profit"
-                        value={takeProfitState[token.mint] || ""}
-                        onChange={(e) =>
-                          handleTakeProfitChange(token.mint, e.target.value)
-                        }
-                        className={styles.tradingInput}
-                        style={{
-                          border:
-                            !autoSellEnabledState[token.mint] ||
-                            !!timeBasedSellEnabledState[token.mint]
-                              ? "1px solid #555"
-                              : "1px solid #FFD700",
-                          color:
-                            !autoSellEnabledState[token.mint] ||
-                            !!timeBasedSellEnabledState[token.mint]
-                              ? "#888"
-                              : "white",
-                        }}
-                        disabled={
-                          !autoSellEnabledState[token.mint] ||
-                          !!timeBasedSellEnabledState[token.mint]
-                        }
-                      />
-                      <input
-                        type="number"
-                        placeholder="Stop Loss %"
-                        value={stopLossState[token.mint] || ""}
-                        onChange={(e) =>
-                          handleStopLossChange(token.mint, e.target.value)
-                        }
-                        className={styles.tradingInput}
-                        style={{
-                          border:
-                            !autoSellEnabledState[token.mint] ||
-                            !!trailingStopLossEnabledState[token.mint] ||
-                            !!timeBasedSellEnabledState[token.mint]
-                              ? "1px solid #555"
-                              : "1px solid #ff6b6b",
-                          color:
-                            !autoSellEnabledState[token.mint] ||
-                            !!trailingStopLossEnabledState[token.mint] ||
-                            !!timeBasedSellEnabledState[token.mint]
-                              ? "#888"
-                              : "white",
-                        }}
-                        disabled={
-                          !autoSellEnabledState[token.mint] ||
-                          !!trailingStopLossEnabledState[token.mint] ||
-                          !!timeBasedSellEnabledState[token.mint]
-                        }
-                      />
-                      <input
-                        type="number"
-                        placeholder="Auto Sell %"
-                        value={autoSellPercentState[token.mint] || ""}
-                        onChange={(e) =>
-                          handleAutoSellPercentChange(
-                            token.mint,
-                            e.target.value
-                          )
-                        }
-                        className={styles.tradingInput}
-                        style={{
-                          border: !autoSellEnabledState[token.mint]
-                            ? "1px solid #555"
-                            : "1px solid #00BFFF",
-                          color: !autoSellEnabledState[token.mint]
-                            ? "#888"
-                            : "white",
-                        }}
-                        disabled={!autoSellEnabledState[token.mint]}
-                      />
-                    </div>
-
-                    {/* Advanced Controls */}
-                    <div className={styles.trailingStopLossControls}>
-                      <TextField
-                        label="Trailing Stop Loss (%)"
-                        type="number"
-                        variant="outlined"
-                        size="small"
-                        className={styles.trailingStopLossInput}
-                        value={trailingStopLossState[token.mint] || ""}
-                        onChange={(e) =>
-                          handleTrailingStopLossChange(
-                            token.mint,
-                            e.target.value
-                          )
-                        }
-                        disabled={
-                          !autoSellEnabledState[token.mint] ||
-                          !trailingStopLossEnabledState[token.mint] ||
-                          !!timeBasedSellEnabledState[token.mint]
-                        }
-                      />
-                      <label
-                        className={styles.checkboxLabel}
-                        style={{
-                          color:
-                            !autoSellEnabledState[token.mint] ||
-                            !!timeBasedSellEnabledState[token.mint]
-                              ? "#888"
-                              : "#FFD700",
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          className={styles.checkbox}
-                          checked={!!trailingStopLossEnabledState[token.mint]}
-                          onChange={(e) =>
-                            handleTrailingStopLossEnabledChange(
-                              token.mint,
-                              e.target.checked
-                            )
-                          }
-                          disabled={
-                            !autoSellEnabledState[token.mint] ||
-                            !!timeBasedSellEnabledState[token.mint]
-                          }
-                        />
-                        On/Off
-                      </label>
-                    </div>
-
-                    <div className={styles.waitForBuyersControls}>
-                      <TextField
-                        label="Wait for Buyers Before Sell"
-                        type="number"
-                        variant="outlined"
-                        size="small"
-                        className={styles.waitForBuyersInput}
-                        value={waitForBuyersState[token.mint] || ""}
-                        onChange={(e) =>
-                          handleWaitForBuyersChange(token.mint, e.target.value)
-                        }
-                        disabled={
-                          !autoSellEnabledState[token.mint] ||
-                          !waitForBuyersEnabledState[token.mint]
-                        }
-                      />
-                      <label
-                        className={styles.checkboxLabel}
-                        style={{
-                          color: !autoSellEnabledState[token.mint]
-                            ? "#888"
-                            : "#FFD700",
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          className={styles.checkbox}
-                          checked={!!waitForBuyersEnabledState[token.mint]}
-                          onChange={(e) =>
-                            handleWaitForBuyersEnabledChange(
-                              token.mint,
-                              e.target.checked
-                            )
-                          }
-                          disabled={!autoSellEnabledState[token.mint]}
-                        />
-                        On/Off
-                      </label>
-                    </div>
-
-                    <div className={styles.timeBasedSellControls}>
-                      <TextField
-                        label="Time-Based Sell (sec)"
-                        type="number"
-                        variant="outlined"
-                        size="small"
-                        className={styles.timeBasedSellInput}
-                        value={timeBasedSellState[token.mint] || ""}
-                        onChange={(e) =>
-                          handleTimeBasedSellChange(token.mint, e.target.value)
-                        }
-                        disabled={
-                          !autoSellEnabledState[token.mint] ||
-                          !timeBasedSellEnabledState[token.mint]
-                        }
-                      />
-                      <label
-                        className={styles.checkboxLabel}
-                        style={{
-                          color: !autoSellEnabledState[token.mint]
-                            ? "#888"
-                            : "#FFD700",
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          className={styles.checkbox}
-                          checked={!!timeBasedSellEnabledState[token.mint]}
-                          onChange={(e) =>
-                            handleTimeBasedSellEnabledChange(
-                              token.mint,
-                              e.target.checked
-                            )
-                          }
-                          disabled={!autoSellEnabledState[token.mint]}
-                        />
-                        On/Off
-                      </label>
-                    </div>
+              <div className={styles.tokenGrid}>
+                {sortedUserTokens.length === 0 ? (
+                  <div className={styles.noTokensMessage}>
+                    You don't have any tokens yet
                   </div>
-                );
-              })
-            )}
+                ) : (
+                  sortedUserTokens.map((token) => {
+                    const buyPrice = token.buyAmount;
+                    const currentPrice = token.currentPrice;
+                    const profitLoss = getProfitLossPercent(buyPrice, currentPrice);
+                    const profitLossColor =
+                      profitLoss > 0
+                        ? "#4CAF50"
+                        : profitLoss < 0
+                          ? "#ff6b6b"
+                          : "#888";
+
+                    return (
+                      <div
+                        key={token.mint}
+                        className={styles.tokenCard}
+                        onClick={() => handleTokenClick(token)}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = "translateY(-2px)";
+                          e.currentTarget.style.boxShadow = "0 6px 12px rgba(0, 0, 0, 0.2)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = "translateY(0)";
+                          e.currentTarget.style.boxShadow = "0 4px 6px rgba(0, 0, 0, 0.1)";
+                        }}
+                      >
+                        <div className={styles.tokenCardTop}>
+                          <div className={styles.tokenImageContainer}>
+                            <img
+                              src={token.imageUrl}
+                              alt={token.name}
+                              className={styles.tokenImage}
+                              onError={(e) => (e.currentTarget.style.display = "none")}
+                            />
+                            <div
+                              className={styles.tokenCreator}
+                              title={token.creator || token.devAddress || "-"}
+                              onClick={() =>
+                                navigator.clipboard.writeText(token.creator || token.devAddress || "-")
+                              }
+                            >
+                              <span className={styles.tokenCreatorAddress}>
+                                {(token.creator || token.devAddress || "-").substring(0, 4)}...
+                                {(token.creator || token.devAddress || "-").slice(-4)}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className={styles.tokenInfo}>
+                            <div className={styles.tokenNameRow}>
+                              <div className={styles.tokenNameWithMint}>
+                                <span className={styles.tokenName}>{token.name}</span>
+                                <span
+                                  className={styles.tokenMintCopyIcon}
+                                  title={token.mint}
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(token.mint);
+                                  }}
+                                  role="button"
+                                  tabIndex={0}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" || e.key === " ") {
+                                      navigator.clipboard.writeText(token.mint);
+                                    }
+                                  }}
+                                  aria-label={`Copy mint address: ${token.mint}`}
+                                  style={{ cursor: "pointer", marginLeft: "6px" }}
+                                >
+                                  <FontAwesomeIcon icon={faCopy} />
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className={styles.tokenAgeWithIcons}>
+                              <span className={styles.tokenAge}>
+                                {getAgeString(now - token.creationTimestamp)}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className={styles.tokenStatsTop}>
+                            <div className={styles.tokenLine}>
+                              <span className={styles.label}>MC</span>
+                              <span className={styles.mcValue}>$1.2M</span>
+                            </div>
+                            <div className={styles.tokenLine}>
+                              <span className={styles.label}>Vol</span>
+                              <span className={styles.defaultValue}>$256K</span>
+                            </div>
+                            <div className={styles.tokenLine}>
+                              <span className={styles.label}>Bal</span>
+                              <span className={styles.defaultValue}>{token.balance}</span>
+                            </div>
+                            <div className={styles.tokenLine}>
+                              <span className={styles.label}>P/L</span>
+                              <span className={styles.defaultValue} style={{ color: profitLossColor }}>
+                                {profitLoss > 0 ? "+" : ""}{profitLoss.toFixed(1)}%
+                              </span>
+                            </div>
+                            <div className={styles.tokenLine} title={toFullDecimalString(token.currentPrice || 0)}>
+                              <span className={styles.label}>P</span>
+                              <img
+                                src="/footerIcon/solana.png"
+                                alt="SOL"
+                                className={styles.solanaIcon}
+                              />
+                              <span className={styles.defaultValue}>
+                                {formatPriceSmart(token.currentPrice || 0)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className={styles.tokenFooter}>
+                          <div className={styles.bondingCurve}>
+                            <FontAwesomeIcon icon={faUserTie} /> 3%
+                          </div>
+
+                          <button
+                            className={styles.buyButtonGlass}
+                            onClick={() => handleBuyClick(token)}
+                            disabled={!manualBuyAmount || parseFloat(manualBuyAmount) <= 0}
+                          >
+                            <FontAwesomeIcon icon={faBolt} style={{ marginRight: 6 }} />
+                            {manualBuyAmount ? `${manualBuyAmount} SOL` : ""}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
           </div>
         ) : (
           /* ALL TOKENS VIEW (with age-based sections) */
           <div className={styles.tokenSectionsContainer}>
             {/* Section 1: Tokens <= 24h */}
-            <div className={styles.tokenSection}>
+            <div className={`${styles.tokenSection} ${activeSection !== 'fresh-drops' ? styles.hiddenOnMobile : ''}`}>
               <div className={styles.sectionHeader}>
                 <h3 className={styles.sectionTitle}>Fresh-Drops</h3>
                 <SectionFilters
@@ -2013,82 +1858,168 @@ const TokenListWithAge: React.FC = () => {
                 />
               </div>
               <div className={styles.tokenGrid}>
-                {filterTokensByAge(sortedTokens, 0, 24, sortOrder24h).map(
-                  (token) => (
-                    <div
-                      key={token.mint}
-                      className={styles.tokenCard}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = "translateY(-2px)";
-                        e.currentTarget.style.boxShadow =
-                          "0 6px 12px rgba(0, 0, 0, 0.2)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = "translateY(0)";
-                        e.currentTarget.style.boxShadow =
-                          "0 4px 6px rgba(0, 0, 0, 0.1)";
-                      }}
-                    >
-                      {token.imageUrl && (
-                        <div className={styles.tokenImageContainer}>
-                          <img
-                            src={token.imageUrl}
-                            alt={token.name}
-                            className={styles.tokenImage}
-                            onError={(e) => {
-                              e.currentTarget.style.display = "none";
-                            }}
-                          />
-                        </div>
-                      )}
-
-                      <div className={styles.tokenName}>{token.name}</div>
-                      <div className={styles.tokenSymbol}>{token.symbol}</div>
-                      <div className={styles.tokenCreator}>
-                        Creator: {token.creator || token.devAddress || "-"}
-                      </div>
-                      <div className={styles.tokenMint}>
-                        Mint: {token.mint.substring(0, 8)}...
-                        {token.mint.substring(token.mint.length - 8)}
-                      </div>
-                      <div className={styles.tokenAge}>
-                        Age: {getAgeString(now - token.creationTimestamp)}
-                      </div>
-
-                      {token.currentPrice !== undefined && (
-                        <div className={styles.tokenPrice}>
-                          Price: ${toFullDecimalString(token.currentPrice)}
-                        </div>
-                      )}
-
-                      <div className={styles.buyControls}>
-                        <TextField
-                          label="Amount (SOL)"
-                          type="number"
-                          variant="outlined"
-                          size="small"
-                          value={buyAmounts[token.mint] || ""}
-                          onChange={(e) =>
-                            handleBuyAmountChange(token.mint, e.target.value)
-                          }
-                          className={styles.amountInput}
+                {filterTokensByAge(sortedTokens, 0, 24, sortOrder24h).map((token) => (
+                  <div
+                    key={token.mint}
+                    className={styles.tokenCard}
+                    onClick={() => handleTokenClick(token)}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = "translateY(-2px)";
+                      e.currentTarget.style.boxShadow = "0 6px 12px rgba(0, 0, 0, 0.2)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = "translateY(0)";
+                      e.currentTarget.style.boxShadow = "0 4px 6px rgba(0, 0, 0, 0.1)";
+                    }}
+                  >
+                    <div className={styles.tokenCardTop}>
+                      <div className={styles.tokenImageContainer}>
+                        <img
+                          src={token.imageUrl}
+                          alt={token.name}
+                          className={styles.tokenImage}
+                          onError={(e) => (e.currentTarget.style.display = "none")}
                         />
-                        <Button
-                          variant="contained"
-                          className={styles.buyButton}
-                          onClick={() => handleBuyClick(token)}
+                        <div
+                          className={styles.tokenCreator}
+                          title={token.creator || token.devAddress || "-"}
+                          onClick={() =>
+                            navigator.clipboard.writeText(token.creator || token.devAddress || "-")
+                          }
                         >
-                          Buy
-                        </Button>
+                          {" "}
+                          <span className={styles.tokenCreatorAddress}>
+                            {(token.creator || token.devAddress || "-").substring(0, 4)}...
+                            {(token.creator || token.devAddress || "-").slice(-4)}
+                          </span>
+                        </div>
                       </div>
+
+                      <div className={styles.tokenInfo}>
+                        <div className={styles.tokenNameRow}>
+                          <div className={styles.tokenNameWithMint}>
+                            <span className={styles.tokenName}>{token.name}</span>
+
+                            <span
+                              className={styles.tokenMintCopyIcon}
+                              title={token.mint}                        // tooltip on hover
+                              onClick={() => {
+                                navigator.clipboard.writeText(token.mint);
+                                // Optional: show a toast/snackbar for feedback here
+                              }}
+                              role="button"
+                              tabIndex={0}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  navigator.clipboard.writeText(token.mint);
+                                }
+                              }}
+                              aria-label={`Copy mint address: ${token.mint}`}
+                              style={{ cursor: "pointer", marginLeft: "6px" }}
+                            >
+                              <FontAwesomeIcon icon={faCopy} />
+                            </span>
+                          </div>
+                        </div>
+
+
+                        <div className={styles.tokenAgeWithIcons}>
+                          <span className={styles.tokenAge}>
+                            {getAgeString(now - token.creationTimestamp)}
+                          </span>
+                          <div className={styles.iconRow}>
+                            <a href="#" target="_blank" rel="noopener noreferrer">
+                              <FontAwesomeIcon icon={faUser} className={`${styles.icon} ${styles.userIcon}`} />
+                            </a>
+                            <a href="#" target="_blank" rel="noopener noreferrer">
+                              <FontAwesomeIcon icon={faGlobe} className={`${styles.icon} ${styles.globeIcon}`} />
+                            </a>
+                            <a href="#" target="_blank" rel="noopener noreferrer">
+                              <FontAwesomeIcon icon={faTelegram} className={`${styles.icon} ${styles.telegramIcon}`} />
+                            </a>
+                            <a href="#" target="_blank" rel="noopener noreferrer">
+                              <FontAwesomeIcon icon={faPills} className={`${styles.icon} ${styles.pillsIcon}`} />
+                            </a>
+                            <a href="#" target="_blank" rel="noopener noreferrer">
+                              <FontAwesomeIcon icon={faMagnifyingGlass} className={`${styles.icon} ${styles.searchIcon}`} />
+                            </a>
+                          </div>
+
+                        </div>
+
+                        <div className={styles.tokenStatsRow}>
+                          <div className={styles.statItem}>
+                            <FontAwesomeIcon icon={faUsers} className={styles.statIcon} />
+                            <span className={styles.statValue}>432</span>
+                          </div>
+                          <div className={styles.statItem}>
+                            <FontAwesomeIcon icon={faArrowUp} className={`${styles.statIcon} ${styles.stateIconUP}`} />
+                            <span className={styles.statValue}>91</span>
+                          </div>
+                          <div className={styles.statItem}>
+                            <FontAwesomeIcon icon={faArrowDown} className={`${styles.statIcon} ${styles.stateIconDOWN}`} />
+                            <span className={styles.statValue}>14</span>
+                          </div>
+                        </div>
+
+
+
+
+
+                      </div>
+
+                      <div className={styles.tokenStatsTop}>
+                        <div className={styles.tokenLine}>
+                          <span className={styles.label} style={{ fontSize: '13px', marginBottom: '4px' }}>MC</span>
+                          <span className={styles.mcValue} style={{ fontSize: '13px', marginBottom: '4px' }}>$1.2M</span>
+                        </div>
+                        <div className={styles.tokenLine}>
+                          <span className={styles.label}>Vol</span>
+                          <span className={styles.defaultValue}>$256K</span>
+                        </div>
+                        <div className={styles.tokenLine}>
+                          <span className={styles.label}>TX</span>
+                          <span className={styles.defaultValue}>3.4K</span>
+                        </div>
+                        <div className={styles.tokenLine} title={toFullDecimalString(token.currentPrice || 0)}>
+                          <span className={styles.label}>P</span>
+                          <img
+                            src="/footerIcon/solana.png"
+                            alt="SOL"
+                            className={styles.solanaIcon}
+                          />
+                          <span className={styles.defaultValue}>
+                            {formatPriceSmart(token.currentPrice || 0)}
+                          </span>
+                        </div>
+                      </div>
+
+
                     </div>
-                  )
-                )}
+
+                    <div className={styles.tokenFooter}>
+                      <div className={styles.bondingCurve}>
+                        <FontAwesomeIcon icon={faUserTie} /> 3%
+                      </div>
+
+                      <button
+                        className={styles.buyButtonGlass}
+                        onClick={() => handleBuyClick(token)}
+                        disabled={!manualBuyAmount || parseFloat(manualBuyAmount) <= 0}
+                      >
+                        <FontAwesomeIcon icon={faBolt} style={{ marginRight: 6 }} />
+                        {manualBuyAmount ? `${manualBuyAmount} SOL` : ""}
+                      </button>
+                    </div>
+
+                  </div>
+                ))}
               </div>
+
             </div>
 
             {/* Section 2: Tokens 24h-48h */}
-            <div className={styles.tokenSection}>
+            <div className={`${styles.tokenSection} ${activeSection !== 'heating-up' ? styles.hiddenOnMobile : ''}`}>
               <div className={styles.sectionHeader}>
                 <h3 className={styles.sectionTitle}>Heating-Up</h3>
                 <SectionFilters
@@ -2102,79 +2033,166 @@ const TokenListWithAge: React.FC = () => {
                 {filterTokensByAge(sortedTokens, 24, 48, sortOrder24_48h).map(
                   (token) => (
                     <div
-                      key={token.mint}
-                      className={styles.tokenCard}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = "translateY(-2px)";
-                        e.currentTarget.style.boxShadow =
-                          "0 6px 12px rgba(0, 0, 0, 0.2)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = "translateY(0)";
-                        e.currentTarget.style.boxShadow =
-                          "0 4px 6px rgba(0, 0, 0, 0.1)";
-                      }}
-                    >
-                      {token.imageUrl && (
-                        <div className={styles.tokenImageContainer}>
-                          <img
-                            src={token.imageUrl}
-                            alt={token.name}
-                            className={styles.tokenImage}
-                            onError={(e) => {
-                              e.currentTarget.style.display = "none";
-                            }}
-                          />
-                        </div>
-                      )}
-
-                      <div className={styles.tokenName}>{token.name}</div>
-                      <div className={styles.tokenSymbol}>{token.symbol}</div>
-                      <div className={styles.tokenCreator}>
-                        Creator: {token.creator || token.devAddress || "-"}
-                      </div>
-                      <div className={styles.tokenMint}>
-                        Mint: {token.mint.substring(0, 8)}...
-                        {token.mint.substring(token.mint.length - 8)}
-                      </div>
-                      <div className={styles.tokenAge}>
-                        Age: {getAgeString(now - token.creationTimestamp)}
-                      </div>
-
-                      {token.currentPrice !== undefined && (
-                        <div className={styles.tokenPrice}>
-                          Price: ${toFullDecimalString(token.currentPrice)}
-                        </div>
-                      )}
-
-                      <div className={styles.buyControls}>
-                        <TextField
-                          label="Amount (SOL)"
-                          type="number"
-                          variant="outlined"
-                          size="small"
-                          value={buyAmounts[token.mint] || ""}
-                          onChange={(e) =>
-                            handleBuyAmountChange(token.mint, e.target.value)
-                          }
-                          className={styles.amountInput}
+                    key={token.mint}
+                    className={styles.tokenCard}
+                    onClick={() => handleTokenClick(token)}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = "translateY(-2px)";
+                      e.currentTarget.style.boxShadow = "0 6px 12px rgba(0, 0, 0, 0.2)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = "translateY(0)";
+                      e.currentTarget.style.boxShadow = "0 4px 6px rgba(0, 0, 0, 0.1)";
+                    }}
+                  >
+                    <div className={styles.tokenCardTop}>
+                      <div className={styles.tokenImageContainer}>
+                        <img
+                          src={token.imageUrl}
+                          alt={token.name}
+                          className={styles.tokenImage}
+                          onError={(e) => (e.currentTarget.style.display = "none")}
                         />
-                        <Button
-                          variant="contained"
-                          className={styles.buyButton}
-                          onClick={() => handleBuyClick(token)}
+                        <div
+                          className={styles.tokenCreator}
+                          title={token.creator || token.devAddress || "-"}
+                          onClick={() =>
+                            navigator.clipboard.writeText(token.creator || token.devAddress || "-")
+                          }
                         >
-                          Buy
-                        </Button>
+                          {" "}
+                          <span className={styles.tokenCreatorAddress}>
+                            {(token.creator || token.devAddress || "-").substring(0, 4)}...
+                            {(token.creator || token.devAddress || "-").slice(-4)}
+                          </span>
+                        </div>
                       </div>
+
+                      <div className={styles.tokenInfo}>
+                        <div className={styles.tokenNameRow}>
+                          <div className={styles.tokenNameWithMint}>
+                            <span className={styles.tokenName}>{token.name}</span>
+
+                            <span
+                              className={styles.tokenMintCopyIcon}
+                              title={token.mint}                        // tooltip on hover
+                              onClick={() => {
+                                navigator.clipboard.writeText(token.mint);
+                                // Optional: show a toast/snackbar for feedback here
+                              }}
+                              role="button"
+                              tabIndex={0}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  navigator.clipboard.writeText(token.mint);
+                                }
+                              }}
+                              aria-label={`Copy mint address: ${token.mint}`}
+                              style={{ cursor: "pointer", marginLeft: "6px" }}
+                            >
+                              <FontAwesomeIcon icon={faCopy} />
+                            </span>
+                          </div>
+                        </div>
+
+
+                        <div className={styles.tokenAgeWithIcons}>
+                          <span className={styles.tokenAge}>
+                            {getAgeString(now - token.creationTimestamp)}
+                          </span>
+                          <div className={styles.iconRow}>
+                            <a href="#" target="_blank" rel="noopener noreferrer">
+                              <FontAwesomeIcon icon={faUser} className={`${styles.icon} ${styles.userIcon}`} />
+                            </a>
+                            <a href="#" target="_blank" rel="noopener noreferrer">
+                              <FontAwesomeIcon icon={faGlobe} className={`${styles.icon} ${styles.globeIcon}`} />
+                            </a>
+                            <a href="#" target="_blank" rel="noopener noreferrer">
+                              <FontAwesomeIcon icon={faTelegram} className={`${styles.icon} ${styles.telegramIcon}`} />
+                            </a>
+                            <a href="#" target="_blank" rel="noopener noreferrer">
+                              <FontAwesomeIcon icon={faPills} className={`${styles.icon} ${styles.pillsIcon}`} />
+                            </a>
+                            <a href="#" target="_blank" rel="noopener noreferrer">
+                              <FontAwesomeIcon icon={faMagnifyingGlass} className={`${styles.icon} ${styles.searchIcon}`} />
+                            </a>
+                          </div>
+
+                        </div>
+
+                        <div className={styles.tokenStatsRow}>
+                          <div className={styles.statItem}>
+                            <FontAwesomeIcon icon={faUsers} className={styles.statIcon} />
+                            <span className={styles.statValue}>432</span>
+                          </div>
+                          <div className={styles.statItem}>
+                            <FontAwesomeIcon icon={faArrowUp} className={`${styles.statIcon} ${styles.stateIconUP}`} />
+                            <span className={styles.statValue}>91</span>
+                          </div>
+                          <div className={styles.statItem}>
+                            <FontAwesomeIcon icon={faArrowDown} className={`${styles.statIcon} ${styles.stateIconDOWN}`} />
+                            <span className={styles.statValue}>14</span>
+                          </div>
+                        </div>
+
+
+
+
+
+                      </div>
+
+                      <div className={styles.tokenStatsTop}>
+                        <div className={styles.tokenLine}>
+                          <span className={styles.label} style={{ fontSize: '13px', marginBottom: '4px' }}>MC</span>
+                          <span className={styles.mcValue} style={{ fontSize: '13px', marginBottom: '4px' }}>$1.2M</span>
+                        </div>
+                        <div className={styles.tokenLine}>
+                          <span className={styles.label}>Vol</span>
+                          <span className={styles.defaultValue}>$256K</span>
+                        </div>
+                        <div className={styles.tokenLine}>
+                          <span className={styles.label}>TX</span>
+                          <span className={styles.defaultValue}>3.4K</span>
+                        </div>
+                        <div className={styles.tokenLine} title={toFullDecimalString(token.currentPrice || 0)}>
+                          <span className={styles.label}>P</span>
+                          <img
+                            src="/footerIcon/solana.png"
+                            alt="SOL"
+                            className={styles.solanaIcon}
+                          />
+                          <span className={styles.defaultValue}>
+                            {formatPriceSmart(token.currentPrice || 0)}
+                          </span>
+                        </div>
+                      </div>
+
+
                     </div>
+
+                    <div className={styles.tokenFooter}>
+                      <div className={styles.bondingCurve}>
+                        <FontAwesomeIcon icon={faUserTie} /> 3%
+                      </div>
+
+                      <button
+                        className={styles.buyButtonGlass}
+                        onClick={() => handleBuyClick(token)}
+                        disabled={!manualBuyAmount || parseFloat(manualBuyAmount) <= 0}
+                      >
+                        <FontAwesomeIcon icon={faBolt} style={{ marginRight: 6 }} />
+                        {manualBuyAmount ? `${manualBuyAmount} SOL` : ""}
+                      </button>
+                    </div>
+
+                  </div>
                   )
                 )}
               </div>
             </div>
 
             {/* Section 3: Tokens > 48h */}
-            <div className={styles.tokenSection}>
+            <div className={`${styles.tokenSection} ${activeSection !== 'battle-tested' ? styles.hiddenOnMobile : ''}`}>
               <div className={styles.sectionHeader}>
                 <h3 className={styles.sectionTitle}>Battle-Tested</h3>
                 <SectionFilters
@@ -2194,69 +2212,156 @@ const TokenListWithAge: React.FC = () => {
                   <div
                     key={token.mint}
                     className={styles.tokenCard}
+                    onClick={() => handleTokenClick(token)}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.transform = "translateY(-2px)";
-                      e.currentTarget.style.boxShadow =
-                        "0 6px 12px rgba(0, 0, 0, 0.2)";
+                      e.currentTarget.style.boxShadow = "0 6px 12px rgba(0, 0, 0, 0.2)";
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.transform = "translateY(0)";
-                      e.currentTarget.style.boxShadow =
-                        "0 4px 6px rgba(0, 0, 0, 0.1)";
+                      e.currentTarget.style.boxShadow = "0 4px 6px rgba(0, 0, 0, 0.1)";
                     }}
                   >
-                    {token.imageUrl && (
+                    <div className={styles.tokenCardTop}>
                       <div className={styles.tokenImageContainer}>
                         <img
                           src={token.imageUrl}
                           alt={token.name}
                           className={styles.tokenImage}
-                          onError={(e) => {
-                            e.currentTarget.style.display = "none";
-                          }}
+                          onError={(e) => (e.currentTarget.style.display = "none")}
                         />
+                        <div
+                          className={styles.tokenCreator}
+                          title={token.creator || token.devAddress || "-"}
+                          onClick={() =>
+                            navigator.clipboard.writeText(token.creator || token.devAddress || "-")
+                          }
+                        >
+                          {" "}
+                          <span className={styles.tokenCreatorAddress}>
+                            {(token.creator || token.devAddress || "-").substring(0, 4)}...
+                            {(token.creator || token.devAddress || "-").slice(-4)}
+                          </span>
+                        </div>
                       </div>
-                    )}
 
-                    <div className={styles.tokenName}>{token.name}</div>
-                    <div className={styles.tokenSymbol}>{token.symbol}</div>
-                    <div className={styles.tokenCreator}>
-                      Creator: {token.creator || token.devAddress || "-"}
-                    </div>
-                    <div className={styles.tokenMint}>
-                      Mint: {token.mint.substring(0, 8)}...
-                      {token.mint.substring(token.mint.length - 8)}
-                    </div>
-                    <div className={styles.tokenAge}>
-                      Age: {getAgeString(now - token.creationTimestamp)}
-                    </div>
+                      <div className={styles.tokenInfo}>
+                        <div className={styles.tokenNameRow}>
+                          <div className={styles.tokenNameWithMint}>
+                            <span className={styles.tokenName}>{token.name}</span>
 
-                    {token.currentPrice !== undefined && (
-                      <div className={styles.tokenPrice}>
-                        Price: ${toFullDecimalString(token.currentPrice)}
+                            <span
+                              className={styles.tokenMintCopyIcon}
+                              title={token.mint}                        // tooltip on hover
+                              onClick={() => {
+                                navigator.clipboard.writeText(token.mint);
+                                // Optional: show a toast/snackbar for feedback here
+                              }}
+                              role="button"
+                              tabIndex={0}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  navigator.clipboard.writeText(token.mint);
+                                }
+                              }}
+                              aria-label={`Copy mint address: ${token.mint}`}
+                              style={{ cursor: "pointer", marginLeft: "6px" }}
+                            >
+                              <FontAwesomeIcon icon={faCopy} />
+                            </span>
+                          </div>
+                        </div>
+
+
+                        <div className={styles.tokenAgeWithIcons}>
+                          <span className={styles.tokenAge}>
+                            {getAgeString(now - token.creationTimestamp)}
+                          </span>
+                          <div className={styles.iconRow}>
+                            <a href="#" target="_blank" rel="noopener noreferrer">
+                              <FontAwesomeIcon icon={faUser} className={`${styles.icon} ${styles.userIcon}`} />
+                            </a>
+                            <a href="#" target="_blank" rel="noopener noreferrer">
+                              <FontAwesomeIcon icon={faGlobe} className={`${styles.icon} ${styles.globeIcon}`} />
+                            </a>
+                            <a href="#" target="_blank" rel="noopener noreferrer">
+                              <FontAwesomeIcon icon={faTelegram} className={`${styles.icon} ${styles.telegramIcon}`} />
+                            </a>
+                            <a href="#" target="_blank" rel="noopener noreferrer">
+                              <FontAwesomeIcon icon={faPills} className={`${styles.icon} ${styles.pillsIcon}`} />
+                            </a>
+                            <a href="#" target="_blank" rel="noopener noreferrer">
+                              <FontAwesomeIcon icon={faMagnifyingGlass} className={`${styles.icon} ${styles.searchIcon}`} />
+                            </a>
+                          </div>
+
+                        </div>
+
+                        <div className={styles.tokenStatsRow}>
+                          <div className={styles.statItem}>
+                            <FontAwesomeIcon icon={faUsers} className={styles.statIcon} />
+                            <span className={styles.statValue}>432</span>
+                          </div>
+                          <div className={styles.statItem}>
+                            <FontAwesomeIcon icon={faArrowUp} className={`${styles.statIcon} ${styles.stateIconUP}`} />
+                            <span className={styles.statValue}>91</span>
+                          </div>
+                          <div className={styles.statItem}>
+                            <FontAwesomeIcon icon={faArrowDown} className={`${styles.statIcon} ${styles.stateIconDOWN}`} />
+                            <span className={styles.statValue}>14</span>
+                          </div>
+                        </div>
+
+
+
+
+
                       </div>
-                    )}
 
-                    <div className={styles.buyControls}>
-                      <TextField
-                        label="Amount (SOL)"
-                        type="number"
-                        variant="outlined"
-                        size="small"
-                        value={buyAmounts[token.mint] || ""}
-                        onChange={(e) =>
-                          handleBuyAmountChange(token.mint, e.target.value)
-                        }
-                        className={styles.amountInput}
-                      />
-                      <Button
-                        variant="contained"
-                        className={styles.buyButton}
+                      <div className={styles.tokenStatsTop}>
+                        <div className={styles.tokenLine}>
+                          <span className={styles.label} style={{ fontSize: '13px', marginBottom: '4px' }}>MC</span>
+                          <span className={styles.mcValue} style={{ fontSize: '13px', marginBottom: '4px' }}>$1.2M</span>
+                        </div>
+                        <div className={styles.tokenLine}>
+                          <span className={styles.label}>Vol</span>
+                          <span className={styles.defaultValue}>$256K</span>
+                        </div>
+                        <div className={styles.tokenLine}>
+                          <span className={styles.label}>TX</span>
+                          <span className={styles.defaultValue}>3.4K</span>
+                        </div>
+                        <div className={styles.tokenLine} title={toFullDecimalString(token.currentPrice || 0)}>
+                          <span className={styles.label}>P</span>
+                          <img
+                            src="/footerIcon/solana.png"
+                            alt="SOL"
+                            className={styles.solanaIcon}
+                          />
+                          <span className={styles.defaultValue}>
+                            {formatPriceSmart(token.currentPrice || 0)}
+                          </span>
+                        </div>
+                      </div>
+
+
+                    </div>
+
+                    <div className={styles.tokenFooter}>
+                      <div className={styles.bondingCurve}>
+                        <FontAwesomeIcon icon={faUserTie} /> 3%
+                      </div>
+
+                      <button
+                        className={styles.buyButtonGlass}
                         onClick={() => handleBuyClick(token)}
+                        disabled={!manualBuyAmount || parseFloat(manualBuyAmount) <= 0}
                       >
-                        Buy
-                      </Button>
+                        <FontAwesomeIcon icon={faBolt} style={{ marginRight: 6 }} />
+                        {manualBuyAmount ? `${manualBuyAmount} SOL` : ""}
+                      </button>
                     </div>
+
                   </div>
                 ))}
               </div>
@@ -2271,6 +2376,8 @@ const TokenListWithAge: React.FC = () => {
         setAutoBuyEnabled={setAutoBuyEnabled}
         bufferAmount={bufferAmount}
         setBufferAmount={setBufferAmount}
+        manualBuyAmount={manualBuyAmount}
+        setManualBuyAmount={setManualBuyAmount}
       />
       <PresetModal
         open={presetModalOpen}
@@ -2313,9 +2420,8 @@ const TokenListWithAge: React.FC = () => {
       {/* Global withdraw notification */}
       {withdrawNotification.show && (
         <div
-          className={`withdraw-notification-global${
-            withdrawNotification.type === "error" ? " error" : ""
-          }`}
+          className={`withdraw-notification-global${withdrawNotification.type === "error" ? " error" : ""
+            }`}
         >
           <span style={{ flex: 1 }}>{withdrawNotification.message}</span>
           <button
@@ -2335,6 +2441,32 @@ const TokenListWithAge: React.FC = () => {
         </div>
       )}
       <FooterBar onOpenSettings={() => setPresetModalOpen(true)} />
+      
+      <TokenDetails
+        open={showTokenDetails}
+        onClose={() => setShowTokenDetails(false)}
+        token={selectedToken}
+        onAutoSellToggle={handleAutoSellToggle}
+        onTakeProfitChange={handleTakeProfitChange}
+        onStopLossChange={handleStopLossChange}
+        onAutoSellPercentChange={handleAutoSellPercentChange}
+        onTrailingStopLossChange={handleTrailingStopLossChange}
+        onTrailingStopLossEnabledChange={handleTrailingStopLossEnabledChange}
+        onTimeBasedSellChange={handleTimeBasedSellChange}
+        onTimeBasedSellEnabledChange={handleTimeBasedSellEnabledChange}
+        onWaitForBuyersChange={handleWaitForBuyersChange}
+        onWaitForBuyersEnabledChange={handleWaitForBuyersEnabledChange}
+        autoSellEnabledState={autoSellEnabledState}
+        takeProfitState={takeProfitState}
+        stopLossState={stopLossState}
+        autoSellPercentState={autoSellPercentState}
+        trailingStopLossState={trailingStopLossState}
+        trailingStopLossEnabledState={trailingStopLossEnabledState}
+        timeBasedSellState={timeBasedSellState}
+        timeBasedSellEnabledState={timeBasedSellEnabledState}
+        waitForBuyersState={waitForBuyersState}
+        waitForBuyersEnabledState={waitForBuyersEnabledState}
+      />
     </>
   );
 };

@@ -7,9 +7,9 @@
 }
 
 .filterIcon {
-  height: 22px;
-  width: 22px;
-  filter: invert(1);
+  height: 18px;
+  width: 18px;
+  /* filter: invert(1); */
 }
 
 .modalBackdrop {

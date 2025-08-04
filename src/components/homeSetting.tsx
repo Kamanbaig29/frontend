@@ -14,6 +14,8 @@ interface HomeSettingProps {
   setAutoBuyEnabled: (v: boolean) => void;
   bufferAmount: string;
   setBufferAmount: (v: string) => void;
+  manualBuyAmount: string;
+  setManualBuyAmount: (v: string) => void;
 }
 
 const HomeSetting: React.FC<HomeSettingProps> = ({
@@ -22,6 +24,8 @@ const HomeSetting: React.FC<HomeSettingProps> = ({
   setAutoBuyEnabled,
   bufferAmount,
   setBufferAmount,
+  manualBuyAmount,
+  setManualBuyAmount,
 }) => {
   const [showModal, setShowModal] = useState(false);
   const [animateIn, setAnimateIn] = useState(false);
@@ -112,6 +116,48 @@ const HomeSetting: React.FC<HomeSettingProps> = ({
             >
               {isStarted ? "Started" : "Paused"}
             </Button>
+
+          </Box>
+
+          <Box className={styles.autoBuyBox}>
+            <h3 className={styles.autoBuyBoxTitle}>Manual Buy</h3>
+
+            <TextField
+              label="Buy Amount (SOL)"
+              type="number"
+              size="small"
+              value={manualBuyAmount}
+              onChange={(e) => setManualBuyAmount(e.target.value)}
+              inputProps={{ min: 0, step: "any" }}
+              fullWidth
+              variant="outlined"
+              sx={{
+                marginTop: "10px",
+                "& .MuiOutlinedInput-root": {
+                  backgroundColor: "#2a2a2a",
+                  borderRadius: 2,
+                  color: "#fff",
+                  fontWeight: 500,
+                  "& fieldset": {
+                    borderColor: "#555",
+                  },
+                  "&:hover fieldset": {
+                    borderColor: "#888",
+                  },
+                  "&.Mui-focused fieldset": {
+                    borderColor: "#ffd700",
+                  },
+                },
+                "& .MuiInputLabel-root": {
+                  color: "#bbb",
+                },
+                "& .MuiInputLabel-root.Mui-focused": {
+                  color: "#ffd700",
+                },
+              }}
+            />
+
+
 
           </Box>
         </Box>
