@@ -91,9 +91,7 @@ const Navbar: React.FC<NavbarProps> = ({ showMyTokens, onMyTokensClick, onDeposi
             alt="TOKENX" 
             className="navbar-logo"
           />
-          <h1 className="navbar-title">
-            TOKENX
-          </h1>
+          <h1 className="navbar-title">TOKENX</h1>
         </div>
         
         {/* Mobile Navigation Buttons */}

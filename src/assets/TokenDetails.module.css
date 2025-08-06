@@ -19,6 +19,78 @@
   padding: 20px !important;
 }
 
+.chartContainer {
+  height: 500px;
+  margin-bottom: 2rem;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #1e1e1e;
+}
+
+.chart {
+  width: 100%;
+  height: 100%;
+}
+
+.pageContainer {
+  min-height: 100vh;
+  background: #0a0a0a;
+  color: white;
+  display: flex;
+  flex-direction: column;
+}
+
+.navbar {
+  background: #1a1a1a;
+  border-bottom: 1px solid #333;
+  padding: 1rem 0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.navContent {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.navContent h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: #FFD700;
+}
+
+.backButton {
+  background-color: #333 !important;
+  color: white !important;
+  padding: 8px 16px !important;
+  border-radius: 6px !important;
+}
+
+.backButton:hover {
+  background-color: #444 !important;
+}
+
+.mainContent {
+  flex: 1;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+  width: 100%;
+}
+
+.footer {
+  background: #1a1a1a;
+  border-top: 1px solid #333;
+  padding: 1rem 0;
+  text-align: center;
+  color: #888;
+}
+
 .tokenDetails {
   background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
   border-radius: 12px;
@@ -31,6 +103,7 @@
   align-items: center;
   gap: 20px;
   margin-bottom: 30px;
+  /* margin-top: 35px; */
 }
 
 .tokenImage {
@@ -137,42 +210,24 @@
 }
 
 .buyButton {
-  background-color: #4CAF50 !important;
+  background: #4caf50 !important;
   color: white !important;
-  padding: 12px 30px !important;
-  border-radius: 8px !important;
+  padding: 12px !important;
   font-weight: 600 !important;
-  font-size: 16px !important;
-}
-
-.buyButton:hover {
-  background-color: #45a049 !important;
 }
 
 .sellButton {
-  background-color: #B22222 !important;
+  background: #f44336 !important;
   color: white !important;
-  padding: 12px 30px !important;
-  border-radius: 8px !important;
+  padding: 12px !important;
   font-weight: 600 !important;
-  font-size: 16px !important;
-}
-
-.sellButton:hover {
-  background-color: #8B0000 !important;
 }
 
 .filtersButton {
-  background-color: #483D8B !important;
+  background: #3f51b5 !important;
   color: white !important;
-  padding: 12px 30px !important;
-  border-radius: 8px !important;
+  padding: 12px !important;
   font-weight: 600 !important;
-  font-size: 16px !important;
-}
-
-.filtersButton:hover {
-  background-color: #372B7A !important;
 }
 
 .advancedControls {
@@ -230,5 +285,595 @@
   
   .actions {
     flex-direction: column;
+  }
+}
+
+/* Token Header Section */
+.tokenHeaderSection {
+  background: #1a1a1a;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+  margin-top: 35px;
+  border: 1px solid #333;
+}
+
+.tokenHeaderContent {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.tokenBasicInfo {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  /* margin-bottom: 20px; */
+}
+
+.tokenLogo {
+  width: 70px;
+  height: 70px;
+  border-radius: 10px;
+  border: 2px solid #333;
+}
+
+.tokenTitleInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tokenNameRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tokenTitle {
+  font-size: 20px;
+  font-weight: bold;
+  margin: 0;
+  color: white;
+}
+
+.tokenSymbolCopy {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #888;
+  font-size: 14px;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.tokenSymbolCopy:hover {
+  color: #3f51b5;
+}
+
+.copyIcon {
+  font-size: 14px;
+}
+
+.creatorRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.creatorAddress {
+  color: #888;
+  font-size: 11px;
+  cursor: pointer;
+  font-family: monospace;
+  background: #333;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.creatorAddress:hover {
+  background: #444;
+  color: #fff;
+}
+
+.socialIcons {
+  display: flex;
+  gap: 8px;
+}
+
+.socialIcon {
+  color: #888;
+  font-size: 14px;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.socialIcon:hover {
+  color: #3f51b5;
+}
+
+.tokenSymbolBadge {
+  background: #3f51b5;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 14px;
+  font-weight: 600;
+  width: fit-content;
+}
+
+.tokenStats {
+  display: flex;
+  gap: 32px;
+  align-items: flex-start;
+  flex-shrink: 0;
+  margin-top: 10px;
+}
+
+.statItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.statLabel {
+  font-size: 14px;
+  color: #888;
+  font-weight: 500;
+}
+
+.statValue {
+  font-size: 15px;
+  font-weight: bold;
+  color: white;
+}
+
+/* Content Grid */
+.contentGrid {
+  margin-bottom: 24px;
+}
+
+.chartTradingSection {
+  background: #1a1a1a;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #333;
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 24px;
+}
+
+.tradingPanel {
+  height: fit-content;
+}
+
+.tradingTabs {
+  display: flex;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #333;
+}
+
+.tab, .activeTabBuy, .activeTabSell {
+  flex: 1;
+  padding: 12px;
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  font-weight: 500;
+  border-bottom: 2px solid transparent;
+}
+
+.tab:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.activeTabBuy {
+  color: #4CAF50;
+  border-bottom-color: #4CAF50;
+}
+
+.activeTabSell {
+  color: #F44336;
+  border-bottom-color: #F44336;
+}
+
+.tradingForm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.balanceInfo {
+  background: #333;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #FFD700;
+  text-align: center;
+}
+
+.autoSellSection {
+  background: #1a1a1a;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid #333;
+}
+
+.autoSellHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.autoSellHeader h3 {
+  margin: 0;
+  color: white;
+  font-size: 18px;
+}
+
+.autoSellToggle {
+  color: #FFD700 !important;
+}
+
+.autoSellControls {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.controlRow {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.input {
+  flex: 1;
+}
+
+.switchLabel {
+  color: #FFD700 !important;
+  min-width: 150px;
+}
+
+.ownedSection {
+  margin-bottom: 20px;
+  padding: 20px;
+  background: rgba(255, 215, 0, 0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 215, 0, 0.3);
+}
+
+.ownedSection h3 {
+  margin: 0 0 16px 0;
+  color: #FFD700;
+  font-size: 16px;
+}
+
+.holdingsInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.holdingsInfo p {
+  margin: 0;
+  font-size: 14px;
+  color: white;
+}
+
+.amountInput {
+  width: 100%;
+}
+
+/* Data Section */
+.dataSection {
+  background: #1a1a1a;
+  border-radius: 12px;
+  padding: 24px;
+  border: 1px solid #333;
+}
+
+.dataGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 24px;
+}
+
+.dataCard {
+  background: #0f0f0f;
+  border-radius: 8px;
+  padding: 20px;
+  border: 1px solid #333;
+}
+
+.dataCard h3 {
+  margin: 0 0 16px 0;
+  color: white;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.dataRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #333;
+}
+
+.dataRow:last-child {
+  border-bottom: none;
+}
+
+.dataRow span:first-child {
+  color: #888;
+  font-size: 14px;
+}
+
+.dataRow span:last-child {
+  color: white;
+  font-weight: 500;
+}
+
+.contractAddress {
+  font-family: monospace;
+  background: #333;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.presetTableContainer {
+  margin-top: 1rem;
+  overflow-x: auto;
+  border-radius: 12px;
+  background-color: #1e1e1e;
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.6);
+}
+
+.presetTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.6rem;
+  color: #ffffffd9;
+}
+
+.presetTable thead {
+  background-color: #2a2a2a;
+}
+
+.presetTable th,
+.presetTable td {
+  padding: 6px 10px;
+  text-align: center;
+  border-bottom: 1px solid #333;
+}
+
+.presetTable th {
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #ccc;
+  letter-spacing: 0.5px;
+}
+
+.presetTable tr:last-child td {
+  border-bottom: none;
+}
+
+.presetTable tbody tr:hover {
+  background-color: #292929;
+  transition: background-color 0.2s ease;
+}
+
+/* Trading Tabs */
+.tabButton {
+  border: 1px solid #444;
+  padding: 10px 20px;
+  font-weight: bold;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  flex: 1;
+  background-color: #2a2a2a;
+  color: #fff;
+  outline: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.tabButton:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.tabButton::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: width 0.6s, height 0.6s;
+}
+
+.tabButton:hover::before {
+  width: 300px;
+  height: 300px;
+}
+
+.tabButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.buyTab {
+  border-radius: 8px 0 0 8px;
+}
+
+.buyTab:hover {
+  background-color: rgba(0, 212, 170, 0.1);
+  border-color: #00d4aa;
+}
+
+.sellTab {
+  border-radius: 0 8px 8px 0;
+}
+
+.sellTab:hover {
+  background-color: rgba(255, 71, 87, 0.1);
+  border-color: #ff4757;
+}
+
+.activeBuyTab {
+  background-color: #00d4aa !important;
+  color: #000 !important;
+  border-color: #00d4aa !important;
+}
+
+.activeBuyTab:hover {
+  background-color: #00b894 !important;
+  transform: translateY(-1px);
+}
+
+.activeSellTab {
+  background-color: #ff4757 !important;
+  color: #fff !important;
+  border-color: #ff4757 !important;
+}
+
+.activeSellTab:hover {
+  background-color: #ff3742 !important;
+  transform: translateY(-1px);
+}
+
+/* Buy Amount Container */
+.buyAmountContainer {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+/* SOL Icon */
+.solIcon {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Advanced Settings Checkbox */
+.advancedSettingsCheckbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  /* margin-bottom: 16px; */
+  padding: 8px;
+  border-radius: 6px;
+  transition: background-color 0.2s ease;
+}
+
+.advancedSettingsCheckbox:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.checkbox {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #00d4aa;
+  border-radius: 4px;
+  position: relative;
+  transition: all 0.3s ease;
+  background-color: transparent;
+}
+
+.checkbox.checked {
+  background-color: #00d4aa;
+  border-color: #00d4aa;
+}
+
+.checkboxInner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: #000;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.checkbox.checked .checkboxInner {
+  opacity: 1;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.5);
+    opacity: 0.5;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+
+.checkboxLabel {
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  user-select: none;
+}
+
+
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .tokenHeaderContent {
+    flex-direction: column;
+    gap: 16px;
+  }
+  
+  .tokenStats {
+    gap: 16px;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  
+  .statItem {
+    min-width: calc(50% - 8px);
+  }
+  
+  .chartTradingSection {
+    grid-template-columns: 1fr;
+  }
+  
+  .dataGrid {
+    grid-template-columns: 1fr;
+  }
+  
+  .tokenTitle {
+    font-size: 24px;
   }
 }

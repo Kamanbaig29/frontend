@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useRef } from "react";
 import {
   Button,
-  TextField,
-  Switch,
-  FormControlLabel,
+  // TextField,
+  // Switch,
+  // FormControlLabel,
   Snackbar,
   Alert,
 } from "@mui/material";
@@ -122,7 +122,7 @@ function formatPriceSmart(price: number): string {
 //   return `${balance} ${symbol}`;
 // }
 
-const sellPercents = [10, 30, 50, 100];
+// const sellPercents = [10, 30, 50, 100];
 
 const TokenListWithAge: React.FC = () => {
   // All useState, useEffect, useRef, etc. go here
@@ -137,7 +137,7 @@ const TokenListWithAge: React.FC = () => {
   const [walletTokens, setWalletTokens] = useState<Token[]>([]);
   const [autoSellConfigs, setAutoSellConfigs] = useState<any[]>([]);
   const [userTokens, setUserTokens] = useState<Token[]>([]);
-  const [sellPercentsState, setSellPercentsState] = useState<{
+  const [/*sellPercentsState*/, setSellPercentsState] = useState<{
     [key: string]: number;
   }>({});
   const [autoBuyEnabled, setAutoBuyEnabled] = useState(false);
@@ -210,6 +210,7 @@ const TokenListWithAge: React.FC = () => {
   const [activeSection, setActiveSection] = useState<'fresh-drops' | 'heating-up' | 'battle-tested'>('fresh-drops');
   const [selectedToken, setSelectedToken] = useState<Token | null>(null);
   const [showTokenDetails, setShowTokenDetails] = useState(false);
+  const [showTokenPage, setShowTokenPage] = useState(false);
 
   // Helper function
   const filterTokensByAge = (
@@ -310,7 +311,7 @@ const TokenListWithAge: React.FC = () => {
     } : token;
     
     setSelectedToken(mergedToken);
-    setShowTokenDetails(true);
+    setShowTokenPage(true);
   };
 
   // Handle buy button click
@@ -358,45 +359,45 @@ const TokenListWithAge: React.FC = () => {
     }
   };
 
-  const handleSellPercentChange = (mint: string, value: number) => {
-    setSellPercentsState((prev) => ({
-      ...prev,
-      [mint]: value,
-    }));
-  };
+  // const handleSellPercentChange = (mint: string, value: number) => {
+  //   setSellPercentsState((prev) => ({
+  //     ...prev,
+  //     [mint]: value,
+  //   }));
+  // };
 
-  const handleSellClick = (token: Token) => {
-    const percent = sellPercentsState[token.mint];
-    if (!percent || percent <= 0) {
-      alert("Please select a valid sell percent");
-      return;
-    }
-    if (!ws) {
-      alert("WebSocket not connected");
-      return;
-    }
-    const preset = sellPresets[activeSellPreset] || {};
-    if (!preset || Object.keys(preset).length === 0) {
-      alert("No sell preset loaded! Please set your sell preset first.");
-      return;
-    }
+  // const handleSellClick = (token: Token) => {
+  //   const percent = sellPercentsState[token.mint];
+  //   if (!percent || percent <= 0) {
+  //     alert("Please select a valid sell percent");
+  //     return;
+  //   }
+  //   if (!ws) {
+  //     alert("WebSocket not connected");
+  //     return;
+  //   }
+  //   const preset = sellPresets[activeSellPreset] || {};
+  //   if (!preset || Object.keys(preset).length === 0) {
+  //     alert("No sell preset loaded! Please set your sell preset first.");
+  //     return;
+  //   }
 
-    // Debug: See what is being sent
-    console.log("Manual sell with preset:", preset);
+  //   // Debug: See what is being sent
+  //   console.log("Manual sell with preset:", preset);
 
-    // FIX: Send fees in SOL (not lamports) - backend expects SOL values
-    ws.send(
-      JSON.stringify({
-        type: "MANUAL_SELL",
-        mintAddress: token.mint,
-        percent,
-        slippage: preset.slippage,
-        priorityFee: Number(preset.priorityFee), // Send as SOL, not lamports
-        bribeAmount: Number(preset.bribeAmount), // Send as SOL, not lamports
-        walletAddress,
-      })
-    );
-  };
+  //   // FIX: Send fees in SOL (not lamports) - backend expects SOL values
+  //   ws.send(
+  //     JSON.stringify({
+  //       type: "MANUAL_SELL",
+  //       mintAddress: token.mint,
+  //       percent,
+  //       slippage: preset.slippage,
+  //       priorityFee: Number(preset.priorityFee), // Send as SOL, not lamports
+  //       bribeAmount: Number(preset.bribeAmount), // Send as SOL, not lamports
+  //       walletAddress,
+  //     })
+  //   );
+  // };
 
   const handleTakeProfitChange = (mint: string, value: string) => {
     setTakeProfitState((prev) => ({
@@ -1588,58 +1589,81 @@ const TokenListWithAge: React.FC = () => {
 
   return (
     <>
-      <Navbar
-        showMyTokens={showMyTokens}
-        onMyTokensClick={handleMyTokensClick}
-        onDepositClick={() => setDepositModalOpen(true)}
-        onWithdrawClick={() => setWithdrawModalOpen(true)}
-        onLogout={() => {
-          const token = localStorage.getItem("token");
-          if (token) {
-            fetch(
-              `${import.meta.env.VITE_API_BASE_URL}/api/bot/stop-services`,
-              {
-                method: "POST",
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                  "Content-Type": "application/json",
-                },
+      {showTokenPage ? (
+        <TokenDetails
+          open={true}
+          fullPage={true}
+          token={selectedToken}
+          solBalance={solBalance}
+          onClose={() => {
+            setSelectedToken(null);
+            setShowTokenPage(false);
+          }}
+          onAutoSellToggle={handleAutoSellToggle}
+          onTakeProfitChange={handleTakeProfitChange}
+          onStopLossChange={handleStopLossChange}
+          onAutoSellPercentChange={handleAutoSellPercentChange}
+          onTrailingStopLossChange={handleTrailingStopLossChange}
+          onTrailingStopLossEnabledChange={handleTrailingStopLossEnabledChange}
+          onTimeBasedSellChange={handleTimeBasedSellChange}
+          onTimeBasedSellEnabledChange={handleTimeBasedSellEnabledChange}
+          onWaitForBuyersChange={handleWaitForBuyersChange}
+          onWaitForBuyersEnabledChange={handleWaitForBuyersEnabledChange}
+          autoSellEnabledState={autoSellEnabledState}
+          takeProfitState={takeProfitState}
+          stopLossState={stopLossState}
+          autoSellPercentState={autoSellPercentState}
+          trailingStopLossState={trailingStopLossState}
+          trailingStopLossEnabledState={trailingStopLossEnabledState}
+          timeBasedSellState={timeBasedSellState}
+          timeBasedSellEnabledState={timeBasedSellEnabledState}
+          waitForBuyersState={waitForBuyersState}
+          waitForBuyersEnabledState={waitForBuyersEnabledState}
+        />
+      ) : (
+        <>
+          <Navbar
+            showMyTokens={showMyTokens}
+            onMyTokensClick={handleMyTokensClick}
+            onDepositClick={() => setDepositModalOpen(true)}
+            onWithdrawClick={() => setWithdrawModalOpen(true)}
+            onLogout={() => {
+              const token = localStorage.getItem("token");
+              if (token) {
+                fetch(
+                  `${import.meta.env.VITE_API_BASE_URL}/api/bot/stop-services`,
+                  {
+                    method: "POST",
+                    headers: {
+                      Authorization: `Bearer ${token}`,
+                      "Content-Type": "application/json",
+                    },
+                  }
+                );
               }
-            );
-          }
-          localStorage.removeItem("token");
-          localStorage.removeItem("userId");
-          window.location.href = "/";
-        }}
-        solBalance={solBalance}
-      />
-      {/* Wallet details + Logout (below the fixed bar) */}
-      {/* {walletAddress && (
-        <span style={{ color: '#FFD700', fontWeight: 600, fontSize: 16, marginLeft: 16 }}>
-          💰 {walletAddress.slice(0, 8)}...{walletAddress.slice(-4)}
-        </span>
-      )} */}
-      <Snackbar
-        open={autoBuySnackbar.open}
-        autoHideDuration={4000}
-        onClose={() => setAutoBuySnackbar({ open: false, message: "" })}
-        anchorOrigin={{ vertical: "top", horizontal: "center" }}
-      >
-        <Alert
-          onClose={() => setAutoBuySnackbar({ open: false, message: "" })}
-          severity="success"
-          sx={{ width: "100%" }}
-        >
-          {autoBuySnackbar.message}
-        </Alert>
-      </Snackbar>
+              localStorage.removeItem("token");
+              localStorage.removeItem("userId");
+              window.location.href = "/";
+            }}
+            solBalance={solBalance}
+          />
+          <Snackbar
+            open={autoBuySnackbar.open}
+            autoHideDuration={4000}
+            onClose={() => setAutoBuySnackbar({ open: false, message: "" })}
+            anchorOrigin={{ vertical: "top", horizontal: "center" }}
+          >
+            <Alert
+              onClose={() => setAutoBuySnackbar({ open: false, message: "" })}
+              severity="success"
+              sx={{ width: "100%" }}
+            >
+              {autoBuySnackbar.message}
+            </Alert>
+          </Snackbar>
 
-      {/* Main content wrapper */}
-      <div className={styles.container}>
-        {/* Filter Bar */}
-
-        {/* Main Header with Toggle */}
-        <div className={styles.header}>
+          <div className={styles.container}>
+            <div className={styles.header}>
           <h2 className={styles.title}>
             {showMyTokens ? "Portfolio" : "Trending Tokens"}
           </h2>
@@ -2369,104 +2393,105 @@ const TokenListWithAge: React.FC = () => {
           </div>
         )}
       </div>
-      <HomeSetting
-        open={settingsModalOpen}
-        onClose={() => setSettingsModalOpen(false)}
-        autoBuyEnabled={autoBuyEnabled}
-        setAutoBuyEnabled={setAutoBuyEnabled}
-        bufferAmount={bufferAmount}
-        setBufferAmount={setBufferAmount}
-        manualBuyAmount={manualBuyAmount}
-        setManualBuyAmount={setManualBuyAmount}
-      />
-      <PresetModal
-        open={presetModalOpen}
-        onClose={() => setPresetModalOpen(false)}
-        buyPresets={buyPresets}
-        sellPresets={sellPresets}
-        activeBuyPreset={activeBuyPreset}
-        activeSellPreset={activeSellPreset}
-        setActiveBuyPreset={setActiveBuyPreset}
-        setActiveSellPreset={setActiveSellPreset}
-      />
-      <BuySellFilterPanel
-        open={showFilters}
-        onClose={() => setShowFilters(false)}
-        userId={userId}
-        buyFilters={buyFilters[userId] || {}}
-        sellFilters={sellFilters[userId] || {}}
-        onChangeBuyFilters={(filters) =>
-          setBuyFilters((prev) => ({ ...prev, [userId]: filters }))
-        }
-        onChangeSellFilters={(filters) =>
-          setSellFilters((prev) => ({ ...prev, [userId]: filters }))
-        }
-      />
-
-      <DepositModal
-        open={depositModalOpen}
-        onClose={() => setDepositModalOpen(false)}
-        walletAddress={walletAddress}
-        solBalance={solBalance}
-      />
-      <WithdrawModal
-        open={withdrawModalOpen}
-        onClose={() => setWithdrawModalOpen(false)}
-        walletAddress={walletAddress}
-        solBalance={solBalance}
-        onNotification={setWithdrawNotification}
-      />
-
-      {/* Global withdraw notification */}
-      {withdrawNotification.show && (
-        <div
-          className={`withdraw-notification-global${withdrawNotification.type === "error" ? " error" : ""
-            }`}
-        >
-          <span style={{ flex: 1 }}>{withdrawNotification.message}</span>
-          <button
-            className="withdraw-notification-close"
-            onClick={() =>
-              setWithdrawNotification({
-                show: false,
-                message: "",
-                type: "success",
-              })
+          <HomeSetting
+            open={settingsModalOpen}
+            onClose={() => setSettingsModalOpen(false)}
+            autoBuyEnabled={autoBuyEnabled}
+            setAutoBuyEnabled={setAutoBuyEnabled}
+            bufferAmount={bufferAmount}
+            setBufferAmount={setBufferAmount}
+            manualBuyAmount={manualBuyAmount}
+            setManualBuyAmount={setManualBuyAmount}
+          />
+          <PresetModal
+            open={presetModalOpen}
+            onClose={() => setPresetModalOpen(false)}
+            buyPresets={buyPresets}
+            sellPresets={sellPresets}
+            activeBuyPreset={activeBuyPreset}
+            activeSellPreset={activeSellPreset}
+            setActiveBuyPreset={setActiveBuyPreset}
+            setActiveSellPreset={setActiveSellPreset}
+          />
+          <BuySellFilterPanel
+            open={showFilters}
+            onClose={() => setShowFilters(false)}
+            userId={userId}
+            buyFilters={buyFilters[userId] || {}}
+            sellFilters={sellFilters[userId] || {}}
+            onChangeBuyFilters={(filters) =>
+              setBuyFilters((prev) => ({ ...prev, [userId]: filters }))
             }
-            aria-label="Close notification"
-            title="Close"
-          >
-            ×
-          </button>
-        </div>
+            onChangeSellFilters={(filters) =>
+              setSellFilters((prev) => ({ ...prev, [userId]: filters }))
+            }
+          />
+
+          <DepositModal
+            open={depositModalOpen}
+            onClose={() => setDepositModalOpen(false)}
+            walletAddress={walletAddress}
+            solBalance={solBalance}
+          />
+          <WithdrawModal
+            open={withdrawModalOpen}
+            onClose={() => setWithdrawModalOpen(false)}
+            walletAddress={walletAddress}
+            solBalance={solBalance}
+            onNotification={setWithdrawNotification}
+          />
+
+          {withdrawNotification.show && (
+            <div
+              className={`withdraw-notification-global${withdrawNotification.type === "error" ? " error" : ""
+                }`}
+            >
+              <span style={{ flex: 1 }}>{withdrawNotification.message}</span>
+              <button
+                className="withdraw-notification-close"
+                onClick={() =>
+                  setWithdrawNotification({
+                    show: false,
+                    message: "",
+                    type: "success",
+                  })
+                }
+                aria-label="Close notification"
+                title="Close"
+              >
+                ×
+              </button>
+            </div>
+          )}
+          <FooterBar onOpenSettings={() => setPresetModalOpen(true)} />
+          
+          <TokenDetails
+            open={showTokenDetails}
+            onClose={() => setShowTokenDetails(false)}
+            token={selectedToken}
+            onAutoSellToggle={handleAutoSellToggle}
+            onTakeProfitChange={handleTakeProfitChange}
+            onStopLossChange={handleStopLossChange}
+            onAutoSellPercentChange={handleAutoSellPercentChange}
+            onTrailingStopLossChange={handleTrailingStopLossChange}
+            onTrailingStopLossEnabledChange={handleTrailingStopLossEnabledChange}
+            onTimeBasedSellChange={handleTimeBasedSellChange}
+            onTimeBasedSellEnabledChange={handleTimeBasedSellEnabledChange}
+            onWaitForBuyersChange={handleWaitForBuyersChange}
+            onWaitForBuyersEnabledChange={handleWaitForBuyersEnabledChange}
+            autoSellEnabledState={autoSellEnabledState}
+            takeProfitState={takeProfitState}
+            stopLossState={stopLossState}
+            autoSellPercentState={autoSellPercentState}
+            trailingStopLossState={trailingStopLossState}
+            trailingStopLossEnabledState={trailingStopLossEnabledState}
+            timeBasedSellState={timeBasedSellState}
+            timeBasedSellEnabledState={timeBasedSellEnabledState}
+            waitForBuyersState={waitForBuyersState}
+            waitForBuyersEnabledState={waitForBuyersEnabledState}
+          />
+        </>
       )}
-      <FooterBar onOpenSettings={() => setPresetModalOpen(true)} />
-      
-      <TokenDetails
-        open={showTokenDetails}
-        onClose={() => setShowTokenDetails(false)}
-        token={selectedToken}
-        onAutoSellToggle={handleAutoSellToggle}
-        onTakeProfitChange={handleTakeProfitChange}
-        onStopLossChange={handleStopLossChange}
-        onAutoSellPercentChange={handleAutoSellPercentChange}
-        onTrailingStopLossChange={handleTrailingStopLossChange}
-        onTrailingStopLossEnabledChange={handleTrailingStopLossEnabledChange}
-        onTimeBasedSellChange={handleTimeBasedSellChange}
-        onTimeBasedSellEnabledChange={handleTimeBasedSellEnabledChange}
-        onWaitForBuyersChange={handleWaitForBuyersChange}
-        onWaitForBuyersEnabledChange={handleWaitForBuyersEnabledChange}
-        autoSellEnabledState={autoSellEnabledState}
-        takeProfitState={takeProfitState}
-        stopLossState={stopLossState}
-        autoSellPercentState={autoSellPercentState}
-        trailingStopLossState={trailingStopLossState}
-        trailingStopLossEnabledState={trailingStopLossEnabledState}
-        timeBasedSellState={timeBasedSellState}
-        timeBasedSellEnabledState={timeBasedSellEnabledState}
-        waitForBuyersState={waitForBuyersState}
-        waitForBuyersEnabledState={waitForBuyersEnabledState}
-      />
     </>
   );
 };
