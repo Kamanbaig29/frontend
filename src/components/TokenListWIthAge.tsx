@@ -133,7 +133,10 @@ const TokenListWithAge: React.FC = () => {
   const [sortOrder] = useState<"desc" | "asc">("desc"); // 'desc' = newest first
   const [presetModalOpen, setPresetModalOpen] = useState(false);
 
-  const [showMyTokens, setShowMyTokens] = useState(false);
+  const [showMyTokens, setShowMyTokens] = useState(() => {
+    const savedView = localStorage.getItem('currentView');
+    return savedView === 'portfolio';
+  });
   const [walletTokens, setWalletTokens] = useState<Token[]>([]);
   const [autoSellConfigs, setAutoSellConfigs] = useState<any[]>([]);
   const [userTokens, setUserTokens] = useState<Token[]>([]);
@@ -350,11 +353,18 @@ const TokenListWithAge: React.FC = () => {
 
   const handleMyTokensClick = () => {
     if (ws) {
+      // Close token details when switching views
+      setShowTokenPage(false);
+      setSelectedToken(null);
+      setShowTokenDetails(false);
+      
       if (!showMyTokens) {
         ws.send(JSON.stringify({ type: "GET_USER_TOKENS" }));
         setShowMyTokens(true);
+        localStorage.setItem('currentView', 'portfolio');
       } else {
         setShowMyTokens(false);
+        localStorage.setItem('currentView', 'discover');
       }
     }
   };
@@ -654,47 +664,48 @@ const TokenListWithAge: React.FC = () => {
     }
   };
 
-  // Fetch tokens on mount with proper authentication
-  useEffect(() => {
-    const fetchTokens = async () => {
-      try {
-        const token = localStorage.getItem("token");
-        if (!token) {
-          setError("Authentication token not found");
-          setLoading(false);
+  // Fetch tokens function
+  const fetchTokens = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setError("Authentication token not found");
+        setLoading(false);
+        return;
+      }
+
+      const res = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL}/api/tokens/all`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 404) {
+          // Auto-logout and redirect to login
+          localStorage.removeItem("token");
+          localStorage.removeItem("userId");
+          window.location.href = "/login"; // or your login route
           return;
         }
-
-        const res = await fetch(
-          `${import.meta.env.VITE_API_BASE_URL}/api/tokens/all`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-
-        if (!res.ok) {
-          if (res.status === 401 || res.status === 404) {
-            // Auto-logout and redirect to login
-            localStorage.removeItem("token");
-            localStorage.removeItem("userId");
-            window.location.href = "/login"; // or your login route
-            return;
-          }
-          throw new Error("Failed to fetch tokens");
-        }
-
-        const data = await res.json();
-        setTokens(data.tokens || []);
-        setLoading(false);
-      } catch (err: any) {
-        setError(err.message || "Failed to fetch tokens");
-        setLoading(false);
+        throw new Error("Failed to fetch tokens");
       }
-    };
 
+      const data = await res.json();
+      setTokens(data.tokens || []);
+      setLoading(false);
+    } catch (err: any) {
+      setError(err.message || "Failed to fetch tokens");
+      setLoading(false);
+    }
+  };
+
+  // Fetch tokens on mount with proper authentication
+  useEffect(() => {
     fetchTokens();
   }, []);
 
@@ -1599,6 +1610,7 @@ const TokenListWithAge: React.FC = () => {
             setSelectedToken(null);
             setShowTokenPage(false);
           }}
+
           onAutoSellToggle={handleAutoSellToggle}
           onTakeProfitChange={handleTakeProfitChange}
           onStopLossChange={handleStopLossChange}

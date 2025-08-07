@@ -83,6 +83,31 @@
   width: 100%;
 }
 
+.backButtonContainer {
+  margin-bottom: 1rem;
+  margin-top: 2rem;
+}
+
+.backButton {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.backButton:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateX(-2px);
+}
+
 .footer {
   background: #1a1a1a;
   border-top: 1px solid #333;
@@ -294,7 +319,7 @@
   border-radius: 12px;
   padding: 24px;
   margin-bottom: 24px;
-  margin-top: 35px;
+  margin-top: 20px;
   border: 1px solid #333;
 }
 
@@ -433,6 +458,9 @@
 /* Content Grid */
 .contentGrid {
   margin-bottom: 24px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .chartTradingSection {
@@ -545,14 +573,14 @@
 .ownedSection {
   margin-bottom: 20px;
   padding: 20px;
-  background: rgba(255, 215, 0, 0.1);
+  background: rgba(59, 130, 246, 0.1);
   border-radius: 8px;
-  border: 1px solid rgba(255, 215, 0, 0.3);
+  border: 1px solid rgba(59, 130, 246, 0.3);
 }
 
 .ownedSection h3 {
   margin: 0 0 16px 0;
-  color: #FFD700;
+  color: #3b82f6;
   font-size: 16px;
 }
 
@@ -578,6 +606,7 @@
   border-radius: 12px;
   padding: 24px;
   border: 1px solid #333;
+  margin-bottom: 1rem;
 }
 
 .dataGrid {
@@ -846,34 +875,314 @@
   user-select: none;
 }
 
+.autoSellCheckbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  margin-bottom: 16px;
+  padding: 8px;
+  border-radius: 6px;
+  transition: background-color 0.2s ease;
+}
 
+.autoSellCheckbox:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.addFieldsDropdown {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+.addButton {
+  background: #2a2a2a;
+  color: #fff;
+  border: 1px solid #444;
+  padding: 10px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  width: 100%;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.addButton:hover {
+  background: #333;
+  border-color: #666;
+}
+
+.addFieldsDropdown:hover .dropdownContent {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.dropdownContent {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  position: absolute;
+  background: rgba(0, 0, 0, 0.95);
+  backdrop-filter: blur(10px);
+  width: 100%;
+  box-shadow: 0px 12px 24px rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  top: 100%;
+  left: 0;
+  padding: 16px;
+  max-height: 400px;
+  overflow-y: auto;
+  box-sizing: border-box;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dropdownField {
+  margin-bottom: 16px;
+}
+
+.dropdownField:last-child {
+  margin-bottom: 0;
+}
+
+.dropdownField {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0.8;
+  transition: opacity 0.2s ease;
+}
+
+.dropdownField:hover {
+  opacity: 1;
+}
+
+.dropdownField .MuiOutlinedInput-root {
+  pointer-events: none;
+  background-color: rgba(20, 20, 20, 0.8) !important;
+}
+
+.dropdownField .MuiInputBase-input {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+.dropdownField .MuiInputLabel-root {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+.dropdownField .MuiOutlinedInput-notchedOutline {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.addFieldButton {
+  background: rgba(0, 212, 170, 0.1);
+  color: #00d4aa;
+  border: 1px solid rgba(0, 212, 170, 0.3);
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.addFieldButton:hover {
+  background: rgba(0, 212, 170, 0.2);
+  border-color: #00d4aa;
+  transform: scale(1.05);
+}
+
+.activeField {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.removeFieldButton {
+  background: none;
+  color: #888;
+  border: none;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.removeFieldButton:hover {
+  color: #ff4757;
+}
+
+.copyNotification {
+  position: fixed;
+  top: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(10px);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 10000;
+  animation: fadeInOut 2s ease-in-out;
+}
+
+@keyframes fadeInOut {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.9);
+  }
+  20%, 80% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.9);
+  }
+}
 
 /* Mobile Responsive */
-@media (max-width: 768px) {
+@media (max-width: 1000px) {
+  .pageContainer {
+    overflow-x: hidden;
+    width: 100vw;
+  }
+  
+  .mainContent {
+    padding: 0.5rem;
+    width: 100%;
+    max-width: 100vw;
+    box-sizing: border-box;
+  }
+
+  .backButtonContainer{
+    margin-top: 3.5rem;
+  }
+  
+  .tokenHeaderSection {
+    margin-bottom: 1rem;
+    margin-top: 1rem;
+    padding: 16px;
+  }
+  
   .tokenHeaderContent {
     flex-direction: column;
     gap: 16px;
   }
   
   .tokenStats {
-    gap: 16px;
+    gap: 12px;
     flex-wrap: wrap;
     width: 100%;
   }
   
   .statItem {
-    min-width: calc(50% - 8px);
+    min-width: calc(50% - 6px);
+    font-size: 12px;
   }
   
   .chartTradingSection {
     grid-template-columns: 1fr;
+    padding: 12px;
+    margin: 0;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  
+  .tradingPanel {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+  
+  .tradingForm {
+    width: 100%;
+  }
+  
+  .dataSection {
+    padding: 12px;
+    /* margin: 0.5rem 0; */
+    margin-top: 0.5rem;
+    margin-bottom: 6.5rem;
   }
   
   .dataGrid {
     grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .dataCard {
+    padding: 12px;
   }
   
   .tokenTitle {
-    font-size: 24px;
+    font-size: 20px;
+  }
+  
+  .dropdownContent {
+    width: 100%;
+    max-width: 100%;
+    left: 0;
+    transform: none;
+    right: auto;
+    margin: 0;
+    padding: 12px;
+  }
+  
+  .dropdownField {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  
+  .dropdownField .MuiTextField-root {
+    width: 100% !important;
+  }
+  
+  .addFieldButton {
+    align-self: flex-end;
+    margin-top: 4px;
+  }
+  
+  .presetTableContainer {
+    overflow-x: auto;
+    margin: 0.5rem 0;
+  }
+  
+  .presetTable {
+    min-width: 250px;
+  }
+  
+  .buyAmountContainer {
+    width: 100%;
+  }
+  
+  .ownedSection {
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  
+  .activeField {
+    width: 100%;
+  }
+  
+  .activeField .MuiTextField-root {
+    width: 100% !important;
   }
 }

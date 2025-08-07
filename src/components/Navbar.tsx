@@ -18,18 +18,12 @@ const Navbar: React.FC<NavbarProps> = ({ showMyTokens, onMyTokensClick, onDeposi
   const [desktopWalletDropdownOpen, setDesktopWalletDropdownOpen] = useState(false);
   const [mobileWalletDropdownOpen, setMobileWalletDropdownOpen] = useState(false);
   const [solPrice, setSolPrice] = useState<number>(0);
-  const [activeNav, setActiveNav] = useState(showMyTokens ? 'portfolio' : 'discover');
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
 
   // Refs for dropdown containers
   const dropdownRef = useRef<HTMLDivElement>(null);
   const walletDropdownRef = useRef<HTMLDivElement>(null);
   const mobileWalletRef = useRef<HTMLDivElement>(null);
-
-  // Sync activeNav with showMyTokens prop
-  useEffect(() => {
-    setActiveNav(showMyTokens ? 'portfolio' : 'discover');
-  }, [showMyTokens]);
 
   // Click outside handler
   useEffect(() => {
@@ -97,9 +91,8 @@ const Navbar: React.FC<NavbarProps> = ({ showMyTokens, onMyTokensClick, onDeposi
         {/* Mobile Navigation Buttons */}
         <div className="navbar-nav mobile-only">
           <button 
-            className={`nav-button ${activeNav === 'discover' ? 'active' : ''}`}
+            className={`nav-button ${!showMyTokens ? 'active' : ''}`}
             onClick={() => {
-              setActiveNav('discover');
               if (showMyTokens && onMyTokensClick) {
                 onMyTokensClick(); // Toggle back to all tokens
               }
@@ -108,10 +101,11 @@ const Navbar: React.FC<NavbarProps> = ({ showMyTokens, onMyTokensClick, onDeposi
             Discover
           </button>
           <button 
-            className={`nav-button ${activeNav === 'portfolio' ? 'active' : ''}`}
+            className={`nav-button ${showMyTokens ? 'active' : ''}`}
             onClick={() => {
-              setActiveNav('portfolio');
-              onMyTokensClick?.();
+              if (!showMyTokens && onMyTokensClick) {
+                onMyTokensClick(); // Toggle to portfolio
+              }
             }}
           >
             Portfolio
@@ -121,9 +115,8 @@ const Navbar: React.FC<NavbarProps> = ({ showMyTokens, onMyTokensClick, onDeposi
         {/* Desktop Navigation Buttons */}
         <div className="navbar-nav desktop-only">
           <button 
-            className={`nav-button ${activeNav === 'discover' ? 'active' : ''}`}
+            className={`nav-button ${!showMyTokens ? 'active' : ''}`}
             onClick={() => {
-              setActiveNav('discover');
               if (showMyTokens && onMyTokensClick) {
                 onMyTokensClick(); // Toggle back to all tokens
               }
@@ -132,10 +125,11 @@ const Navbar: React.FC<NavbarProps> = ({ showMyTokens, onMyTokensClick, onDeposi
             Discover
           </button>
           <button 
-            className={`nav-button ${activeNav === 'portfolio' ? 'active' : ''}`}
+            className={`nav-button ${showMyTokens ? 'active' : ''}`}
             onClick={() => {
-              setActiveNav('portfolio');
-              onMyTokensClick?.();
+              if (!showMyTokens && onMyTokensClick) {
+                onMyTokensClick(); // Toggle to portfolio
+              }
             }}
           >
             Portfolio

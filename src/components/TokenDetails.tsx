@@ -132,6 +132,12 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
   const [presetModalOpen, setPresetModalOpen] = useState(false);
   const [userTokens, setUserTokens] = useState<any[]>([]);
   const [buyAmount, setBuyAmount] = useState<string>("0.1");
+  const [sellPercentage, setSellPercentage] = useState<string>("100");
+  const [activeFields, setActiveFields] = useState<string[]>(() => {
+    const saved = localStorage.getItem(`activeFields_${token?.mint}`);
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [notification, setNotification] = useState<{show: boolean, message: string}>({show: false, message: ''});
   // const [advancedSettingsEnabled, setAdvancedSettingsEnabled] = useState(false);
 
   useEffect(() => {
@@ -181,13 +187,13 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
   // const hasBalance = userBalance > 0;
 
   // Debug logging
-  console.log("TokenDetails Debug:", {
-    tokenMint: token?.mint,
-    userTokensLength: userTokens.length,
-    userToken,
-    userBalance,
-    tokenBalance: token?.balance,
-  });
+  // console.log("TokenDetails Debug:", {
+  //   tokenMint: token?.mint,
+  //   userTokensLength: userTokens.length,
+  //   userToken,
+  //   userBalance,
+  //   tokenBalance: token?.balance,
+  // });
 
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const widgetRef = useRef<any>(null);
@@ -208,55 +214,66 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
     };
 
     const initChart = () => {
-      if (widgetRef.current) {
-        widgetRef.current.remove();
-      }
+      try {
+        if (widgetRef.current) {
+          widgetRef.current.remove();
+        }
+        
+        const container = document.getElementById("tradingview_chart");
+        if (!container) return;
 
-      widgetRef.current = new (window as any).TradingView.widget({
-        autosize: true,
-        symbol: "BINANCE:BTCUSDT",
-        interval: "5",
-        timezone: "Etc/UTC",
-        theme: "dark",
-        style: "1",
-        locale: "en",
-        toolbar_bg: "#1a1a1a",
-        enable_publishing: false,
-        allow_symbol_change: false,
-        hide_top_toolbar: false,
-        hide_legend: false,
-        hide_side_toolbar: false,
-        save_image: false,
-        container_id: "tradingview_chart",
-        enabled_features: [
-          "left_toolbar",
-          "header_widget",
-          "timeframes_toolbar",
-          "header_chart_type",
-          "header_undo_redo",
-        ],
-        disabled_features: [
-          "header_symbol_search",
-          "header_fullscreen_button",
-          "header_screenshot",
-          "volume_force_overlay",
-          "create_volume_indicator_by_default",
-          "study_dialog_search_control",
-        ],
-        overrides: {
-          "paneProperties.background": "#1a1a1a",
-          "paneProperties.vertGridProperties.color": "#333",
-          "paneProperties.horzGridProperties.color": "#333",
-        },
-      });
+        widgetRef.current = new (window as any).TradingView.widget({
+          autosize: true,
+          symbol: "BINANCE:BTCUSDT",
+          interval: "5",
+          timezone: "Etc/UTC",
+          theme: "dark",
+          style: "1",
+          locale: "en",
+          toolbar_bg: "#1a1a1a",
+          enable_publishing: false,
+          allow_symbol_change: false,
+          hide_top_toolbar: false,
+          hide_legend: false,
+          hide_side_toolbar: false,
+          save_image: false,
+          container_id: "tradingview_chart",
+          enabled_features: [
+            "left_toolbar",
+            "header_widget",
+            "timeframes_toolbar",
+            "header_chart_type",
+            "header_undo_redo",
+          ],
+          disabled_features: [
+            "header_symbol_search",
+            "header_fullscreen_button",
+            "header_screenshot",
+            "volume_force_overlay",
+            "create_volume_indicator_by_default",
+            "study_dialog_search_control",
+          ],
+          overrides: {
+            "paneProperties.background": "#1a1a1a",
+            "paneProperties.vertGridProperties.color": "#333",
+            "paneProperties.horzGridProperties.color": "#333",
+          },
+        });
+      } catch (error) {
+        console.error('TradingView widget error:', error);
+      }
     };
 
     loadTradingView();
 
     return () => {
-      if (widgetRef.current) {
-        widgetRef.current.remove();
-        widgetRef.current = null;
+      try {
+        if (widgetRef.current) {
+          widgetRef.current.remove();
+          widgetRef.current = null;
+        }
+      } catch (error) {
+        console.error('TradingView cleanup error:', error);
       }
     };
   }, [open]);
@@ -343,15 +360,37 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
   const bind = (fn?: (mint: string, value: any) => void) =>
     fn && token ? (val: any) => fn(token.mint, val) : () => {};
 
+  const addFieldToActive = (fieldName: string) => {
+    if (!activeFields.includes(fieldName)) {
+      const newFields = [...activeFields, fieldName];
+      setActiveFields(newFields);
+      if (token) localStorage.setItem(`activeFields_${token.mint}`, JSON.stringify(newFields));
+    }
+  };
+
+  const removeFieldFromActive = (fieldName: string) => {
+    const newFields = activeFields.filter(f => f !== fieldName);
+    setActiveFields(newFields);
+    if (token) localStorage.setItem(`activeFields_${token.mint}`, JSON.stringify(newFields));
+  };
+
+  const showNotification = (message: string) => {
+    setNotification({show: true, message});
+    setTimeout(() => setNotification({show: false, message: ''}), 2000);
+  };
+
   const handleSell = () => {
     if (!ws || !token) return;
 
     const preset = sellPresets[activeSellPreset] || {};
+    const sellPercent = Number(sellPercentage);
+    
     ws.send(
       JSON.stringify({
         type: "MANUAL_SELL",
         mintAddress: token.mint,
-        percent: 100,
+        percent: sellPercent,
+        sellAll: sellPercent === 100,
         slippage: preset.slippage,
         priorityFee: Number(preset.priorityFee),
         bribeAmount: Number(preset.bribeAmount),
@@ -361,11 +400,15 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
   };
 
   if (fullPage) {
+    if (!token) {
+      return null;
+    }
+    
     return (
       <div className={styles.pageContainer}>
         <Navbar
-          showMyTokens={false}
-          onMyTokensClick={() => {}}
+          showMyTokens={localStorage.getItem('currentView') === 'portfolio'}
+          onMyTokensClick={onClose}
           onDepositClick={() => setDepositModalOpen(true)}
           onWithdrawClick={() => setWithdrawModalOpen(true)}
           onLogout={() => {
@@ -392,6 +435,16 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
         <main className={styles.mainContent}>
           {token && (
             <>
+              {/* Back Button */}
+              <div className={styles.backButtonContainer}>
+                <button 
+                  className={styles.backButton}
+                  onClick={onClose}
+                >
+                  ← Back
+                </button>
+              </div>
+
               {/* Token Header Section */}
               <div className={styles.tokenHeaderSection}>
                 <div className={styles.tokenHeaderContent}>
@@ -408,9 +461,10 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
                         <h1 className={styles.tokenTitle}>{token.name}</h1>
                         <span
                           className={styles.tokenSymbolCopy}
-                          onClick={() =>
-                            navigator.clipboard.writeText(token.mint)
-                          }
+                          onClick={() => {
+                            navigator.clipboard.writeText(token.mint);
+                            showNotification('Mint address copied!');
+                          }}
                           title="Copy mint address"
                         >
                           {token.symbol}
@@ -423,11 +477,12 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
                       <div className={styles.creatorRow}>
                         <span
                           className={styles.creatorAddress}
-                          onClick={() =>
+                          onClick={() => {
                             navigator.clipboard.writeText(
                               token.creator || token.devAddress || ""
-                            )
-                          }
+                            );
+                            showNotification('Creator address copied!');
+                          }}
                           title="Copy creator address"
                         >
                           {(
@@ -477,6 +532,10 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
                     <div className={styles.statItem}>
                       <span className={styles.statLabel}>Volume 24h</span>
                       <span className={styles.statValue}>$456K</span>
+                    </div>
+                     <div className={styles.statItem}>
+                      <span className={styles.statLabel}>Total Supply:</span>
+                      <span className={styles.statValue}>1,000,000,000</span>
                     </div>
                     <div className={styles.statItem}>
                       <span className={styles.statLabel}>Age</span>
@@ -659,156 +718,302 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
                             </div>
                           </div>
 
-                          <FormControlLabel
-                            control={
-                              <Switch
-                                checked={autoSellEnabled}
-                                onChange={handleAutoSellToggle}
-                                color="primary"
-                                size="small"
-                              />
-                            }
-                            label="Auto Sell"
-                            className={styles.autoSellToggle}
-                          />
+                          
 
                           <TextField
                             label="Sell Percentage (%)"
                             type="number"
-                            defaultValue="100"
+                            value={sellPercentage}
+                            onChange={(e) => setSellPercentage(e.target.value)}
                             className={styles.amountInput}
                             size="small"
-                          />
-                          <TextField
-                            label="Take Profit %"
-                            type="number"
-                            value={takeProfit}
-                            onChange={(e) =>
-                              handleTakeProfitChange(e.target.value)
-                            }
-                            className={styles.amountInput}
-                            size="small"
-                            disabled={!autoSellEnabled}
-                          />
-                          <TextField
-                            label="Stop Loss %"
-                            type="number"
-                            value={stopLoss}
-                            onChange={(e) =>
-                              handleStopLossChange(e.target.value)
-                            }
-                            className={styles.amountInput}
-                            size="small"
-                            disabled={!autoSellEnabled}
-                          />
-                          <TextField
-                            label="Auto Sell %"
-                            type="number"
-                            value={autoSellPercent}
-                            onChange={(e) =>
-                              handleAutoSellPercentChange(e.target.value)
-                            }
-                            className={styles.amountInput}
-                            size="small"
-                            disabled={!autoSellEnabled}
-                          />
-                          <TextField
-                            label="Trailing Stop Loss (%)"
-                            type="number"
-                            value={trailingStopLoss}
-                            onChange={(e) =>
-                              handleTrailingStopLossChange(e.target.value)
-                            }
-                            className={styles.amountInput}
-                            size="small"
-                            disabled={
-                              !autoSellEnabled ||
-                              !trailingStopLossEnabled ||
-                              timeBasedSellEnabled
-                            }
-                          />
-                          <FormControlLabel
-                            control={
-                              <Switch
-                                checked={trailingStopLossEnabled}
-                                onChange={(e) =>
-                                  handleTrailingStopLossEnabledChange(
-                                    e.target.checked
-                                  )
-                                }
-                                color="primary"
-                                size="small"
-                                disabled={
-                                  !autoSellEnabled || timeBasedSellEnabled
-                                }
-                              />
-                            }
-                            label="On/Off"
-                            className={styles.switchLabel}
-                          />
-                          <TextField
-                            label="Time-Based Sell (sec)"
-                            type="number"
-                            value={timeBasedSell}
-                            onChange={(e) =>
-                              handleTimeBasedSellChange(e.target.value)
-                            }
-                            className={styles.amountInput}
-                            size="small"
-                            disabled={!autoSellEnabled || !timeBasedSellEnabled}
-                          />
-                          <FormControlLabel
-                            control={
-                              <Switch
-                                checked={timeBasedSellEnabled}
-                                onChange={(e) =>
-                                  handleTimeBasedSellEnabledChange(
-                                    e.target.checked
-                                  )
-                                }
-                                color="primary"
-                                size="small"
-                                disabled={!autoSellEnabled}
-                              />
-                            }
-                            label="On/Off"
-                            className={styles.switchLabel}
-                          />
-                          <TextField
-                            label="Wait for Buyers Before Sell"
-                            type="number"
-                            value={waitForBuyers}
-                            onChange={(e) =>
-                              handleWaitForBuyersChange(e.target.value)
-                            }
-                            className={styles.amountInput}
-                            size="small"
-                            disabled={!autoSellEnabled || !waitForBuyersEnabled}
-                          />
-                          <FormControlLabel
-                            control={
-                              <Switch
-                                checked={waitForBuyersEnabled}
-                                onChange={(e) =>
-                                  handleWaitForBuyersEnabledChange(
-                                    e.target.checked
-                                  )
-                                }
-                                color="primary"
-                                size="small"
-                                disabled={!autoSellEnabled}
-                              />
-                            }
-                            label="On/Off"
-                            className={styles.switchLabel}
+                            sx={{
+                              width: '100%',
+                              "& .MuiOutlinedInput-root": {
+                                backgroundColor: "#2a2a2a",
+                                color: "#ffffff",
+                                "& fieldset": {
+                                  borderColor: "#444",
+                                },
+                                "&:hover fieldset": {
+                                  borderColor: "#666",
+                                },
+                                "&.Mui-focused fieldset": {
+                                  borderColor: "#ff4757",
+                                },
+                              },
+                              "& .MuiInputLabel-root": {
+                                color: "#aaa",
+                                "&.Mui-focused": {
+                                  color: "#ff4757",
+                                },
+                              },
+                            }}
                           />
                           <Button
-                            onClick={handleSell}
+                            onClick={() => handleSell()}
                             className={styles.sellButton}
                             fullWidth
+                            variant="contained"
+                            sx={{
+                              backgroundColor: "#ff4757",
+                              color: "#fff",
+                              fontWeight: "bold",
+                              fontSize: "16px",
+                              padding: "12px",
+                              borderRadius: "8px",
+                              textTransform: "none",
+                              "&:hover": {
+                                backgroundColor: "#ff3742",
+                              },
+                            }}
                           >
-                            Sell {token.symbol}
+                            Sell {sellPercentage}% {token.symbol}
                           </Button>
+                          <div className={styles.autoSellCheckbox} onClick={handleAutoSellToggle}>
+                            <div className={`${styles.checkbox} ${autoSellEnabled ? styles.checked : ''}`}>
+                              <div className={styles.checkboxInner}></div>
+                            </div>
+                            <span className={styles.checkboxLabel}>Auto Sell</span>
+                          </div>
+                          {/* Active Fields Outside Dropdown */}
+                          {activeFields.map(fieldName => {
+                            const fieldConfig = {
+                              'takeProfit': { label: 'Take Profit %', value: takeProfit, onChange: handleTakeProfitChange },
+                              'stopLoss': { label: 'Stop Loss %', value: stopLoss, onChange: handleStopLossChange },
+                              'autoSellPercent': { label: 'Auto Sell %', value: autoSellPercent, onChange: handleAutoSellPercentChange },
+                              'trailingStopLoss': { label: 'Trailing Stop Loss (%)', value: trailingStopLoss, onChange: handleTrailingStopLossChange },
+                              'timeBasedSell': { label: 'Time-Based Sell (sec)', value: timeBasedSell, onChange: handleTimeBasedSellChange },
+                              'waitForBuyers': { label: 'Wait for Buyers Before Sell', value: waitForBuyers, onChange: handleWaitForBuyersChange }
+                            }[fieldName];
+                            
+                            return fieldConfig ? (
+                              <div key={fieldName} className={styles.activeField}>
+                                <TextField
+                                  label={fieldConfig.label}
+                                  type="number"
+                                  value={fieldConfig.value}
+                                  onChange={(e) => fieldConfig.onChange(e.target.value)}
+                                  size="small"
+                                  sx={{
+                                    width: '100%',
+                                    "& .MuiOutlinedInput-root": {
+                                      backgroundColor: "#2a2a2a",
+                                      color: "#ffffff",
+                                      "& fieldset": { borderColor: "#444" },
+                                      "&:hover fieldset": { borderColor: "#666" },
+                                      "&.Mui-focused fieldset": { borderColor: "#ff4757" },
+                                    },
+                                    "& .MuiInputLabel-root": {
+                                      color: "#aaa",
+                                      "&.Mui-focused": { color: "#ff4757" },
+                                    },
+                                  }}
+                                />
+                                <button 
+                                  className={styles.removeFieldButton}
+                                  onClick={() => removeFieldFromActive(fieldName)}
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            ) : null;
+                          })}
+                          
+                          {autoSellEnabled && (
+                            <div className={styles.addFieldsDropdown}>
+                              <button className={styles.addButton}>+ Add</button>
+                              <div className={styles.dropdownContent}>
+                                {!activeFields.includes('takeProfit') && (
+                                  <div className={styles.dropdownField}>
+                                    <TextField
+                                      label="Take Profit %"
+                                      type="number"
+                                      value={takeProfit}
+                                      disabled
+                                      size="small"
+                                      sx={{
+                                        width: 'calc(100% - 30px)',
+                                        "& .MuiOutlinedInput-root": {
+                                          backgroundColor: "#2a2a2a",
+                                          color: "#ffffff",
+                                          "& fieldset": { borderColor: "#444" },
+                                          "&:hover fieldset": { borderColor: "#666" },
+                                          "&.Mui-focused fieldset": { borderColor: "#ff4757" },
+                                        },
+                                        "& .MuiInputLabel-root": {
+                                          color: "#aaa",
+                                          "&.Mui-focused": { color: "#ff4757" },
+                                        },
+                                      }}
+                                    />
+                                    <button 
+                                      className={styles.addFieldButton}
+                                      onClick={() => addFieldToActive('takeProfit')}
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                )}
+                                {!activeFields.includes('stopLoss') && (
+                                  <div className={styles.dropdownField}>
+                                    <TextField
+                                      label="Stop Loss %"
+                                      type="number"
+                                      value={stopLoss}
+                                      disabled
+                                      size="small"
+                                      sx={{
+                                        width: 'calc(100% - 30px)',
+                                        "& .MuiOutlinedInput-root": {
+                                          backgroundColor: "#2a2a2a",
+                                          color: "#ffffff",
+                                          "& fieldset": { borderColor: "#444" },
+                                          "&:hover fieldset": { borderColor: "#666" },
+                                          "&.Mui-focused fieldset": { borderColor: "#ff4757" },
+                                        },
+                                        "& .MuiInputLabel-root": {
+                                          color: "#aaa",
+                                          "&.Mui-focused": { color: "#ff4757" },
+                                        },
+                                      }}
+                                    />
+                                    <button 
+                                      className={styles.addFieldButton}
+                                      onClick={() => addFieldToActive('stopLoss')}
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                )}
+                                {!activeFields.includes('autoSellPercent') && (
+                                  <div className={styles.dropdownField}>
+                                    <TextField
+                                      label="Auto Sell %"
+                                      type="number"
+                                      value={autoSellPercent}
+                                      disabled
+                                      size="small"
+                                      sx={{
+                                        width: 'calc(100% - 30px)',
+                                        "& .MuiOutlinedInput-root": {
+                                          backgroundColor: "#2a2a2a",
+                                          color: "#ffffff",
+                                          "& fieldset": { borderColor: "#444" },
+                                          "&:hover fieldset": { borderColor: "#666" },
+                                          "&.Mui-focused fieldset": { borderColor: "#ff4757" },
+                                        },
+                                        "& .MuiInputLabel-root": {
+                                          color: "#aaa",
+                                          "&.Mui-focused": { color: "#ff4757" },
+                                        },
+                                      }}
+                                    />
+                                    <button 
+                                      className={styles.addFieldButton}
+                                      onClick={() => addFieldToActive('autoSellPercent')}
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                )}
+                                {!activeFields.includes('trailingStopLoss') && (
+                                  <div className={styles.dropdownField}>
+                                    <TextField
+                                      label="Trailing Stop Loss (%)"
+                                      type="number"
+                                      value={trailingStopLoss}
+                                      disabled
+                                      size="small"
+                                      sx={{
+                                        width: 'calc(100% - 30px)',
+                                        "& .MuiOutlinedInput-root": {
+                                          backgroundColor: "#2a2a2a",
+                                          color: "#ffffff",
+                                          "& fieldset": { borderColor: "#444" },
+                                          "&:hover fieldset": { borderColor: "#666" },
+                                          "&.Mui-focused fieldset": { borderColor: "#ff4757" },
+                                        },
+                                        "& .MuiInputLabel-root": {
+                                          color: "#aaa",
+                                          "&.Mui-focused": { color: "#ff4757" },
+                                        },
+                                      }}
+                                    />
+                                    <button 
+                                      className={styles.addFieldButton}
+                                      onClick={() => addFieldToActive('trailingStopLoss')}
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                )}
+                                {!activeFields.includes('timeBasedSell') && (
+                                  <div className={styles.dropdownField}>
+                                    <TextField
+                                      label="Time-Based Sell (sec)"
+                                      type="number"
+                                      value={timeBasedSell}
+                                      disabled
+                                      size="small"
+                                      sx={{
+                                        width: 'calc(100% - 30px)',
+                                        "& .MuiOutlinedInput-root": {
+                                          backgroundColor: "#2a2a2a",
+                                          color: "#ffffff",
+                                          "& fieldset": { borderColor: "#444" },
+                                          "&:hover fieldset": { borderColor: "#666" },
+                                          "&.Mui-focused fieldset": { borderColor: "#ff4757" },
+                                        },
+                                        "& .MuiInputLabel-root": {
+                                          color: "#aaa",
+                                          "&.Mui-focused": { color: "#ff4757" },
+                                        },
+                                      }}
+                                    />
+                                    <button 
+                                      className={styles.addFieldButton}
+                                      onClick={() => addFieldToActive('timeBasedSell')}
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                )}
+                                {!activeFields.includes('waitForBuyers') && (
+                                  <div className={styles.dropdownField}>
+                                    <TextField
+                                      label="Wait for Buyers Before Sell"
+                                      type="number"
+                                      value={waitForBuyers}
+                                      disabled
+                                      size="small"
+                                      sx={{
+                                        width: 'calc(100% - 30px)',
+                                        "& .MuiOutlinedInput-root": {
+                                          backgroundColor: "#2a2a2a",
+                                          color: "#ffffff",
+                                          "& fieldset": { borderColor: "#444" },
+                                          "&:hover fieldset": { borderColor: "#666" },
+                                          "&.Mui-focused fieldset": { borderColor: "#ff4757" },
+                                        },
+                                        "& .MuiInputLabel-root": {
+                                          color: "#aaa",
+                                          "&.Mui-focused": { color: "#ff4757" },
+                                        },
+                                      }}
+                                    />
+                                    <button 
+                                      className={styles.addFieldButton}
+                                      onClick={() => addFieldToActive('waitForBuyers')}
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          
                         </>
                       )}
                     </div>
@@ -816,189 +1021,11 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
                 </div>
               </div>
 
-              {/* Auto-Sell Section */}
-              <div className={styles.autoSellSection}>
-                <div className={styles.ownedSection}>
-                  <h3>Your Holdings</h3>
-                  <div className={styles.holdingsInfo}>
-                    <p>
-                      <strong>Balance:</strong> {userBalance} {token.symbol}
-                    </p>
-                    {(userToken?.buyAmount || token.buyAmount) && (
-                      <p>
-                        <strong>Buy Price:</strong> $
-                        {userToken?.buyAmount || token.buyAmount}
-                      </p>
-                    )}
-                    {/* {(userToken?.buyTime || token.buyTime) && (
-                        <p><strong>Bought:</strong> {new Date(userToken?.buyTime || token.buyTime).toLocaleString()}</p>
-                      )} */}
-                  </div>
-                </div>
-
-                <div className={styles.autoSellHeader}>
-                  <h3>Auto-Sell Settings</h3>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={autoSellEnabled}
-                        onChange={handleAutoSellToggle}
-                        color="primary"
-                      />
-                    }
-                    label="Enable Auto-Sell"
-                    className={styles.autoSellToggle}
-                  />
-                </div>
-
-                {autoSellEnabled && (
-                  <div className={styles.autoSellControls}>
-                    <div className={styles.controlRow}>
-                      <TextField
-                        label="Take Profit %"
-                        type="number"
-                        value={takeProfit}
-                        onChange={(e) => handleTakeProfitChange(e.target.value)}
-                        className={styles.input}
-                        size="small"
-                      />
-                      <TextField
-                        label="Stop Loss %"
-                        type="number"
-                        value={stopLoss}
-                        onChange={(e) => handleStopLossChange(e.target.value)}
-                        className={styles.input}
-                        size="small"
-                      />
-                      <TextField
-                        label="Auto Sell %"
-                        type="number"
-                        value={autoSellPercent}
-                        onChange={(e) =>
-                          handleAutoSellPercentChange(e.target.value)
-                        }
-                        className={styles.input}
-                        size="small"
-                      />
-                    </div>
-
-                    <div className={styles.controlRow}>
-                      <TextField
-                        label="Trailing Stop Loss %"
-                        type="number"
-                        value={trailingStopLoss}
-                        onChange={(e) =>
-                          handleTrailingStopLossChange(e.target.value)
-                        }
-                        className={styles.input}
-                        size="small"
-                        disabled={!trailingStopLossEnabled}
-                      />
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={trailingStopLossEnabled}
-                            onChange={(e) =>
-                              handleTrailingStopLossEnabledChange(
-                                e.target.checked
-                              )
-                            }
-                            color="primary"
-                            size="small"
-                            disabled={timeBasedSellEnabled}
-                          />
-                        }
-                        label="Enable Trailing"
-                        className={styles.switchLabel}
-                      />
-                    </div>
-
-                    <div className={styles.controlRow}>
-                      <TextField
-                        label="Time-Based Sell (sec)"
-                        type="number"
-                        value={timeBasedSell}
-                        onChange={(e) =>
-                          handleTimeBasedSellChange(e.target.value)
-                        }
-                        className={styles.input}
-                        size="small"
-                        disabled={!timeBasedSellEnabled}
-                      />
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={timeBasedSellEnabled}
-                            onChange={(e) =>
-                              handleTimeBasedSellEnabledChange(e.target.checked)
-                            }
-                            color="primary"
-                            size="small"
-                          />
-                        }
-                        label="Enable Time-Based"
-                        className={styles.switchLabel}
-                      />
-                    </div>
-
-                    <div className={styles.controlRow}>
-                      <TextField
-                        label="Wait for Buyers"
-                        type="number"
-                        value={waitForBuyers}
-                        onChange={(e) =>
-                          handleWaitForBuyersChange(e.target.value)
-                        }
-                        className={styles.input}
-                        size="small"
-                        disabled={!waitForBuyersEnabled}
-                      />
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={waitForBuyersEnabled}
-                            onChange={(e) =>
-                              handleWaitForBuyersEnabledChange(e.target.checked)
-                            }
-                            color="primary"
-                            size="small"
-                          />
-                        }
-                        label="Enable Wait for Buyers"
-                        className={styles.switchLabel}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
+              
 
               {/* Bottom Data Section */}
               <div className={styles.dataSection}>
                 <div className={styles.dataGrid}>
-                  <div className={styles.dataCard}>
-                    <h3>Token Info</h3>
-                    <div className={styles.dataRow}>
-                      <span>Contract:</span>
-                      <span className={styles.contractAddress}>
-                        {token.mint.slice(0, 8)}...{token.mint.slice(-8)}
-                      </span>
-                    </div>
-                    <div className={styles.dataRow}>
-                      <span>Creator:</span>
-                      <span>
-                        {(token.creator || token.devAddress || "Unknown").slice(
-                          0,
-                          8
-                        )}
-                        ...
-                      </span>
-                    </div>
-                    <div className={styles.dataRow}>
-                      <span>Total Supply:</span>
-                      <span>1,000,000,000</span>
-                    </div>
-                  </div>
-
                   <div className={styles.dataCard}>
                     <h3>Holders</h3>
                     <div className={styles.dataRow}>
@@ -1037,6 +1064,13 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
         </main>
 
         <FooterBar onOpenSettings={() => setPresetModalOpen(true)} />
+
+        {/* Copy Notification */}
+        {notification.show && (
+          <div className={styles.copyNotification}>
+            {notification.message}
+          </div>
+        )}
 
         <BuySellFilterPanel
           open={showFilters}
@@ -1285,7 +1319,7 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
               </Button>
               {token.balance && (
                 <Button onClick={handleSell} className={styles.sellButton}>
-                  Sell
+                  Sell {sellPercentage}%
                 </Button>
               )}
               <Button

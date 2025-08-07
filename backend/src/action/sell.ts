@@ -39,6 +39,7 @@ interface SellTokenParams {
   slippage?: number;
   priorityFee?: number;
   bribeAmount?: number;
+  sellAll?: boolean; // Force sell entire balance
 }
 
 // amazonq-ignore-next-line
@@ -52,15 +53,28 @@ export async function sellToken({
   slippage = 0,
   priorityFee = 0,
   bribeAmount = 0,
+  sellAll = false,
 }: SellTokenParams): Promise<string | undefined> {
   const discriminator = calculateDiscriminator("global:swap");
+
+  // If sellAll is true, get actual token balance but use 99.9% to avoid reserves error
+  let sellAmount = amount;
+  if (sellAll) {
+    try {
+      const tokenAccount = await getAccount(connection, swapAccounts.userTokenAccount);
+      sellAmount = BigInt(Math.floor(Number(tokenAccount.amount) * 0.999));
+      console.log(`Selling 99.9% of balance: ${sellAmount} (total: ${tokenAccount.amount})`);
+    } catch (e) {
+      console.error("Failed to get token balance for complete sell:", e);
+    }
+  }
 
   // Apply slippage to minOut
   const minOutWithSlippage = slippage === 0 ? minOut : BigInt(Math.floor(Number(minOut) * (1 - slippage / 100)));
 
   const data = Buffer.alloc(25);
   discriminator.copy(data, 0);
-  data.writeBigUInt64LE(amount, 8);
+  data.writeBigUInt64LE(sellAmount, 8);
   data.writeUInt8(1, 16); // sell
   data.writeBigUInt64LE(minOutWithSlippage, 17);
 

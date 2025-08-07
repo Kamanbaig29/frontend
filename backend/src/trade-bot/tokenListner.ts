@@ -1012,9 +1012,16 @@ wss.on("connection", (ws: WSWithUser) => {
               // If amount is provided, use it directly (already in smallest unit)
               sellAmountInSmallestUnit = amount;
             } else {
-              // Calculate based on percent of raw chain balance
-              let sellAmount = (chainBalanceRaw * percent) / 100;
-              sellAmountInSmallestUnit = Math.floor(sellAmount);
+                // Check if this is a 100% sell request
+              if (data.sellAll === true || percent === 100) {
+                // For 100% sell, use 99.9% to avoid InsufficientBondingReserve
+                sellAmountInSmallestUnit = Math.floor(chainBalanceRaw * 0.999);
+                console.log(`🔥 100% Sell: Using 99.9% of balance ${sellAmountInSmallestUnit} (${chainBalanceRaw})`);
+              } else {
+                // For partial sell, calculate percentage
+                let sellAmount = (chainBalanceRaw * percent) / 100;
+                sellAmountInSmallestUnit = Math.floor(sellAmount);
+              }
             }
             //console.log("[DEBUG] Sell Amount Calculation: percent:", percent, "sellAmountInSmallestUnit:", sellAmountInSmallestUnit);
 
@@ -1089,13 +1096,14 @@ wss.on("connection", (ws: WSWithUser) => {
                     txSignature = await sellToken({
                         connection,
                         userKeypair,
-                programId: MEMEHOME_PROGRAM_ID,
+                        programId: MEMEHOME_PROGRAM_ID,
                         amount: BigInt(sellAmountInSmallestUnit),
-                        minOut: expectedSolOut / 100n, // 1% slippage (or override with slippage param)
+                        minOut: expectedSolOut / 100n,
                         swapAccounts,
                         slippage: slippageValue,
                         priorityFee: priorityFeeValue,
                         bribeAmount: bribeAmountValue,
+                        sellAll: data.sellAll === true || percent === 100,
                     });
                     //console.log("Step 17: Executing sellToken...");
                     console.log("Step 18: Got txSignature:", txSignature);
@@ -1240,10 +1248,22 @@ wss.on("connection", (ws: WSWithUser) => {
 
           } catch (error) {
                 console.error("❌ Manual sell failed:", error);
+                let errorMessage = "Unknown error";
+                
+                if (error instanceof Error) {
+                  if (error.message.includes("InsufficientBondingReserve")) {
+                    errorMessage = "Cannot sell: Bonding curve must retain minimum SOL reserves. Try selling a smaller amount.";
+                  } else if (error.message.includes("custom program error: 0x1780")) {
+                    errorMessage = "Insufficient bonding reserves. Try selling less than 100% or wait for more liquidity.";
+                  } else {
+                    errorMessage = error.message;
+                  }
+                }
+                
             ws.send(
               JSON.stringify({
                 type: "MANUAL_SELL_ERROR",
-                error: error instanceof Error ? error.message : "Unknown error",
+                error: errorMessage,
               })
             );
           }
