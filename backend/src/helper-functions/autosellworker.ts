@@ -355,19 +355,31 @@ export async function checkAndExecuteAllAutoSells() {
         }
       }
 
-      // --- 6. TAKE PROFIT / STOP LOSS CHECK (Only runs if Time-Based and Trailing are disabled) ---
+      // --- 6. CHECK IF ALL FUNCTIONS ARE DISABLED ---
+      const allFunctionsDisabled = !config.takeProfitEnabled && 
+                                   !config.stopLossEnabled && 
+                                   !config.trailingStopLossEnabled && 
+                                   !config.timeBasedSellEnabled && 
+                                   !config.waitForBuyersBeforeSellEnabled;
+      
+      if (allFunctionsDisabled) {
+        console.log(`[AutoSellWorker] ⚠️ All auto-sell functions disabled for user: ${config.userId}, token: ${config.mint} - Auto-sell is ON but no triggers are enabled`);
+        continue;
+      }
+
+      // --- 7. TAKE PROFIT / STOP LOSS CHECK (Only runs if Time-Based and Trailing are disabled) ---
       const buyPrice = config.buyPrice;
       if (!buyPrice) continue;
       const profitLossPercent = ((currentPrice - buyPrice) / buyPrice) * 100;
 
-      // Check takeProfit/stopLoss
+      // Check takeProfit/stopLoss only if enabled
       let shouldSell = false;
       let reason = '';
-      if (typeof config.takeProfit === 'number' && profitLossPercent >= config.takeProfit) {
+      if (config.takeProfitEnabled && typeof config.takeProfit === 'number' && profitLossPercent >= config.takeProfit) {
         shouldSell = true;
         reason = 'take-profit';
       }
-      if (typeof config.stopLoss === 'number' && profitLossPercent <= -Math.abs(config.stopLoss)) {
+      if (config.stopLossEnabled && typeof config.stopLoss === 'number' && profitLossPercent <= -Math.abs(config.stopLoss)) {
         shouldSell = true;
         reason = 'stop-loss';
       }

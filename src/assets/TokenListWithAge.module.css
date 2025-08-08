@@ -905,7 +905,7 @@
 }
 
 .hiddenOnMobile {
-  display: block;
+  /* display: block; */
 }
 
 @media (max-width: 1000px) {

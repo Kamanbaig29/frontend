@@ -12,7 +12,7 @@ import { WebSocketProvider, useWebSocket } from './context/webSocketContext';
 import LoginPage from './components/LoginPage';
 import LandingPage from './components/landingPage';
 import TokenListWithAge from './components/TokenListWIthAge';
-import Navbar from './components/Navbar';
+// import Navbar from './components/Navbar';
 //import { Typography } from '@mui/material';
 //import ActivePresetBar from "./components/ActivePresetBar";
 import PresetModal from "./components/PresetModal";

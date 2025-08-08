@@ -602,17 +602,144 @@
 
 /* Data Section */
 .dataSection {
-  background: #1a1a1a;
-  border-radius: 12px;
-  padding: 24px;
-  border: 1px solid #333;
+  background: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 100%);
+  border-radius: 16px;
+  padding: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   margin-bottom: 1rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.sectionHeader {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.sectionTitle {
+  font-size: 28px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 8px 0;
+  background: linear-gradient(75deg, #1a237e 6%, #3f51b5 36%, #00bcd4 77%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.sectionSubtitle {
+  color: #888;
+  font-size: 14px;
+  font-weight: 400;
 }
 
 .dataGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 24px;
+}
+
+.modernDataCard {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+  border-radius: 16px;
+  padding: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.modernDataCard::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(75deg, #1a237e 6%, #3f51b5 36%, #00bcd4 77%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.modernDataCard:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.modernDataCard:hover::before {
+  opacity: 1;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.cardIcon {
+  font-size: 24px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+}
+
+.cardTitle {
+  margin: 0;
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.cardContent {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modernDataRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.2s ease;
+}
+
+.modernDataRow:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.dataLabel {
+  color: #aaa;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
+.dataValue {
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 16px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+}
+
+.dataValue.positive {
+  color: #00d4aa;
+}
+
+.dataValue.negative {
+  color: #ff4757;
 }
 
 .dataCard {
@@ -1057,6 +1184,50 @@
   }
 }
 
+.errorNotification {
+  position: fixed;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 0, 0, 0.185);
+  backdrop-filter: blur(10px);
+  color: rgb(255, 159, 159);
+  padding: 16px 24px;
+  border-radius: 12px;
+  /* border: 10px solid red; */
+  font-size: 12px;
+  font-weight: 500;
+  max-width: 400px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(139, 19, 19, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  z-index: 10001;
+  animation: slideDown 0.3s ease-out;
+}
+
+  .disclaimerMessage {
+    background: rgba(255, 193, 7, 0.1);
+    border: 1px solid rgba(255, 193, 7, 0.3);
+    color: #ffc107;
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    text-align: center;
+    margin-bottom: 12px;
+    line-height: 1.4;
+  }
+
+@keyframes slideDown {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50px);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
 /* Mobile Responsive */
 @media (max-width: 1000px) {
   .pageContainer {
@@ -1185,4 +1356,35 @@
   .activeField .MuiTextField-root {
     width: 100% !important;
   }
+  
+  .errorNotification {
+    max-width: calc(100vw - 32px);
+    left: 16px;
+    right: 16px;
+    transform: none;
+    padding: 12px 16px;
+    font-size: 13px;
+  }
+  
+  .copyNotification {
+    max-width: calc(100vw - 32px);
+    left: 16px;
+    right: 16px;
+    transform: none;
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+  
+  @keyframes slideDown {
+    0% {
+      opacity: 0;
+      top: 10px;
+    }
+    100% {
+      opacity: 1;
+      top: 60px;
+    }
+  }
+  
+
 }

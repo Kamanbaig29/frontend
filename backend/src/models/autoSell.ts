@@ -8,7 +8,9 @@ const AutoSellSchema = new mongoose.Schema({
   // amazonq-ignore-next-line
   buyPrice: { type: Number, required: true },
   takeProfit: { type: Number, required: false }, // e.g. 2.5 (SOL) or percent
+  takeProfitEnabled: { type: Boolean, default: false },
   stopLoss: { type: Number, required: false },   // e.g. 10 (%)
+  stopLossEnabled: { type: Boolean, default: false },
   trailingStopLossPercent: { type: Number, required: false }, // e.g. 5 (%)
   // amazonq-ignore-next-line
   trailingStopLossEnabled: { type: Boolean, default: false },

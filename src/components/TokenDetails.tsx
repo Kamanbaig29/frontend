@@ -59,26 +59,6 @@ interface TokenDetailsProps {
   token: Token | null;
   fullPage?: boolean;
   solBalance?: number;
-  onAutoSellToggle?: (token: Token) => void;
-  onTakeProfitChange?: (mint: string, value: string) => void;
-  onStopLossChange?: (mint: string, value: string) => void;
-  onAutoSellPercentChange?: (mint: string, value: string) => void;
-  onTrailingStopLossChange?: (mint: string, value: string) => void;
-  onTrailingStopLossEnabledChange?: (mint: string, checked: boolean) => void;
-  onTimeBasedSellChange?: (mint: string, value: string) => void;
-  onTimeBasedSellEnabledChange?: (mint: string, checked: boolean) => void;
-  onWaitForBuyersChange?: (mint: string, value: string) => void;
-  onWaitForBuyersEnabledChange?: (mint: string, checked: boolean) => void;
-  autoSellEnabledState?: { [key: string]: boolean };
-  takeProfitState?: { [key: string]: string };
-  stopLossState?: { [key: string]: string };
-  autoSellPercentState?: { [key: string]: string };
-  trailingStopLossState?: { [key: string]: string };
-  trailingStopLossEnabledState?: { [key: string]: boolean };
-  timeBasedSellState?: { [key: string]: string };
-  timeBasedSellEnabledState?: { [key: string]: boolean };
-  waitForBuyersState?: { [key: string]: string };
-  waitForBuyersEnabledState?: { [key: string]: boolean };
 }
 
 const TokenDetails: React.FC<TokenDetailsProps> = ({
@@ -87,26 +67,6 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
   token,
   fullPage = false,
   solBalance: propSolBalance,
-  onAutoSellToggle,
-  onTakeProfitChange,
-  onStopLossChange,
-  onAutoSellPercentChange,
-  onTrailingStopLossChange,
-  onTrailingStopLossEnabledChange,
-  onTimeBasedSellChange,
-  onTimeBasedSellEnabledChange,
-  onWaitForBuyersChange,
-  onWaitForBuyersEnabledChange,
-  autoSellEnabledState,
-  takeProfitState,
-  stopLossState,
-  autoSellPercentState,
-  trailingStopLossState,
-  trailingStopLossEnabledState,
-  timeBasedSellState,
-  timeBasedSellEnabledState,
-  waitForBuyersState,
-  waitForBuyersEnabledState,
 }) => {
   // const [loading, setLoading] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -133,52 +93,271 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
   const [userTokens, setUserTokens] = useState<any[]>([]);
   const [buyAmount, setBuyAmount] = useState<string>("0.1");
   const [sellPercentage, setSellPercentage] = useState<string>("100");
-  const [activeFields, setActiveFields] = useState<string[]>(() => {
-    const saved = localStorage.getItem(`activeFields_${token?.mint}`);
-    return saved ? JSON.parse(saved) : [];
-  });
+  // const [activeFields, setActiveFields] = useState<string[]>(() => {
+  //   const saved = localStorage.getItem(`activeFields_${token?.mint}`);
+  //   return saved ? JSON.parse(saved) : [];
+  // });
   const [notification, setNotification] = useState<{show: boolean, message: string}>({show: false, message: ''});
+  const [errorNotification, setErrorNotification] = useState<{show: boolean, message: string}>({show: false, message: ''});
   // const [advancedSettingsEnabled, setAdvancedSettingsEnabled] = useState(false);
 
   useEffect(() => {
-    if (!ws) return;
+    if (!open || !token) return;
 
-    // Request user tokens and SOL balance when component opens
-    ws.send(JSON.stringify({ type: "GET_MY_TOKENS" }));
-    ws.send(JSON.stringify({ type: "GET_SOL_BALANCE" }));
+    const fetchUserData = async () => {
+      try {
+        const userId = localStorage.getItem("userId");
+        if (!userId) return;
 
-    const handleMessage = async (event: MessageEvent) => {
-      const data = JSON.parse(event.data);
-      if (data.type === "SOL_BALANCE_UPDATE") {
-        setSolBalance(data.balance);
-      } else if (data.type === "MY_TOKENS_UPDATE") {
-        setUserTokens(data.tokens || []);
+        // Fetch auto-sell configs like TokenListWithAge
+        const response = await fetch(
+          `${import.meta.env.VITE_API_BASE_URL}/api/auto-sell/user/${userId}`
+        );
+        
+        if (response.ok) {
+          const data = await response.json();
+          const autoSellConfigs = data.autoSells || [];
+          
+          // Get wallet tokens via WebSocket
+          if (ws) {
+            ws.send(JSON.stringify({ type: "GET_USER_TOKENS" }));
+            ws.send(JSON.stringify({ type: "GET_SOL_BALANCE" }));
+            
+            const handleMessage = (event: MessageEvent) => {
+              const wsData = JSON.parse(event.data);
+              if (wsData.type === "SOL_BALANCE_UPDATE") {
+                setSolBalance(wsData.balance);
+              } else if (wsData.type === "USER_TOKENS") {
+                const walletTokens = wsData.tokens || [];
+                
+                // Merge like TokenListWithAge does
+                const merged = walletTokens.map((walletToken: any) => {
+                  const config = autoSellConfigs.find((c: any) => c.mint === walletToken.mint);
+                  
+                  // Update autoSellConfig if this is the current token
+                  if (token && walletToken.mint === token.mint) {
+                    if (config) {
+                      setAutoSellConfig({
+                        autoSellEnabled: config.autoSellEnabled ?? false,
+                        takeProfit: config.takeProfit?.toString() ?? "10",
+                        takeProfitEnabled: config.takeProfitEnabled ?? false,
+                        stopLoss: config.stopLoss?.toString() ?? "10",
+                        stopLossEnabled: config.stopLossEnabled ?? false,
+                        autoSellPercent: config.autoSellPercent?.toString() ?? "100",
+                        trailingStopLoss: config.trailingStopLossPercent?.toString() ?? "10",
+                        trailingStopLossEnabled: config.trailingStopLossEnabled ?? false,
+                        timeBasedSell: config.timeBasedSellSec?.toString() ?? "0",
+                        timeBasedSellEnabled: config.timeBasedSellEnabled ?? false,
+                        waitForBuyers: config.waitForBuyersBeforeSell?.toString() ?? "5",
+                        waitForBuyersEnabled: config.waitForBuyersBeforeSellEnabled ?? false,
+                      });
+                    } else {
+                      // No config exists, set default values
+                      setAutoSellConfig({
+                        autoSellEnabled: false,
+                        takeProfit: "10",
+                        takeProfitEnabled: false,
+                        stopLoss: "10",
+                        stopLossEnabled: false,
+                        autoSellPercent: "100",
+                        trailingStopLoss: "10",
+                        trailingStopLossEnabled: false,
+                        timeBasedSell: "0",
+                        timeBasedSellEnabled: false,
+                        waitForBuyers: "5",
+                        waitForBuyersEnabled: false,
+                      });
+                    }
+                  }
+                  
+                  return {
+                    ...walletToken,
+                    autoSellEnabled: config?.autoSellEnabled ?? false,
+                    takeProfit: config?.takeProfit ?? walletToken.takeProfit ?? 10,
+                    stopLoss: config?.stopLoss ?? walletToken.stopLoss ?? 10,
+                    autoSellPercent: config?.autoSellPercent ?? walletToken.autoSellPercent ?? 100,
+                  };
+                });
+                setUserTokens(merged);
+              }
+            };
+            
+            ws.addEventListener("message", handleMessage);
+            return () => ws.removeEventListener("message", handleMessage);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch user data:", error);
       }
     };
-    ws.addEventListener("message", handleMessage);
-    return () => ws.removeEventListener("message", handleMessage);
-  }, [ws]);
 
-  const autoSellEnabled = token
-    ? autoSellEnabledState?.[token.mint] || false
-    : false;
-  const takeProfit = token ? takeProfitState?.[token.mint] || "" : "";
-  const stopLoss = token ? stopLossState?.[token.mint] || "" : "";
-  const autoSellPercent = token ? autoSellPercentState?.[token.mint] || "" : "";
-  const trailingStopLoss = token
-    ? trailingStopLossState?.[token.mint] || ""
-    : "";
-  const trailingStopLossEnabled = token
-    ? trailingStopLossEnabledState?.[token.mint] || false
-    : false;
-  const timeBasedSell = token ? timeBasedSellState?.[token.mint] || "" : "";
-  const timeBasedSellEnabled = token
-    ? timeBasedSellEnabledState?.[token.mint] || false
-    : false;
-  const waitForBuyers = token ? waitForBuyersState?.[token.mint] || "" : "";
-  const waitForBuyersEnabled = token
-    ? waitForBuyersEnabledState?.[token.mint] || false
-    : false;
+    fetchUserData();
+  }, [open, token, ws]);
+
+  // Auto-sell state managed independently
+  const [autoSellConfig, setAutoSellConfig] = useState({
+    autoSellEnabled: false,
+    takeProfit: "",
+    takeProfitEnabled: false,
+    stopLoss: "",
+    stopLossEnabled: false,
+    autoSellPercent: "100",
+    trailingStopLoss: "",
+    trailingStopLossEnabled: false,
+    timeBasedSell: "",
+    timeBasedSellEnabled: false,
+    waitForBuyers: "",
+    waitForBuyersEnabled: false,
+  });
+
+  // Auto-sell handlers
+  const handleTakeProfitChange = (mint: string, value: string) => {
+    setAutoSellConfig(prev => ({ ...prev, takeProfit: value }));
+    if (autoSellConfig.autoSellEnabled) {
+      updateAutoSellConfig(mint, { takeProfit: Number(value) || undefined });
+    }
+  };
+
+  const handleStopLossChange = (mint: string, value: string) => {
+    setAutoSellConfig(prev => ({ ...prev, stopLoss: value }));
+    if (autoSellConfig.autoSellEnabled) {
+      updateAutoSellConfig(mint, { stopLoss: Number(value) || undefined });
+    }
+  };
+
+  const handleAutoSellPercentChange = (mint: string, value: string) => {
+    setAutoSellConfig(prev => ({ ...prev, autoSellPercent: value }));
+    if (autoSellConfig.autoSellEnabled) {
+      updateAutoSellConfig(mint, { autoSellPercent: Number(value) || 100 });
+    }
+  };
+
+  const handleAutoSellToggle = (token: Token) => {
+    if (!walletAddress) {
+      alert("Wallet address not loaded. Please refresh or re-login.");
+      return;
+    }
+    const enabled = !autoSellConfig.autoSellEnabled;
+    
+    if (enabled) {
+      // Set default values when enabling auto-sell
+      const defaultConfig = {
+        autoSellEnabled: true,
+        takeProfit: "10",
+        takeProfitEnabled: false,
+        stopLoss: "10",
+        stopLossEnabled: false,
+        autoSellPercent: "100",
+        trailingStopLoss: "10",
+        trailingStopLossEnabled: false,
+        timeBasedSell: "0",
+        timeBasedSellEnabled: false,
+        waitForBuyers: "5",
+        waitForBuyersEnabled: false,
+      };
+      setAutoSellConfig(defaultConfig);
+      updateAutoSellConfig(token.mint, { 
+        autoSellEnabled: true,
+        takeProfit: 10,
+        takeProfitEnabled: false,
+        stopLoss: 10,
+        stopLossEnabled: false,
+        autoSellPercent: 100,
+        trailingStopLossPercent: 10,
+        trailingStopLossEnabled: false,
+        timeBasedSellSec: 0,
+        timeBasedSellEnabled: false,
+        waitForBuyersBeforeSell: 5,
+        waitForBuyersBeforeSellEnabled: false,
+      });
+    } else {
+      setAutoSellConfig(prev => ({ ...prev, autoSellEnabled: false }));
+      updateAutoSellConfig(token.mint, { autoSellEnabled: false });
+    }
+  };
+
+  const handleTrailingStopLossChange = (mint: string, value: string) => {
+    setAutoSellConfig(prev => ({ ...prev, trailingStopLoss: value }));
+    if (autoSellConfig.autoSellEnabled) {
+      updateAutoSellConfig(mint, { trailingStopLossPercent: Number(value) || 10 });
+    }
+  };
+
+  const handleTrailingStopLossEnabledChange = (mint: string, checked: boolean) => {
+    setAutoSellConfig(prev => ({ ...prev, trailingStopLossEnabled: checked }));
+    if (autoSellConfig.autoSellEnabled) {
+      updateAutoSellConfig(mint, { trailingStopLossEnabled: checked });
+    }
+  };
+
+  const handleTimeBasedSellChange = (mint: string, value: string) => {
+    setAutoSellConfig(prev => ({ ...prev, timeBasedSell: value }));
+    if (autoSellConfig.autoSellEnabled) {
+      updateAutoSellConfig(mint, { timeBasedSellSec: Number(value) || 0 });
+    }
+  };
+
+  const handleTimeBasedSellEnabledChange = (mint: string, checked: boolean) => {
+    setAutoSellConfig(prev => ({ ...prev, timeBasedSellEnabled: checked }));
+    if (autoSellConfig.autoSellEnabled) {
+      updateAutoSellConfig(mint, { timeBasedSellEnabled: checked });
+    }
+  };
+
+  const handleWaitForBuyersChange = (mint: string, value: string) => {
+    setAutoSellConfig(prev => ({ ...prev, waitForBuyers: value }));
+    if (autoSellConfig.autoSellEnabled) {
+      updateAutoSellConfig(mint, { waitForBuyersBeforeSell: Number(value) || 5 });
+    }
+  };
+
+  const handleWaitForBuyersEnabledChange = (mint: string, checked: boolean) => {
+    setAutoSellConfig(prev => ({ ...prev, waitForBuyersEnabled: checked }));
+    if (autoSellConfig.autoSellEnabled) {
+      updateAutoSellConfig(mint, { waitForBuyersBeforeSellEnabled: checked });
+    }
+  };
+
+  const updateAutoSellConfig = async (mint: string, updates: any) => {
+    if (!walletAddress) return;
+    
+    const preset = sellPresets[activeSellPreset] || {};
+    const payload = {
+      userId,
+      walletAddress,
+      mint,
+      buyPrice: userToken?.buyAmount || 0,
+      takeProfit: Number(autoSellConfig.takeProfit) || undefined,
+      takeProfitEnabled: autoSellConfig.takeProfitEnabled,
+      stopLoss: Number(autoSellConfig.stopLoss) || undefined,
+      stopLossEnabled: autoSellConfig.stopLossEnabled,
+      autoSellPercent: Number(autoSellConfig.autoSellPercent) || 100,
+      autoSellEnabled: autoSellConfig.autoSellEnabled,
+      slippage: preset.slippage || 5,
+      priorityFee: preset.priorityFee || 0.001,
+      bribeAmount: preset.bribeAmount || 0,
+      tokenName: token?.name,
+      tokenSymbol: token?.symbol,
+      trailingStopLossPercent: Number(autoSellConfig.trailingStopLoss) || 10,
+      trailingStopLossEnabled: autoSellConfig.trailingStopLossEnabled,
+      timeBasedSellSec: Number(autoSellConfig.timeBasedSell) || 0,
+      timeBasedSellEnabled: autoSellConfig.timeBasedSellEnabled,
+      waitForBuyersBeforeSell: Number(autoSellConfig.waitForBuyers) || 5,
+      waitForBuyersBeforeSellEnabled: autoSellConfig.waitForBuyersEnabled,
+      ...updates
+    };
+    
+    const API_URL = import.meta.env.VITE_API_BASE_URL;
+    try {
+      await fetch(`${API_URL}/api/auto-sell/upsert`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    } catch (error) {
+      console.error("Failed to update auto-sell config:", error);
+    }
+  };
   // Get user's balance for this token from userTokens array
   const userToken = token
     ? userTokens.find((t) => t.mint === token.mint)
@@ -278,65 +457,7 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
     };
   }, [open]);
 
-  const handleAutoSellToggle = () => {
-    if (token && onAutoSellToggle) {
-      onAutoSellToggle(token);
-    }
-  };
 
-  const handleTakeProfitChange = (value: string) => {
-    if (token && onTakeProfitChange) {
-      onTakeProfitChange(token.mint, value);
-    }
-  };
-
-  const handleStopLossChange = (value: string) => {
-    if (token && onStopLossChange) {
-      onStopLossChange(token.mint, value);
-    }
-  };
-
-  const handleAutoSellPercentChange = (value: string) => {
-    if (token && onAutoSellPercentChange) {
-      onAutoSellPercentChange(token.mint, value);
-    }
-  };
-
-  const handleTrailingStopLossChange = (value: string) => {
-    if (token && onTrailingStopLossChange) {
-      onTrailingStopLossChange(token.mint, value);
-    }
-  };
-
-  const handleTrailingStopLossEnabledChange = (checked: boolean) => {
-    if (token && onTrailingStopLossEnabledChange) {
-      onTrailingStopLossEnabledChange(token.mint, checked);
-    }
-  };
-
-  const handleTimeBasedSellChange = (value: string) => {
-    if (token && onTimeBasedSellChange) {
-      onTimeBasedSellChange(token.mint, value);
-    }
-  };
-
-  const handleTimeBasedSellEnabledChange = (checked: boolean) => {
-    if (token && onTimeBasedSellEnabledChange) {
-      onTimeBasedSellEnabledChange(token.mint, checked);
-    }
-  };
-
-  const handleWaitForBuyersChange = (value: string) => {
-    if (token && onWaitForBuyersChange) {
-      onWaitForBuyersChange(token.mint, value);
-    }
-  };
-
-  const handleWaitForBuyersEnabledChange = (checked: boolean) => {
-    if (token && onWaitForBuyersEnabledChange) {
-      onWaitForBuyersEnabledChange(token.mint, checked);
-    }
-  };
 
   const handleBuy = () => {
     if (!ws || !token) return;
@@ -357,26 +478,32 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
     );
   };
 
-  const bind = (fn?: (mint: string, value: any) => void) =>
-    fn && token ? (val: any) => fn(token.mint, val) : () => {};
+  // Helper function for binding handlers
+  const bindHandler = (handler: (value: string) => void) => (e: React.ChangeEvent<HTMLInputElement>) => handler(e.target.value);
+  const bindToggleHandler = (handler: (checked: boolean) => void) => (e: React.ChangeEvent<HTMLInputElement>) => handler(e.target.checked);
 
-  const addFieldToActive = (fieldName: string) => {
-    if (!activeFields.includes(fieldName)) {
-      const newFields = [...activeFields, fieldName];
-      setActiveFields(newFields);
-      if (token) localStorage.setItem(`activeFields_${token.mint}`, JSON.stringify(newFields));
-    }
-  };
+  // const addFieldToActive = (fieldName: string) => {
+  //   if (!activeFields.includes(fieldName)) {
+  //     const newFields = [...activeFields, fieldName];
+  //     setActiveFields(newFields);
+  //     if (token) localStorage.setItem(`activeFields_${token.mint}`, JSON.stringify(newFields));
+  //   }
+  // };
 
-  const removeFieldFromActive = (fieldName: string) => {
-    const newFields = activeFields.filter(f => f !== fieldName);
-    setActiveFields(newFields);
-    if (token) localStorage.setItem(`activeFields_${token.mint}`, JSON.stringify(newFields));
-  };
+  // const removeFieldFromActive = (fieldName: string) => {
+  //   const newFields = activeFields.filter(f => f !== fieldName);
+  //   setActiveFields(newFields);
+  //   if (token) localStorage.setItem(`activeFields_${token.mint}`, JSON.stringify(newFields));
+  // };
 
   const showNotification = (message: string) => {
     setNotification({show: true, message});
     setTimeout(() => setNotification({show: false, message: ''}), 2000);
+  };
+
+  const showErrorNotification = (message: string) => {
+    setErrorNotification({show: true, message});
+    setTimeout(() => setErrorNotification({show: false, message: ''}), 3000);
   };
 
   const handleSell = () => {
@@ -672,12 +799,12 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
                               </tbody>
                             </table>
                           </div>
-                          <div className={styles.advancedSettingsCheckbox} onClick={() => setShowFilters(true)}>
+                          {/* <div className={styles.advancedSettingsCheckbox} onClick={() => setShowFilters(true)}>
                             <div className={`${styles.checkbox} ${styles.checked}`}>
                               <div className={styles.checkboxInner}></div>
                             </div>
                             <span className={styles.checkboxLabel}>Advanced Settings</span>
-                          </div>
+                          </div> */}
 
                           <Button
                             onClick={handleBuy}
@@ -702,21 +829,23 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
                         </>
                       ) : (
                         <>
-                          <div className={styles.ownedSection}>
-                            <h3>Your Holdings</h3>
-                            <div className={styles.holdingsInfo}>
-                              <p>
-                                <strong>Balance:</strong> {userBalance}{" "}
-                                {token.symbol}
-                              </p>
-                              {(userToken?.buyAmount || token.buyAmount) && (
+                          {userBalance > 0 && (
+                            <div className={styles.ownedSection}>
+                              <h3>Your Holdings</h3>
+                              <div className={styles.holdingsInfo}>
                                 <p>
-                                  <strong>Buy Price:</strong> $
-                                  {userToken?.buyAmount || token.buyAmount}
+                                  <strong>Balance:</strong> {userBalance}{" "}
+                                  {token.symbol}
                                 </p>
-                              )}
+                                {userToken?.buyAmount && (
+                                  <p>
+                                    <strong>Buy Price:</strong> $
+                                    {userToken.buyAmount}
+                                  </p>
+                                )}
+                              </div>
                             </div>
-                          </div>
+                          )}
 
                           
 
@@ -755,8 +884,9 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
                             className={styles.sellButton}
                             fullWidth
                             variant="contained"
+                            disabled={!userBalance || userBalance <= 0}
                             sx={{
-                              backgroundColor: "#ff4757",
+                              backgroundColor: userBalance > 0 ? "#ff4757" : "#666",
                               color: "#fff",
                               fontWeight: "bold",
                               fontSize: "16px",
@@ -764,72 +894,255 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
                               borderRadius: "8px",
                               textTransform: "none",
                               "&:hover": {
-                                backgroundColor: "#ff3742",
+                                backgroundColor: userBalance > 0 ? "#ff3742" : "#666",
                               },
                             }}
                           >
-                            Sell {sellPercentage}% {token.symbol}
+                            {userBalance > 0 ? `Sell ${sellPercentage}% ${token.symbol}` : "No Balance to Sell"}
                           </Button>
-                          <div className={styles.autoSellCheckbox} onClick={handleAutoSellToggle}>
-                            <div className={`${styles.checkbox} ${autoSellEnabled ? styles.checked : ''}`}>
+                          <div className={styles.autoSellCheckbox} onClick={() => token && handleAutoSellToggle(token)}>
+                            <div className={`${styles.checkbox} ${autoSellConfig.autoSellEnabled ? styles.checked : ''}`}>
                               <div className={styles.checkboxInner}></div>
                             </div>
                             <span className={styles.checkboxLabel}>Auto Sell</span>
                           </div>
-                          {/* Active Fields Outside Dropdown */}
-                          {activeFields.map(fieldName => {
-                            const fieldConfig = {
-                              'takeProfit': { label: 'Take Profit %', value: takeProfit, onChange: handleTakeProfitChange },
-                              'stopLoss': { label: 'Stop Loss %', value: stopLoss, onChange: handleStopLossChange },
-                              'autoSellPercent': { label: 'Auto Sell %', value: autoSellPercent, onChange: handleAutoSellPercentChange },
-                              'trailingStopLoss': { label: 'Trailing Stop Loss (%)', value: trailingStopLoss, onChange: handleTrailingStopLossChange },
-                              'timeBasedSell': { label: 'Time-Based Sell (sec)', value: timeBasedSell, onChange: handleTimeBasedSellChange },
-                              'waitForBuyers': { label: 'Wait for Buyers Before Sell', value: waitForBuyers, onChange: handleWaitForBuyersChange }
-                            }[fieldName];
-                            
-                            return fieldConfig ? (
-                              <div key={fieldName} className={styles.activeField}>
-                                <TextField
-                                  label={fieldConfig.label}
-                                  type="number"
-                                  value={fieldConfig.value}
-                                  onChange={(e) => fieldConfig.onChange(e.target.value)}
-                                  size="small"
-                                  sx={{
-                                    width: '100%',
-                                    "& .MuiOutlinedInput-root": {
-                                      backgroundColor: "#2a2a2a",
-                                      color: "#ffffff",
-                                      "& fieldset": { borderColor: "#444" },
-                                      "&:hover fieldset": { borderColor: "#666" },
-                                      "&.Mui-focused fieldset": { borderColor: "#ff4757" },
-                                    },
-                                    "& .MuiInputLabel-root": {
-                                      color: "#aaa",
-                                      "&.Mui-focused": { color: "#ff4757" },
-                                    },
-                                  }}
-                                />
-                                <button 
-                                  className={styles.removeFieldButton}
-                                  onClick={() => removeFieldFromActive(fieldName)}
-                                >
-                                  ×
-                                </button>
-                              </div>
-                            ) : null;
-                          })}
                           
-                          {autoSellEnabled && (
+                          {/* Auto Sell % - Always visible when auto-sell is enabled */}
+                          {autoSellConfig.autoSellEnabled && (
+                            <TextField
+                              label="Auto Sell %"
+                              type="number"
+                              value={autoSellConfig.autoSellPercent}
+                              onChange={(e) => handleAutoSellPercentChange(token.mint, e.target.value)}
+                              size="small"
+                              sx={{
+                                width: '100%',
+                                marginBottom: '12px',
+                                "& .MuiOutlinedInput-root": {
+                                  backgroundColor: "#2a2a2a",
+                                  color: "#ffffff",
+                                  "& fieldset": { borderColor: "#444" },
+                                  "&:hover fieldset": { borderColor: "#666" },
+                                  "&.Mui-focused fieldset": { borderColor: "#ff4757" },
+                                },
+                                "& .MuiInputLabel-root": {
+                                  color: "#aaa",
+                                  "&.Mui-focused": { color: "#ff4757" },
+                                },
+                              }}
+                            />
+                          )}
+                          
+                          {/* Disclaimer when all filters are disabled */}
+                          {autoSellConfig.autoSellEnabled && 
+                           !autoSellConfig.takeProfitEnabled && 
+                           !autoSellConfig.stopLossEnabled && 
+                           !autoSellConfig.trailingStopLossEnabled && 
+                           !autoSellConfig.timeBasedSellEnabled && 
+                           !autoSellConfig.waitForBuyersEnabled && (
+                            <div className={styles.disclaimerMessage}>
+                              ⚠️ No sell will be executed because no filter triggers are enabled. Please add at least one trigger below.
+                            </div>
+                          )}
+                          
+                          {/* Active Fields Outside Dropdown - Show enabled fields */}
+                          {autoSellConfig.takeProfitEnabled && (
+                            <div className={styles.activeField}>
+                              <TextField
+                                label="Take Profit %"
+                                type="number"
+                                value={autoSellConfig.takeProfit}
+                                onChange={(e) => handleTakeProfitChange(token.mint, e.target.value)}
+                                size="small"
+                                sx={{
+                                  width: '100%',
+                                  "& .MuiOutlinedInput-root": {
+                                    backgroundColor: "#2a2a2a",
+                                    color: "#ffffff",
+                                    "& fieldset": { borderColor: "#444" },
+                                    "&:hover fieldset": { borderColor: "#666" },
+                                    "&.Mui-focused fieldset": { borderColor: "#ff4757" },
+                                  },
+                                  "& .MuiInputLabel-root": {
+                                    color: "#aaa",
+                                    "&.Mui-focused": { color: "#ff4757" },
+                                  },
+                                }}
+                              />
+                              <button 
+                                className={styles.removeFieldButton}
+                                onClick={() => {
+                                  setAutoSellConfig(prev => ({ ...prev, takeProfitEnabled: false }));
+                                  if (token) updateAutoSellConfig(token.mint, { takeProfitEnabled: false });
+                                }}
+                              >
+                                -
+                              </button>
+                            </div>
+                          )}
+                          
+                          {autoSellConfig.stopLossEnabled && (
+                            <div className={styles.activeField}>
+                              <TextField
+                                label="Stop Loss %"
+                                type="number"
+                                value={autoSellConfig.stopLoss}
+                                onChange={(e) => handleStopLossChange(token.mint, e.target.value)}
+                                size="small"
+                                sx={{
+                                  width: '100%',
+                                  "& .MuiOutlinedInput-root": {
+                                    backgroundColor: "#2a2a2a",
+                                    color: "#ffffff",
+                                    "& fieldset": { borderColor: "#444" },
+                                    "&:hover fieldset": { borderColor: "#666" },
+                                    "&.Mui-focused fieldset": { borderColor: "#ff4757" },
+                                  },
+                                  "& .MuiInputLabel-root": {
+                                    color: "#aaa",
+                                    "&.Mui-focused": { color: "#ff4757" },
+                                  },
+                                }}
+                              />
+                              <button 
+                                className={styles.removeFieldButton}
+                                onClick={() => {
+                                  setAutoSellConfig(prev => ({ ...prev, stopLossEnabled: false }));
+                                  if (token) updateAutoSellConfig(token.mint, { stopLossEnabled: false });
+                                }}
+                              >
+                                -
+                              </button>
+                            </div>
+                          )}
+                          
+                          {autoSellConfig.trailingStopLossEnabled && (
+                            <div className={styles.activeField}>
+                              <TextField
+                                label="Trailing Stop Loss (%)"
+                                type="number"
+                                value={autoSellConfig.trailingStopLoss}
+                                onChange={(e) => handleTrailingStopLossChange(token.mint, e.target.value)}
+                                size="small"
+                                sx={{
+                                  width: '100%',
+                                  "& .MuiOutlinedInput-root": {
+                                    backgroundColor: "#2a2a2a",
+                                    color: "#ffffff",
+                                    "& fieldset": { borderColor: "#444" },
+                                    "&:hover fieldset": { borderColor: "#666" },
+                                    "&.Mui-focused fieldset": { borderColor: "#ff4757" },
+                                  },
+                                  "& .MuiInputLabel-root": {
+                                    color: "#aaa",
+                                    "&.Mui-focused": { color: "#ff4757" },
+                                  },
+                                }}
+                              />
+                              <button 
+                                className={styles.removeFieldButton}
+                                onClick={() => {
+                                  setAutoSellConfig(prev => ({ ...prev, trailingStopLossEnabled: false }));
+                                  if (token) updateAutoSellConfig(token.mint, { trailingStopLossEnabled: false });
+                                }}
+                              >
+                                -
+                              </button>
+                            </div>
+                          )}
+                          
+                          {autoSellConfig.timeBasedSellEnabled && (
+                            <div className={styles.activeField}>
+                              <TextField
+                                label="Time-Based Sell (sec)"
+                                type="number"
+                                value={autoSellConfig.timeBasedSell}
+                                onChange={(e) => handleTimeBasedSellChange(token.mint, e.target.value)}
+                                size="small"
+                                sx={{
+                                  width: '100%',
+                                  "& .MuiOutlinedInput-root": {
+                                    backgroundColor: "#2a2a2a",
+                                    color: "#ffffff",
+                                    "& fieldset": { borderColor: "#444" },
+                                    "&:hover fieldset": { borderColor: "#666" },
+                                    "&.Mui-focused fieldset": { borderColor: "#ff4757" },
+                                  },
+                                  "& .MuiInputLabel-root": {
+                                    color: "#aaa",
+                                    "&.Mui-focused": { color: "#ff4757" },
+                                  },
+                                }}
+                              />
+                              <button 
+                                className={styles.removeFieldButton}
+                                onClick={() => {
+                                  setAutoSellConfig(prev => ({ ...prev, timeBasedSellEnabled: false }));
+                                  if (token) updateAutoSellConfig(token.mint, { timeBasedSellEnabled: false });
+                                }}
+                              >
+                                -
+                              </button>
+                            </div>
+                          )}
+                          
+                          {autoSellConfig.waitForBuyersEnabled && (
+                            <div className={styles.activeField}>
+                              <TextField
+                                label="Wait for Buyers Before Sell"
+                                type="number"
+                                value={autoSellConfig.waitForBuyers}
+                                onChange={(e) => handleWaitForBuyersChange(token.mint, e.target.value)}
+                                size="small"
+                                sx={{
+                                  width: '100%',
+                                  "& .MuiOutlinedInput-root": {
+                                    backgroundColor: "#2a2a2a",
+                                    color: "#ffffff",
+                                    "& fieldset": { borderColor: "#444" },
+                                    "&:hover fieldset": { borderColor: "#666" },
+                                    "&.Mui-focused fieldset": { borderColor: "#ff4757" },
+                                  },
+                                  "& .MuiInputLabel-root": {
+                                    color: "#aaa",
+                                    "&.Mui-focused": { color: "#ff4757" },
+                                  },
+                                }}
+                              />
+                              <button 
+                                className={styles.removeFieldButton}
+                                onClick={() => {
+                                  setAutoSellConfig(prev => ({ ...prev, waitForBuyersEnabled: false }));
+                                  if (token) updateAutoSellConfig(token.mint, { waitForBuyersBeforeSellEnabled: false });
+                                }}
+                              >
+                                -
+                              </button>
+                            </div>
+                          )}
+                          {/* {false && activeFields.map(fieldName => {
+                            // const fieldConfig = {
+                            //   'takeProfit': { label: 'Take Profit %', value: autoSellConfig.takeProfit, onChange: (v: string) => handleTakeProfitChange(token.mint, v) },
+                            //   'stopLoss': { label: 'Stop Loss %', value: autoSellConfig.stopLoss, onChange: (v: string) => handleStopLossChange(token.mint, v) },
+
+                            //   'trailingStopLoss': { label: 'Trailing Stop Loss (%)', value: autoSellConfig.trailingStopLoss, onChange: (v: string) => handleTrailingStopLossChange(token.mint, v) },
+                            //   'timeBasedSell': { label: 'Time-Based Sell (sec)', value: autoSellConfig.timeBasedSell, onChange: (v: string) => handleTimeBasedSellChange(token.mint, v) },
+                            //   'waitForBuyers': { label: 'Wait for Buyers Before Sell', value: autoSellConfig.waitForBuyers, onChange: (v: string) => handleWaitForBuyersChange(token.mint, v) }
+                            // }[fieldName];
+                            
+                            return null;
+                          })} */}
+                          
+                          {autoSellConfig.autoSellEnabled && (
                             <div className={styles.addFieldsDropdown}>
                               <button className={styles.addButton}>+ Add</button>
                               <div className={styles.dropdownContent}>
-                                {!activeFields.includes('takeProfit') && (
+                                {!autoSellConfig.takeProfitEnabled && (
                                   <div className={styles.dropdownField}>
                                     <TextField
                                       label="Take Profit %"
                                       type="number"
-                                      value={takeProfit}
+                                      value={autoSellConfig.takeProfit}
                                       disabled
                                       size="small"
                                       sx={{
@@ -849,18 +1162,21 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
                                     />
                                     <button 
                                       className={styles.addFieldButton}
-                                      onClick={() => addFieldToActive('takeProfit')}
+                                      onClick={() => {
+                                        setAutoSellConfig(prev => ({ ...prev, takeProfitEnabled: true }));
+                                        if (token) updateAutoSellConfig(token.mint, { takeProfitEnabled: true });
+                                      }}
                                     >
                                       +
                                     </button>
                                   </div>
                                 )}
-                                {!activeFields.includes('stopLoss') && (
+                                {!autoSellConfig.stopLossEnabled && (
                                   <div className={styles.dropdownField}>
                                     <TextField
                                       label="Stop Loss %"
                                       type="number"
-                                      value={stopLoss}
+                                      value={autoSellConfig.stopLoss}
                                       disabled
                                       size="small"
                                       sx={{
@@ -880,49 +1196,26 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
                                     />
                                     <button 
                                       className={styles.addFieldButton}
-                                      onClick={() => addFieldToActive('stopLoss')}
-                                    >
-                                      +
-                                    </button>
-                                  </div>
-                                )}
-                                {!activeFields.includes('autoSellPercent') && (
-                                  <div className={styles.dropdownField}>
-                                    <TextField
-                                      label="Auto Sell %"
-                                      type="number"
-                                      value={autoSellPercent}
-                                      disabled
-                                      size="small"
-                                      sx={{
-                                        width: 'calc(100% - 30px)',
-                                        "& .MuiOutlinedInput-root": {
-                                          backgroundColor: "#2a2a2a",
-                                          color: "#ffffff",
-                                          "& fieldset": { borderColor: "#444" },
-                                          "&:hover fieldset": { borderColor: "#666" },
-                                          "&.Mui-focused fieldset": { borderColor: "#ff4757" },
-                                        },
-                                        "& .MuiInputLabel-root": {
-                                          color: "#aaa",
-                                          "&.Mui-focused": { color: "#ff4757" },
-                                        },
+                                      onClick={() => {
+                                        if (autoSellConfig.trailingStopLossEnabled) {
+                                          showErrorNotification('One loss filter already active. Disable Trailing Stop Loss first then add Stop Loss.');
+                                          return;
+                                        }
+                                        setAutoSellConfig(prev => ({ ...prev, stopLossEnabled: true }));
+                                        if (token) updateAutoSellConfig(token.mint, { stopLossEnabled: true });
                                       }}
-                                    />
-                                    <button 
-                                      className={styles.addFieldButton}
-                                      onClick={() => addFieldToActive('autoSellPercent')}
                                     >
                                       +
                                     </button>
                                   </div>
                                 )}
-                                {!activeFields.includes('trailingStopLoss') && (
+
+                                {!autoSellConfig.trailingStopLossEnabled && (
                                   <div className={styles.dropdownField}>
                                     <TextField
                                       label="Trailing Stop Loss (%)"
                                       type="number"
-                                      value={trailingStopLoss}
+                                      value={autoSellConfig.trailingStopLoss}
                                       disabled
                                       size="small"
                                       sx={{
@@ -942,18 +1235,25 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
                                     />
                                     <button 
                                       className={styles.addFieldButton}
-                                      onClick={() => addFieldToActive('trailingStopLoss')}
+                                      onClick={() => {
+                                        if (autoSellConfig.stopLossEnabled) {
+                                          showErrorNotification('One loss filter already active. Disable Stop Loss first then add Trailing Stop Loss.');
+                                          return;
+                                        }
+                                        setAutoSellConfig(prev => ({ ...prev, trailingStopLossEnabled: true }));
+                                        if (token) updateAutoSellConfig(token.mint, { trailingStopLossEnabled: true });
+                                      }}
                                     >
                                       +
                                     </button>
                                   </div>
                                 )}
-                                {!activeFields.includes('timeBasedSell') && (
+                                {!autoSellConfig.timeBasedSellEnabled && (
                                   <div className={styles.dropdownField}>
                                     <TextField
                                       label="Time-Based Sell (sec)"
                                       type="number"
-                                      value={timeBasedSell}
+                                      value={autoSellConfig.timeBasedSell}
                                       disabled
                                       size="small"
                                       sx={{
@@ -973,18 +1273,21 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
                                     />
                                     <button 
                                       className={styles.addFieldButton}
-                                      onClick={() => addFieldToActive('timeBasedSell')}
+                                      onClick={() => {
+                                        setAutoSellConfig(prev => ({ ...prev, timeBasedSellEnabled: true }));
+                                        if (token) updateAutoSellConfig(token.mint, { timeBasedSellEnabled: true });
+                                      }}
                                     >
                                       +
                                     </button>
                                   </div>
                                 )}
-                                {!activeFields.includes('waitForBuyers') && (
+                                {!autoSellConfig.waitForBuyersEnabled && (
                                   <div className={styles.dropdownField}>
                                     <TextField
                                       label="Wait for Buyers Before Sell"
                                       type="number"
-                                      value={waitForBuyers}
+                                      value={autoSellConfig.waitForBuyers}
                                       disabled
                                       size="small"
                                       sx={{
@@ -1004,7 +1307,10 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
                                     />
                                     <button 
                                       className={styles.addFieldButton}
-                                      onClick={() => addFieldToActive('waitForBuyers')}
+                                      onClick={() => {
+                                        setAutoSellConfig(prev => ({ ...prev, waitForBuyersEnabled: true }));
+                                        if (token) updateAutoSellConfig(token.mint, { waitForBuyersBeforeSellEnabled: true });
+                                      }}
                                     >
                                       +
                                     </button>
@@ -1025,36 +1331,71 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
 
               {/* Bottom Data Section */}
               <div className={styles.dataSection}>
+                <div className={styles.sectionHeader}>
+                  <h2 className={styles.sectionTitle}>Token Analytics</h2>
+                  <div className={styles.sectionSubtitle}>Real-time market data and statistics</div>
+                </div>
                 <div className={styles.dataGrid}>
-                  <div className={styles.dataCard}>
-                    <h3>Holders</h3>
-                    <div className={styles.dataRow}>
-                      <span>Total Holders:</span>
-                      <span>1,234</span>
+                  <div className={styles.modernDataCard}>
+                    <div className={styles.cardHeader}>
+                      <div className={styles.cardIcon}><img src="/tokenDetail/group.png" alt="" width={30} height={30} /></div>
+                      <h3 className={styles.cardTitle}>Holders</h3>
                     </div>
-                    <div className={styles.dataRow}>
-                      <span>Top 10 Holdings:</span>
-                      <span>45.2%</span>
-                    </div>
-                    <div className={styles.dataRow}>
-                      <span>Liquidity:</span>
-                      <span>$125K</span>
+                    <div className={styles.cardContent}>
+                      <div className={styles.modernDataRow}>
+                        <div className={styles.dataLabel}>Total Holders</div>
+                        <div className={styles.dataValue}>1,234</div>
+                      </div>
+                      <div className={styles.modernDataRow}>
+                        <div className={styles.dataLabel}>Top 10 Holdings</div>
+                        <div className={styles.dataValue}>45.2%</div>
+                      </div>
+                      <div className={styles.modernDataRow}>
+                        <div className={styles.dataLabel}>Liquidity Pool</div>
+                        <div className={styles.dataValue}>$125K</div>
+                      </div>
                     </div>
                   </div>
 
-                  <div className={styles.dataCard}>
-                    <h3>Trading Stats</h3>
-                    <div className={styles.dataRow}>
-                      <span>24h Transactions:</span>
-                      <span>2,456</span>
+                  <div className={styles.modernDataCard}>
+                    <div className={styles.cardHeader}>
+                      <div className={styles.cardIcon}><img src="/tokenDetail/candlestick-chart.png" alt="" width={30} height={30} /></div>
+                      <h3 className={styles.cardTitle}>Trading Stats</h3>
                     </div>
-                    <div className={styles.dataRow}>
-                      <span>24h Buyers:</span>
-                      <span>892</span>
+                    <div className={styles.cardContent}>
+                      <div className={styles.modernDataRow}>
+                        <div className={styles.dataLabel}>24h Transactions</div>
+                        <div className={styles.dataValue}>2,456</div>
+                      </div>
+                      <div className={styles.modernDataRow}>
+                        <div className={styles.dataLabel}>24h Buyers</div>
+                        <div className={styles.dataValue + ' ' + styles.positive}>892</div>
+                      </div>
+                      <div className={styles.modernDataRow}>
+                        <div className={styles.dataLabel}>24h Sellers</div>
+                        <div className={styles.dataValue + ' ' + styles.negative}>567</div>
+                      </div>
                     </div>
-                    <div className={styles.dataRow}>
-                      <span>24h Sellers:</span>
-                      <span>567</span>
+                  </div>
+                  
+                  <div className={styles.modernDataCard}>
+                    <div className={styles.cardHeader}>
+                      <div className={styles.cardIcon}><img src="/tokenDetail/money.png" alt="" width={30} height={30} /></div>
+                      <h3 className={styles.cardTitle}>Market Data</h3>
+                    </div>
+                    <div className={styles.cardContent}>
+                      <div className={styles.modernDataRow}>
+                        <div className={styles.dataLabel}>Market Cap</div>
+                        <div className={styles.dataValue}>$2.4M</div>
+                      </div>
+                      <div className={styles.modernDataRow}>
+                        <div className={styles.dataLabel}>24h Volume</div>
+                        <div className={styles.dataValue}>$456K</div>
+                      </div>
+                      <div className={styles.modernDataRow}>
+                        <div className={styles.dataLabel}>Price Change</div>
+                        <div className={styles.dataValue + ' ' + styles.positive}>+12.5%</div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1069,6 +1410,13 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
         {notification.show && (
           <div className={styles.copyNotification}>
             {notification.message}
+          </div>
+        )}
+
+        {/* Error Notification */}
+        {errorNotification.show && (
+          <div className={styles.errorNotification}>
+            {errorNotification.message}
           </div>
         )}
 
@@ -1183,8 +1531,8 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
               <FormControlLabel
                 control={
                   <Switch
-                    checked={autoSellEnabled}
-                    onChange={() => onAutoSellToggle?.(token)}
+                    checked={autoSellConfig.autoSellEnabled}
+                    onChange={() => token && handleAutoSellToggle(token)}
                     color="primary"
                   />
                 }
@@ -1192,31 +1540,29 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
                 className={styles.autoSellToggle}
               />
 
-              {autoSellEnabled && (
+              {autoSellConfig.autoSellEnabled && (
                 <div className={styles.autoSellControls}>
                   <TextField
                     label="Take Profit %"
                     type="number"
-                    value={takeProfit}
-                    onChange={(e) => bind(onTakeProfitChange)(e.target.value)}
+                    value={autoSellConfig.takeProfit}
+                    onChange={bindHandler((v) => handleTakeProfitChange(token.mint, v))}
                     className={styles.input}
                     size="small"
                   />
                   <TextField
                     label="Stop Loss %"
                     type="number"
-                    value={stopLoss}
-                    onChange={(e) => bind(onStopLossChange)(e.target.value)}
+                    value={autoSellConfig.stopLoss}
+                    onChange={bindHandler((v) => handleStopLossChange(token.mint, v))}
                     className={styles.input}
                     size="small"
                   />
                   <TextField
                     label="Auto Sell %"
                     type="number"
-                    value={autoSellPercent}
-                    onChange={(e) =>
-                      bind(onAutoSellPercentChange)(e.target.value)
-                    }
+                    value={autoSellConfig.autoSellPercent}
+                    onChange={bindHandler((v) => handleAutoSellPercentChange(token.mint, v))}
                     className={styles.input}
                     size="small"
                   />
@@ -1225,28 +1571,20 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
                     <TextField
                       label="Trailing Stop Loss (%)"
                       type="number"
-                      value={trailingStopLoss}
-                      onChange={(e) =>
-                        bind(onTrailingStopLossChange)(e.target.value)
-                      }
+                      value={autoSellConfig.trailingStopLoss}
+                      onChange={bindHandler((v) => handleTrailingStopLossChange(token.mint, v))}
                       className={styles.input}
                       size="small"
-                      disabled={
-                        !trailingStopLossEnabled || timeBasedSellEnabled
-                      }
+                      disabled={!autoSellConfig.trailingStopLossEnabled || autoSellConfig.timeBasedSellEnabled}
                     />
                     <FormControlLabel
                       control={
                         <Switch
-                          checked={trailingStopLossEnabled}
-                          onChange={(e) =>
-                            bind(onTrailingStopLossEnabledChange)(
-                              e.target.checked
-                            )
-                          }
+                          checked={autoSellConfig.trailingStopLossEnabled}
+                          onChange={bindToggleHandler((c) => handleTrailingStopLossEnabledChange(token.mint, c))}
                           color="primary"
                           size="small"
-                          disabled={timeBasedSellEnabled}
+                          disabled={autoSellConfig.timeBasedSellEnabled}
                         />
                       }
                       label="Enable Trailing"
@@ -1258,21 +1596,17 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
                     <TextField
                       label="Time-Based Sell (sec)"
                       type="number"
-                      value={timeBasedSell}
-                      onChange={(e) =>
-                        bind(onTimeBasedSellChange)(e.target.value)
-                      }
+                      value={autoSellConfig.timeBasedSell}
+                      onChange={bindHandler((v) => handleTimeBasedSellChange(token.mint, v))}
                       className={styles.input}
                       size="small"
-                      disabled={!timeBasedSellEnabled}
+                      disabled={!autoSellConfig.timeBasedSellEnabled}
                     />
                     <FormControlLabel
                       control={
                         <Switch
-                          checked={timeBasedSellEnabled}
-                          onChange={(e) =>
-                            bind(onTimeBasedSellEnabledChange)(e.target.checked)
-                          }
+                          checked={autoSellConfig.timeBasedSellEnabled}
+                          onChange={bindToggleHandler((c) => handleTimeBasedSellEnabledChange(token.mint, c))}
                           color="primary"
                           size="small"
                         />
@@ -1286,21 +1620,17 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
                     <TextField
                       label="Wait for Buyers Before Sell"
                       type="number"
-                      value={waitForBuyers}
-                      onChange={(e) =>
-                        bind(onWaitForBuyersChange)(e.target.value)
-                      }
+                      value={autoSellConfig.waitForBuyers}
+                      onChange={bindHandler((v) => handleWaitForBuyersChange(token.mint, v))}
                       className={styles.input}
                       size="small"
-                      disabled={!waitForBuyersEnabled}
+                      disabled={!autoSellConfig.waitForBuyersEnabled}
                     />
                     <FormControlLabel
                       control={
                         <Switch
-                          checked={waitForBuyersEnabled}
-                          onChange={(e) =>
-                            bind(onWaitForBuyersEnabledChange)(e.target.checked)
-                          }
+                          checked={autoSellConfig.waitForBuyersEnabled}
+                          onChange={bindToggleHandler((c) => handleWaitForBuyersEnabledChange(token.mint, c))}
                           color="primary"
                           size="small"
                         />
@@ -1317,11 +1647,13 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
               <Button onClick={handleBuy} className={styles.buyButton}>
                 Buy
               </Button>
-              {token.balance && (
-                <Button onClick={handleSell} className={styles.sellButton}>
-                  Sell {sellPercentage}%
-                </Button>
-              )}
+              <Button 
+                onClick={handleSell} 
+                className={styles.sellButton}
+                disabled={!userBalance || userBalance <= 0}
+              >
+                {userBalance > 0 ? `Sell ${sellPercentage}%` : "No Balance"}
+              </Button>
               <Button
                 onClick={() => setShowFilters(true)}
                 className={styles.filtersButton}

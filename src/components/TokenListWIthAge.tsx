@@ -31,12 +31,15 @@ import {
   faUserTie,
   faBolt,
   faCopy,
+  faUsers,
+  faArrowUp, 
+  faArrowDown,
 } from "@fortawesome/free-solid-svg-icons";
 
 import { faTelegram } from "@fortawesome/free-brands-svg-icons";
 
-import { faUsers } from "@fortawesome/free-solid-svg-icons";
-import { faArrowUp, faArrowDown } from "@fortawesome/free-solid-svg-icons";
+// import { faUsers } from "@fortawesome/free-solid-svg-icons";
+// import { faArrowUp, faArrowDown } from "@fortawesome/free-solid-svg-icons";
 
 
 
@@ -299,21 +302,7 @@ const TokenListWithAge: React.FC = () => {
   const handleSettingsClick = () => setSettingsModalOpen(true);
 
   const handleTokenClick = (token: Token) => {
-    // Check if this token exists in userTokens (portfolio) and merge data
-    const portfolioToken = userTokens.find(ut => ut.mint === token.mint);
-    const mergedToken = portfolioToken ? {
-      ...token,
-      ...portfolioToken, // Portfolio data overrides discover data
-      balance: portfolioToken.balance,
-      buyAmount: portfolioToken.buyAmount,
-      buyTime: portfolioToken.buyTime,
-      autoSellEnabled: portfolioToken.autoSellEnabled,
-      takeProfit: portfolioToken.takeProfit,
-      stopLoss: portfolioToken.stopLoss,
-      autoSellPercent: portfolioToken.autoSellPercent
-    } : token;
-    
-    setSelectedToken(mergedToken);
+    setSelectedToken(token);
     setShowTokenPage(true);
   };
 
@@ -409,260 +398,260 @@ const TokenListWithAge: React.FC = () => {
   //   );
   // };
 
-  const handleTakeProfitChange = (mint: string, value: string) => {
-    setTakeProfitState((prev) => ({
-      ...prev,
-      [mint]: value,
-    }));
+  // const handleTakeProfitChange = (mint: string, value: string) => {
+  //   setTakeProfitState((prev) => ({
+  //     ...prev,
+  //     [mint]: value,
+  //   }));
 
-    if (autoSellEnabledState[mint]) {
-      if (!walletAddress) {
-        alert("Wallet address not loaded. Please refresh or re-login.");
-        return;
-      }
-      const preset = sellPresets[activeSellPreset] || {};
-      const payload = {
-        userId,
-        walletAddress,
-        mint,
-        buyPrice: userTokens.find((t) => t.mint === mint)?.buyAmount || 0,
-        takeProfit: Number(value) || undefined,
-        stopLoss: Number(stopLossState[mint]) || undefined,
-        autoSellPercent: Number(autoSellPercentState[mint]) || 100,
-        autoSellEnabled: true,
-        slippage: preset.slippage || 5,
-        priorityFee: preset.priorityFee || 0.001,
-        bribeAmount: preset.bribeAmount || 0,
-        tokenName: userTokens.find((t) => t.mint === mint)?.name,
-        tokenSymbol: userTokens.find((t) => t.mint === mint)?.symbol,
-      };
-      console.log(
-        "TakeProfitChange payload:",
-        payload,
-        "walletAddress:",
-        walletAddress
-      );
-      const API_URL = import.meta.env.VITE_API_BASE_URL;
-      fetch(`${API_URL}/api/auto-sell/upsert`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-    }
-  };
+  //   if (autoSellEnabledState[mint]) {
+  //     if (!walletAddress) {
+  //       alert("Wallet address not loaded. Please refresh or re-login.");
+  //       return;
+  //     }
+  //     const preset = sellPresets[activeSellPreset] || {};
+  //     const payload = {
+  //       userId,
+  //       walletAddress,
+  //       mint,
+  //       buyPrice: userTokens.find((t) => t.mint === mint)?.buyAmount || 0,
+  //       takeProfit: Number(value) || undefined,
+  //       stopLoss: Number(stopLossState[mint]) || undefined,
+  //       autoSellPercent: Number(autoSellPercentState[mint]) || 100,
+  //       autoSellEnabled: true,
+  //       slippage: preset.slippage || 5,
+  //       priorityFee: preset.priorityFee || 0.001,
+  //       bribeAmount: preset.bribeAmount || 0,
+  //       tokenName: userTokens.find((t) => t.mint === mint)?.name,
+  //       tokenSymbol: userTokens.find((t) => t.mint === mint)?.symbol,
+  //     };
+  //     console.log(
+  //       "TakeProfitChange payload:",
+  //       payload,
+  //       "walletAddress:",
+  //       walletAddress
+  //     );
+  //     const API_URL = import.meta.env.VITE_API_BASE_URL;
+  //     fetch(`${API_URL}/api/auto-sell/upsert`, {
+  //       method: "POST",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify(payload),
+  //     });
+  //   }
+  // };
 
-  const handleStopLossChange = (mint: string, value: string) => {
-    setStopLossState((prev) => ({
-      ...prev,
-      [mint]: value,
-    }));
+  // const handleStopLossChange = (mint: string, value: string) => {
+  //   setStopLossState((prev) => ({
+  //     ...prev,
+  //     [mint]: value,
+  //   }));
 
-    if (autoSellEnabledState[mint]) {
-      if (!walletAddress) {
-        alert("Wallet address not loaded. Please refresh or re-login.");
-        return;
-      }
-      const preset = sellPresets[activeSellPreset] || {};
-      const payload = {
-        userId,
-        walletAddress,
-        mint,
-        buyPrice: userTokens.find((t) => t.mint === mint)?.buyAmount || 0,
-        takeProfit: Number(takeProfitState[mint]) || undefined,
-        stopLoss: Number(value) || undefined,
-        autoSellPercent: Number(autoSellPercentState[mint]) || 100,
-        autoSellEnabled: true,
-        slippage: preset.slippage || 5,
-        priorityFee: preset.priorityFee || 0.001,
-        bribeAmount: preset.bribeAmount || 0,
-        tokenName: userTokens.find((t) => t.mint === mint)?.name,
-        tokenSymbol: userTokens.find((t) => t.mint === mint)?.symbol,
-      };
-      console.log(
-        "StopLossChange payload:",
-        payload,
-        "walletAddress:",
-        walletAddress
-      );
-      const API_URL = import.meta.env.VITE_API_BASE_URL;
-      fetch(`${API_URL}/api/auto-sell/upsert`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-    }
-  };
+  //   if (autoSellEnabledState[mint]) {
+  //     if (!walletAddress) {
+  //       alert("Wallet address not loaded. Please refresh or re-login.");
+  //       return;
+  //     }
+  //     const preset = sellPresets[activeSellPreset] || {};
+  //     const payload = {
+  //       userId,
+  //       walletAddress,
+  //       mint,
+  //       buyPrice: userTokens.find((t) => t.mint === mint)?.buyAmount || 0,
+  //       takeProfit: Number(takeProfitState[mint]) || undefined,
+  //       stopLoss: Number(value) || undefined,
+  //       autoSellPercent: Number(autoSellPercentState[mint]) || 100,
+  //       autoSellEnabled: true,
+  //       slippage: preset.slippage || 5,
+  //       priorityFee: preset.priorityFee || 0.001,
+  //       bribeAmount: preset.bribeAmount || 0,
+  //       tokenName: userTokens.find((t) => t.mint === mint)?.name,
+  //       tokenSymbol: userTokens.find((t) => t.mint === mint)?.symbol,
+  //     };
+  //     console.log(
+  //       "StopLossChange payload:",
+  //       payload,
+  //       "walletAddress:",
+  //       walletAddress
+  //     );
+  //     const API_URL = import.meta.env.VITE_API_BASE_URL;
+  //     fetch(`${API_URL}/api/auto-sell/upsert`, {
+  //       method: "POST",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify(payload),
+  //     });
+  //   }
+  // };
 
-  const handleAutoSellPercentChange = (mint: string, value: string) => {
-    setAutoSellPercentState((prev) => ({
-      ...prev,
-      [mint]: value,
-    }));
+  // const handleAutoSellPercentChange = (mint: string, value: string) => {
+  //   setAutoSellPercentState((prev) => ({
+  //     ...prev,
+  //     [mint]: value,
+  //   }));
 
-    if (autoSellEnabledState[mint]) {
-      if (!walletAddress) {
-        alert("Wallet address not loaded. Please refresh or re-login.");
-        return;
-      }
-      const preset = sellPresets[activeSellPreset] || {};
-      const payload = {
-        userId,
-        walletAddress,
-        mint,
-        buyPrice: userTokens.find((t) => t.mint === mint)?.buyAmount || 0,
-        takeProfit: Number(takeProfitState[mint]) || undefined,
-        stopLoss: Number(stopLossState[mint]) || undefined,
-        autoSellPercent: Number(value) || 100,
-        autoSellEnabled: true,
-        slippage: preset.slippage || 5,
-        priorityFee: preset.priorityFee || 0.001,
-        bribeAmount: preset.bribeAmount || 0,
-        tokenName: userTokens.find((t) => t.mint === mint)?.name,
-        tokenSymbol: userTokens.find((t) => t.mint === mint)?.symbol,
-      };
-      console.log(
-        "AutoSellPercentChange payload:",
-        payload,
-        "walletAddress:",
-        walletAddress
-      );
-      const API_URL = import.meta.env.VITE_API_BASE_URL;
-      fetch(`${API_URL}/api/auto-sell/upsert`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-    }
-  };
+  //   if (autoSellEnabledState[mint]) {
+  //     if (!walletAddress) {
+  //       alert("Wallet address not loaded. Please refresh or re-login.");
+  //       return;
+  //     }
+  //     const preset = sellPresets[activeSellPreset] || {};
+  //     const payload = {
+  //       userId,
+  //       walletAddress,
+  //       mint,
+  //       buyPrice: userTokens.find((t) => t.mint === mint)?.buyAmount || 0,
+  //       takeProfit: Number(takeProfitState[mint]) || undefined,
+  //       stopLoss: Number(stopLossState[mint]) || undefined,
+  //       autoSellPercent: Number(value) || 100,
+  //       autoSellEnabled: true,
+  //       slippage: preset.slippage || 5,
+  //       priorityFee: preset.priorityFee || 0.001,
+  //       bribeAmount: preset.bribeAmount || 0,
+  //       tokenName: userTokens.find((t) => t.mint === mint)?.name,
+  //       tokenSymbol: userTokens.find((t) => t.mint === mint)?.symbol,
+  //     };
+  //     console.log(
+  //       "AutoSellPercentChange payload:",
+  //       payload,
+  //       "walletAddress:",
+  //       walletAddress
+  //     );
+  //     const API_URL = import.meta.env.VITE_API_BASE_URL;
+  //     fetch(`${API_URL}/api/auto-sell/upsert`, {
+  //       method: "POST",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify(payload),
+  //     });
+  //   }
+  // };
 
-  const handleAutoSellToggle = (token: Token) => {
-    if (!walletAddress) {
-      alert("Wallet address not loaded. Please refresh or re-login.");
-      return;
-    }
-    const enabled = !autoSellEnabledState[token.mint];
-    setAutoSellEnabledState((prev) => ({
-      ...prev,
-      [token.mint]: enabled,
-    }));
+  // const handleAutoSellToggle = (token: Token) => {
+  //   if (!walletAddress) {
+  //     alert("Wallet address not loaded. Please refresh or re-login.");
+  //     return;
+  //   }
+  //   const enabled = !autoSellEnabledState[token.mint];
+  //   setAutoSellEnabledState((prev) => ({
+  //     ...prev,
+  //     [token.mint]: enabled,
+  //   }));
 
-    if (enabled) {
-      // Sync input fields with backend values
-      setTakeProfitState((prev) => ({
-        ...prev,
-        [token.mint]:
-          token.takeProfit !== undefined ? String(token.takeProfit) : "",
-      }));
-      setStopLossState((prev) => ({
-        ...prev,
-        [token.mint]:
-          token.stopLoss !== undefined ? String(token.stopLoss) : "",
-      }));
-      setAutoSellPercentState((prev) => ({
-        ...prev,
-        [token.mint]:
-          token.autoSellPercent !== undefined
-            ? String(token.autoSellPercent)
-            : "",
-      }));
-      // Ensure trailingStopLossState has a value
-      setTrailingStopLossState((prev) => ({
-        ...prev,
-        [token.mint]:
-          prev[token.mint] !== undefined && prev[token.mint] !== ""
-            ? prev[token.mint]
-            : "10",
-      }));
-      // Ensure timeBasedSellState has a value
-      setTimeBasedSellState((prev) => ({
-        ...prev,
-        [token.mint]:
-          prev[token.mint] !== undefined && prev[token.mint] !== ""
-            ? prev[token.mint]
-            : "0",
-      }));
-      // Ensure waitForBuyersState has a value
-      setWaitForBuyersState((prev) => ({
-        ...prev,
-        [token.mint]:
-          prev[token.mint] !== undefined && prev[token.mint] !== ""
-            ? prev[token.mint]
-            : "5",
-      }));
-      const preset = sellPresets[activeSellPreset] || {};
-      const payload = {
-        userId,
-        walletAddress,
-        mint: token.mint,
-        buyPrice: token.buyAmount || 0,
-        takeProfit: Number(takeProfitState[token.mint]) || 10,
-        stopLoss: Number(stopLossState[token.mint]) || 10,
-        autoSellPercent: Number(autoSellPercentState[token.mint]) || 100,
-        autoSellEnabled: true,
-        slippage: preset.slippage || 5,
-        priorityFee: preset.priorityFee || 0.001,
-        bribeAmount: preset.bribeAmount || 0,
-        tokenName: token.name,
-        tokenSymbol: token.symbol,
-        trailingStopLossPercent:
-          trailingStopLossState[token.mint] !== undefined &&
-            trailingStopLossState[token.mint] !== ""
-            ? Number(trailingStopLossState[token.mint])
-            : 10,
-        trailingStopLossEnabled:
-          trailingStopLossEnabledState[token.mint] !== undefined
-            ? trailingStopLossEnabledState[token.mint]
-            : false,
-        timeBasedSellSec:
-          timeBasedSellState[token.mint] !== undefined &&
-            timeBasedSellState[token.mint] !== ""
-            ? Number(timeBasedSellState[token.mint])
-            : 0,
-        timeBasedSellEnabled:
-          timeBasedSellEnabledState[token.mint] !== undefined
-            ? timeBasedSellEnabledState[token.mint]
-            : false,
-        waitForBuyersBeforeSell: Number(waitForBuyersState[token.mint]) || 5,
-        waitForBuyersBeforeSellEnabled:
-          waitForBuyersEnabledState[token.mint] !== undefined
-            ? waitForBuyersEnabledState[token.mint]
-            : false,
-      };
-      console.log(
-        "AutoSell ON payload:",
-        payload,
-        "walletAddress:",
-        walletAddress
-      );
-      const API_URL = import.meta.env.VITE_API_BASE_URL;
-      fetch(`${API_URL}/api/auto-sell/upsert`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-    } else {
-      const payload = {
-        userId,
-        walletAddress,
-        mint: token.mint,
-        buyPrice: token.buyAmount || 0,
-        autoSellPercent: Number(autoSellPercentState[token.mint]) || 100,
-        autoSellEnabled: false,
-      };
-      console.log(
-        "AutoSell OFF payload:",
-        payload,
-        "walletAddress:",
-        walletAddress
-      );
-      const API_URL = import.meta.env.VITE_API_BASE_URL;
-      fetch(`${API_URL}/api/auto-sell/upsert`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-    }
-  };
+  //   if (enabled) {
+  //     // Sync input fields with backend values
+  //     setTakeProfitState((prev) => ({
+  //       ...prev,
+  //       [token.mint]:
+  //         token.takeProfit !== undefined ? String(token.takeProfit) : "",
+  //     }));
+  //     setStopLossState((prev) => ({
+  //       ...prev,
+  //       [token.mint]:
+  //         token.stopLoss !== undefined ? String(token.stopLoss) : "",
+  //     }));
+  //     setAutoSellPercentState((prev) => ({
+  //       ...prev,
+  //       [token.mint]:
+  //         token.autoSellPercent !== undefined
+  //           ? String(token.autoSellPercent)
+  //           : "",
+  //     }));
+  //     // Ensure trailingStopLossState has a value
+  //     setTrailingStopLossState((prev) => ({
+  //       ...prev,
+  //       [token.mint]:
+  //         prev[token.mint] !== undefined && prev[token.mint] !== ""
+  //           ? prev[token.mint]
+  //           : "10",
+  //     }));
+  //     // Ensure timeBasedSellState has a value
+  //     setTimeBasedSellState((prev) => ({
+  //       ...prev,
+  //       [token.mint]:
+  //         prev[token.mint] !== undefined && prev[token.mint] !== ""
+  //           ? prev[token.mint]
+  //           : "0",
+  //     }));
+  //     // Ensure waitForBuyersState has a value
+  //     setWaitForBuyersState((prev) => ({
+  //       ...prev,
+  //       [token.mint]:
+  //         prev[token.mint] !== undefined && prev[token.mint] !== ""
+  //           ? prev[token.mint]
+  //           : "5",
+  //     }));
+  //     const preset = sellPresets[activeSellPreset] || {};
+  //     const payload = {
+  //       userId,
+  //       walletAddress,
+  //       mint: token.mint,
+  //       buyPrice: token.buyAmount || 0,
+  //       takeProfit: Number(takeProfitState[token.mint]) || 10,
+  //       stopLoss: Number(stopLossState[token.mint]) || 10,
+  //       autoSellPercent: Number(autoSellPercentState[token.mint]) || 100,
+  //       autoSellEnabled: true,
+  //       slippage: preset.slippage || 5,
+  //       priorityFee: preset.priorityFee || 0.001,
+  //       bribeAmount: preset.bribeAmount || 0,
+  //       tokenName: token.name,
+  //       tokenSymbol: token.symbol,
+  //       trailingStopLossPercent:
+  //         trailingStopLossState[token.mint] !== undefined &&
+  //           trailingStopLossState[token.mint] !== ""
+  //           ? Number(trailingStopLossState[token.mint])
+  //           : 10,
+  //       trailingStopLossEnabled:
+  //         trailingStopLossEnabledState[token.mint] !== undefined
+  //           ? trailingStopLossEnabledState[token.mint]
+  //           : false,
+  //       timeBasedSellSec:
+  //         timeBasedSellState[token.mint] !== undefined &&
+  //           timeBasedSellState[token.mint] !== ""
+  //           ? Number(timeBasedSellState[token.mint])
+  //           : 0,
+  //       timeBasedSellEnabled:
+  //         timeBasedSellEnabledState[token.mint] !== undefined
+  //           ? timeBasedSellEnabledState[token.mint]
+  //           : false,
+  //       waitForBuyersBeforeSell: Number(waitForBuyersState[token.mint]) || 5,
+  //       waitForBuyersBeforeSellEnabled:
+  //         waitForBuyersEnabledState[token.mint] !== undefined
+  //           ? waitForBuyersEnabledState[token.mint]
+  //           : false,
+  //     };
+  //     console.log(
+  //       "AutoSell ON payload:",
+  //       payload,
+  //       "walletAddress:",
+  //       walletAddress
+  //     );
+  //     const API_URL = import.meta.env.VITE_API_BASE_URL;
+  //     fetch(`${API_URL}/api/auto-sell/upsert`, {
+  //       method: "POST",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify(payload),
+  //     });
+  //   } else {
+  //     const payload = {
+  //       userId,
+  //       walletAddress,
+  //       mint: token.mint,
+  //       buyPrice: token.buyAmount || 0,
+  //       autoSellPercent: Number(autoSellPercentState[token.mint]) || 100,
+  //       autoSellEnabled: false,
+  //     };
+  //     console.log(
+  //       "AutoSell OFF payload:",
+  //       payload,
+  //       "walletAddress:",
+  //       walletAddress
+  //     );
+  //     const API_URL = import.meta.env.VITE_API_BASE_URL;
+  //     fetch(`${API_URL}/api/auto-sell/upsert`, {
+  //       method: "POST",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify(payload),
+  //     });
+  //   }
+  // };
 
   // Fetch tokens function
   const fetchTokens = async () => {
@@ -1305,7 +1294,7 @@ const TokenListWithAge: React.FC = () => {
       return true;
     }
     // If whitelist has real creators, only allow buy if creator is in whitelist and not in blacklist
-    const isWhitelisted = whitelistNorm.includes(creator);
+    const isWhitelisted = whitelistNorm.includes(creator); 
     const isBlacklisted = blacklistNorm.includes(creator);
     console.log("Comparing (real whitelist):", {
       creator,
@@ -1337,266 +1326,266 @@ const TokenListWithAge: React.FC = () => {
     };
   }, []);
 
-  const handleTrailingStopLossChange = (mint: string, value: string) => {
-    setTrailingStopLossState((prev) => ({
-      ...prev,
-      [mint]: value,
-    }));
+  // const handleTrailingStopLossChange = (mint: string, value: string) => {
+  //   setTrailingStopLossState((prev) => ({
+  //     ...prev,
+  //     [mint]: value,
+  //   }));
 
-    if (autoSellEnabledState[mint]) {
-      if (!walletAddress) {
-        alert("Wallet address not loaded. Please refresh or re-login.");
-        return;
-      }
-      const preset = sellPresets[activeSellPreset] || {};
-      const payload = {
-        userId,
-        walletAddress,
-        mint,
-        buyPrice: userTokens.find((t) => t.mint === mint)?.buyAmount || 0,
-        takeProfit: Number(takeProfitState[mint]) || undefined,
-        stopLoss: Number(stopLossState[mint]) || undefined,
-        autoSellPercent: Number(autoSellPercentState[mint]) || 100,
-        autoSellEnabled: true,
-        slippage: preset.slippage || 5,
-        priorityFee: preset.priorityFee || 0.001,
-        bribeAmount: preset.bribeAmount || 0,
-        tokenName: userTokens.find((t) => t.mint)?.name,
-        tokenSymbol: userTokens.find((t) => t.mint)?.symbol,
-        trailingStopLossPercent: Number(value) || 10,
-        trailingStopLossEnabled:
-          trailingStopLossEnabledState[mint] !== undefined
-            ? trailingStopLossEnabledState[mint]
-            : false,
-      };
-      const API_URL = import.meta.env.VITE_API_BASE_URL;
-      fetch(`${API_URL}/api/auto-sell/upsert`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-    }
-  };
+  //   if (autoSellEnabledState[mint]) {
+  //     if (!walletAddress) {
+  //       alert("Wallet address not loaded. Please refresh or re-login.");
+  //       return;
+  //     }
+  //     const preset = sellPresets[activeSellPreset] || {};
+  //     const payload = {
+  //       userId,
+  //       walletAddress,
+  //       mint,
+  //       buyPrice: userTokens.find((t) => t.mint === mint)?.buyAmount || 0,
+  //       takeProfit: Number(takeProfitState[mint]) || undefined,
+  //       stopLoss: Number(stopLossState[mint]) || undefined,
+  //       autoSellPercent: Number(autoSellPercentState[mint]) || 100,
+  //       autoSellEnabled: true,
+  //       slippage: preset.slippage || 5,
+  //       priorityFee: preset.priorityFee || 0.001,
+  //       bribeAmount: preset.bribeAmount || 0,
+  //       tokenName: userTokens.find((t) => t.mint)?.name,
+  //       tokenSymbol: userTokens.find((t) => t.mint)?.symbol,
+  //       trailingStopLossPercent: Number(value) || 10,
+  //       trailingStopLossEnabled:
+  //         trailingStopLossEnabledState[mint] !== undefined
+  //           ? trailingStopLossEnabledState[mint]
+  //           : false,
+  //     };
+  //     const API_URL = import.meta.env.VITE_API_BASE_URL;
+  //     fetch(`${API_URL}/api/auto-sell/upsert`, {
+  //       method: "POST",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify(payload),
+  //     });
+  //   }
+  // };
 
-  const handleTrailingStopLossEnabledChange = (
-    mint: string,
-    checked: boolean
-  ) => {
-    setTrailingStopLossEnabledState((prev) => ({
-      ...prev,
-      [mint]: checked,
-    }));
+  // const handleTrailingStopLossEnabledChange = (
+  //   mint: string,
+  //   checked: boolean
+  // ) => {
+  //   setTrailingStopLossEnabledState((prev) => ({
+  //     ...prev,
+  //     [mint]: checked,
+  //   }));
 
-    if (autoSellEnabledState[mint]) {
-      if (!walletAddress) {
-        alert("Wallet address not loaded. Please refresh or re-login.");
-        return;
-      }
-      const preset = sellPresets[activeSellPreset] || {};
-      const payload = {
-        userId,
-        walletAddress,
-        mint,
-        buyPrice: userTokens.find((t) => t.mint === mint)?.buyAmount || 0,
-        takeProfit: Number(takeProfitState[mint]) || undefined,
-        stopLoss: Number(stopLossState[mint]) || undefined,
-        autoSellPercent: Number(autoSellPercentState[mint]) || 100,
-        autoSellEnabled: true,
-        slippage: preset.slippage || 5,
-        priorityFee: preset.priorityFee || 0.001,
-        bribeAmount: preset.bribeAmount || 0,
-        tokenName: userTokens.find((t) => t.mint)?.name,
-        tokenSymbol: userTokens.find((t) => t.mint)?.symbol,
-        trailingStopLossPercent: Number(trailingStopLossState[mint]) || 10,
-        trailingStopLossEnabled: checked,
-      };
-      const API_URL = import.meta.env.VITE_API_BASE_URL;
-      fetch(`${API_URL}/api/auto-sell/upsert`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-    }
-  };
+  //   if (autoSellEnabledState[mint]) {
+  //     if (!walletAddress) {
+  //       alert("Wallet address not loaded. Please refresh or re-login.");
+  //       return;
+  //     }
+  //     const preset = sellPresets[activeSellPreset] || {};
+  //     const payload = {
+  //       userId,
+  //       walletAddress,
+  //       mint,
+  //       buyPrice: userTokens.find((t) => t.mint === mint)?.buyAmount || 0,
+  //       takeProfit: Number(takeProfitState[mint]) || undefined,
+  //       stopLoss: Number(stopLossState[mint]) || undefined,
+  //       autoSellPercent: Number(autoSellPercentState[mint]) || 100,
+  //       autoSellEnabled: true,
+  //       slippage: preset.slippage || 5,
+  //       priorityFee: preset.priorityFee || 0.001,
+  //       bribeAmount: preset.bribeAmount || 0,
+  //       tokenName: userTokens.find((t) => t.mint)?.name,
+  //       tokenSymbol: userTokens.find((t) => t.mint)?.symbol,
+  //       trailingStopLossPercent: Number(trailingStopLossState[mint]) || 10,
+  //       trailingStopLossEnabled: checked,
+  //     };
+  //     const API_URL = import.meta.env.VITE_API_BASE_URL;
+  //     fetch(`${API_URL}/api/auto-sell/upsert`, {
+  //       method: "POST",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify(payload),
+  //     });
+  //   }
+  // };
 
-  const handleTimeBasedSellChange = (mint: string, value: string) => {
-    setTimeBasedSellState((prev) => ({ ...prev, [mint]: value }));
-    if (autoSellEnabledState[mint]) {
-      if (!walletAddress) {
-        alert("Wallet address not loaded. Please refresh or re-login.");
-        return;
-      }
-      const preset = sellPresets[activeSellPreset] || {};
-      const payload = {
-        userId,
-        walletAddress,
-        mint,
-        buyPrice: userTokens.find((t) => t.mint === mint)?.buyAmount || 0,
-        takeProfit: Number(takeProfitState[mint]) || undefined,
-        stopLoss: Number(stopLossState[mint]) || undefined,
-        autoSellPercent: Number(autoSellPercentState[mint]) || 100,
-        autoSellEnabled: true,
-        slippage: preset.slippage || 5,
-        priorityFee: preset.priorityFee || 0.001,
-        bribeAmount: preset.bribeAmount || 0,
-        tokenName: userTokens.find((t) => t.mint)?.name,
-        tokenSymbol: userTokens.find((t) => t.mint)?.symbol,
-        trailingStopLossPercent: Number(trailingStopLossState[mint]) || 10,
-        trailingStopLossEnabled:
-          trailingStopLossEnabledState[mint] !== undefined
-            ? trailingStopLossEnabledState[mint]
-            : false,
-        timeBasedSellSec: Number(value) || 0,
-        timeBasedSellEnabled:
-          timeBasedSellEnabledState[mint] !== undefined
-            ? timeBasedSellEnabledState[mint]
-            : false,
-        waitForBuyersBeforeSell: Number(waitForBuyersState[mint]) || 5,
-        waitForBuyersBeforeSellEnabled:
-          waitForBuyersEnabledState[mint] !== undefined
-            ? waitForBuyersEnabledState[mint]
-            : false,
-      };
-      const API_URL = import.meta.env.VITE_API_BASE_URL;
-      fetch(`${API_URL}/api/auto-sell/upsert`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-    }
-  };
+  // const handleTimeBasedSellChange = (mint: string, value: string) => {
+  //   setTimeBasedSellState((prev) => ({ ...prev, [mint]: value }));
+  //   if (autoSellEnabledState[mint]) {
+  //     if (!walletAddress) {
+  //       alert("Wallet address not loaded. Please refresh or re-login.");
+  //       return;
+  //     }
+  //     const preset = sellPresets[activeSellPreset] || {};
+  //     const payload = {
+  //       userId,
+  //       walletAddress,
+  //       mint,
+  //       buyPrice: userTokens.find((t) => t.mint === mint)?.buyAmount || 0,
+  //       takeProfit: Number(takeProfitState[mint]) || undefined,
+  //       stopLoss: Number(stopLossState[mint]) || undefined,
+  //       autoSellPercent: Number(autoSellPercentState[mint]) || 100,
+  //       autoSellEnabled: true,
+  //       slippage: preset.slippage || 5,
+  //       priorityFee: preset.priorityFee || 0.001,
+  //       bribeAmount: preset.bribeAmount || 0,
+  //       tokenName: userTokens.find((t) => t.mint)?.name,
+  //       tokenSymbol: userTokens.find((t) => t.mint)?.symbol,
+  //       trailingStopLossPercent: Number(trailingStopLossState[mint]) || 10,
+  //       trailingStopLossEnabled:
+  //         trailingStopLossEnabledState[mint] !== undefined
+  //           ? trailingStopLossEnabledState[mint]
+  //           : false,
+  //       timeBasedSellSec: Number(value) || 0,
+  //       timeBasedSellEnabled:
+  //         timeBasedSellEnabledState[mint] !== undefined
+  //           ? timeBasedSellEnabledState[mint]
+  //           : false,
+  //       waitForBuyersBeforeSell: Number(waitForBuyersState[mint]) || 5,
+  //       waitForBuyersBeforeSellEnabled:
+  //         waitForBuyersEnabledState[mint] !== undefined
+  //           ? waitForBuyersEnabledState[mint]
+  //           : false,
+  //     };
+  //     const API_URL = import.meta.env.VITE_API_BASE_URL;
+  //     fetch(`${API_URL}/api/auto-sell/upsert`, {
+  //       method: "POST",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify(payload),
+  //     });
+  //   }
+  // };
 
-  const handleTimeBasedSellEnabledChange = (mint: string, checked: boolean) => {
-    setTimeBasedSellEnabledState((prev) => ({ ...prev, [mint]: checked }));
-    if (autoSellEnabledState[mint]) {
-      if (!walletAddress) {
-        alert("Wallet address not loaded. Please refresh or re-login.");
-        return;
-      }
-      const preset = sellPresets[activeSellPreset] || {};
-      const payload = {
-        userId,
-        walletAddress,
-        mint,
-        buyPrice: userTokens.find((t) => t.mint === mint)?.buyAmount || 0,
-        takeProfit: Number(takeProfitState[mint]) || undefined,
-        stopLoss: Number(stopLossState[mint]) || undefined,
-        autoSellPercent: Number(autoSellPercentState[mint]) || 100,
-        autoSellEnabled: true,
-        slippage: preset.slippage || 5,
-        priorityFee: preset.priorityFee || 0.001,
-        bribeAmount: preset.bribeAmount || 0,
-        tokenName: userTokens.find((t) => t.mint)?.name,
-        tokenSymbol: userTokens.find((t) => t.mint)?.symbol,
-        trailingStopLossPercent: Number(trailingStopLossState[mint]) || 10,
-        trailingStopLossEnabled:
-          trailingStopLossEnabledState[mint] !== undefined
-            ? trailingStopLossEnabledState[mint]
-            : false,
-        timeBasedSellSec: Number(timeBasedSellState[mint]) || 0,
-        timeBasedSellEnabled: checked,
-        waitForBuyersBeforeSell: Number(waitForBuyersState[mint]) || 5,
-        waitForBuyersBeforeSellEnabled: checked,
-      };
-      const API_URL = import.meta.env.VITE_API_BASE_URL;
-      fetch(`${API_URL}/api/auto-sell/upsert`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-    }
-  };
+  // const handleTimeBasedSellEnabledChange = (mint: string, checked: boolean) => {
+  //   setTimeBasedSellEnabledState((prev) => ({ ...prev, [mint]: checked }));
+  //   if (autoSellEnabledState[mint]) {
+  //     if (!walletAddress) {
+  //       alert("Wallet address not loaded. Please refresh or re-login.");
+  //       return;
+  //     }
+  //     const preset = sellPresets[activeSellPreset] || {};
+  //     const payload = {
+  //       userId,
+  //       walletAddress,
+  //       mint,
+  //       buyPrice: userTokens.find((t) => t.mint === mint)?.buyAmount || 0,
+  //       takeProfit: Number(takeProfitState[mint]) || undefined,
+  //       stopLoss: Number(stopLossState[mint]) || undefined,
+  //       autoSellPercent: Number(autoSellPercentState[mint]) || 100,
+  //       autoSellEnabled: true,
+  //       slippage: preset.slippage || 5,
+  //       priorityFee: preset.priorityFee || 0.001,
+  //       bribeAmount: preset.bribeAmount || 0,
+  //       tokenName: userTokens.find((t) => t.mint)?.name,
+  //       tokenSymbol: userTokens.find((t) => t.mint)?.symbol,
+  //       trailingStopLossPercent: Number(trailingStopLossState[mint]) || 10,
+  //       trailingStopLossEnabled:
+  //         trailingStopLossEnabledState[mint] !== undefined
+  //           ? trailingStopLossEnabledState[mint]
+  //           : false,
+  //       timeBasedSellSec: Number(timeBasedSellState[mint]) || 0,
+  //       timeBasedSellEnabled: checked,
+  //       waitForBuyersBeforeSell: Number(waitForBuyersState[mint]) || 5,
+  //       waitForBuyersBeforeSellEnabled: checked,
+  //     };
+  //     const API_URL = import.meta.env.VITE_API_BASE_URL;
+  //     fetch(`${API_URL}/api/auto-sell/upsert`, {
+  //       method: "POST",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify(payload),
+  //     });
+  //   }
+  // };
 
-  const handleWaitForBuyersChange = (mint: string, value: string) => {
-    setWaitForBuyersState((prev) => ({ ...prev, [mint]: value }));
-    if (autoSellEnabledState[mint]) {
-      if (!walletAddress) {
-        alert("Wallet address not loaded. Please refresh or re-login.");
-        return;
-      }
-      const preset = sellPresets[activeSellPreset] || {};
-      const payload = {
-        userId,
-        walletAddress,
-        mint,
-        buyPrice: userTokens.find((t) => t.mint === mint)?.buyAmount || 0,
-        takeProfit: Number(takeProfitState[mint]) || undefined,
-        stopLoss: Number(stopLossState[mint]) || undefined,
-        autoSellPercent: Number(autoSellPercentState[mint]) || 100,
-        autoSellEnabled: true,
-        slippage: preset.slippage || 5,
-        priorityFee: preset.priorityFee || 0.001,
-        bribeAmount: preset.bribeAmount || 0,
-        tokenName: userTokens.find((t) => t.mint)?.name,
-        tokenSymbol: userTokens.find((t) => t.mint)?.symbol,
-        trailingStopLossPercent: Number(trailingStopLossState[mint]) || 10,
-        trailingStopLossEnabled:
-          trailingStopLossEnabledState[mint] !== undefined
-            ? trailingStopLossEnabledState[mint]
-            : false,
-        timeBasedSellSec: Number(timeBasedSellState[mint]) || 0,
-        timeBasedSellEnabled:
-          timeBasedSellEnabledState[mint] !== undefined
-            ? timeBasedSellEnabledState[mint]
-            : false,
-        waitForBuyersBeforeSell: Number(value) || 5,
-        waitForBuyersBeforeSellEnabled:
-          waitForBuyersEnabledState[mint] !== undefined
-            ? waitForBuyersEnabledState[mint]
-            : false,
-      };
-      const API_URL = import.meta.env.VITE_API_BASE_URL;
-      fetch(`${API_URL}/api/auto-sell/upsert`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-    }
-  };
+  // const handleWaitForBuyersChange = (mint: string, value: string) => {
+  //   setWaitForBuyersState((prev) => ({ ...prev, [mint]: value }));
+  //   if (autoSellEnabledState[mint]) {
+  //     if (!walletAddress) {
+  //       alert("Wallet address not loaded. Please refresh or re-login.");
+  //       return;
+  //     }
+  //     const preset = sellPresets[activeSellPreset] || {};
+  //     const payload = {
+  //       userId,
+  //       walletAddress,
+  //       mint,
+  //       buyPrice: userTokens.find((t) => t.mint === mint)?.buyAmount || 0,
+  //       takeProfit: Number(takeProfitState[mint]) || undefined,
+  //       stopLoss: Number(stopLossState[mint]) || undefined,
+  //       autoSellPercent: Number(autoSellPercentState[mint]) || 100,
+  //       autoSellEnabled: true,
+  //       slippage: preset.slippage || 5,
+  //       priorityFee: preset.priorityFee || 0.001,
+  //       bribeAmount: preset.bribeAmount || 0,
+  //       tokenName: userTokens.find((t) => t.mint)?.name,
+  //       tokenSymbol: userTokens.find((t) => t.mint)?.symbol,
+  //       trailingStopLossPercent: Number(trailingStopLossState[mint]) || 10,
+  //       trailingStopLossEnabled:
+  //         trailingStopLossEnabledState[mint] !== undefined
+  //           ? trailingStopLossEnabledState[mint]
+  //           : false,
+  //       timeBasedSellSec: Number(timeBasedSellState[mint]) || 0,
+  //       timeBasedSellEnabled:
+  //         timeBasedSellEnabledState[mint] !== undefined
+  //           ? timeBasedSellEnabledState[mint]
+  //           : false,
+  //       waitForBuyersBeforeSell: Number(value) || 5,
+  //       waitForBuyersBeforeSellEnabled:
+  //         waitForBuyersEnabledState[mint] !== undefined
+  //           ? waitForBuyersEnabledState[mint]
+  //           : false,
+  //     };
+  //     const API_URL = import.meta.env.VITE_API_BASE_URL;
+  //     fetch(`${API_URL}/api/auto-sell/upsert`, {
+  //       method: "POST",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify(payload),
+  //     });
+  //   }
+  // };
 
-  const handleWaitForBuyersEnabledChange = (mint: string, checked: boolean) => {
-    setWaitForBuyersEnabledState((prev) => ({ ...prev, [mint]: checked }));
-    if (autoSellEnabledState[mint]) {
-      if (!walletAddress) {
-        alert("Wallet address not loaded. Please refresh or re-login.");
-        return;
-      }
-      const preset = sellPresets[activeSellPreset] || {};
-      const payload = {
-        userId,
-        walletAddress,
-        mint,
-        buyPrice: userTokens.find((t) => t.mint === mint)?.buyAmount || 0,
-        takeProfit: Number(takeProfitState[mint]) || undefined,
-        stopLoss: Number(stopLossState[mint]) || undefined,
-        autoSellPercent: Number(autoSellPercentState[mint]) || 100,
-        autoSellEnabled: true,
-        slippage: preset.slippage || 5,
-        priorityFee: preset.priorityFee || 0.001,
-        bribeAmount: preset.bribeAmount || 0,
-        tokenName: userTokens.find((t) => t.mint)?.name,
-        tokenSymbol: userTokens.find((t) => t.mint)?.symbol,
-        trailingStopLossPercent: Number(trailingStopLossState[mint]) || 10,
-        trailingStopLossEnabled:
-          trailingStopLossEnabledState[mint] !== undefined
-            ? trailingStopLossEnabledState[mint]
-            : false,
-        timeBasedSellSec: Number(timeBasedSellState[mint]) || 0,
-        timeBasedSellEnabled:
-          timeBasedSellEnabledState[mint] !== undefined
-            ? timeBasedSellEnabledState[mint]
-            : false,
-        waitForBuyersBeforeSell: Number(waitForBuyersState[mint]) || 5,
-        waitForBuyersBeforeSellEnabled: checked,
-      };
-      const API_URL = import.meta.env.VITE_API_BASE_URL;
-      fetch(`${API_URL}/api/auto-sell/upsert`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-    }
-  };
+  // const handleWaitForBuyersEnabledChange = (mint: string, checked: boolean) => {
+  //   setWaitForBuyersEnabledState((prev) => ({ ...prev, [mint]: checked }));
+  //   if (autoSellEnabledState[mint]) {
+  //     if (!walletAddress) {
+  //       alert("Wallet address not loaded. Please refresh or re-login.");
+  //       return;
+  //     }
+  //     const preset = sellPresets[activeSellPreset] || {};
+  //     const payload = {
+  //       userId,
+  //       walletAddress,
+  //       mint,
+  //       buyPrice: userTokens.find((t) => t.mint === mint)?.buyAmount || 0,
+  //       takeProfit: Number(takeProfitState[mint]) || undefined,
+  //       stopLoss: Number(stopLossState[mint]) || undefined,
+  //       autoSellPercent: Number(autoSellPercentState[mint]) || 100,
+  //       autoSellEnabled: true,
+  //       slippage: preset.slippage || 5,
+  //       priorityFee: preset.priorityFee || 0.001,
+  //       bribeAmount: preset.bribeAmount || 0,
+  //       tokenName: userTokens.find((t) => t.mint)?.name,
+  //       tokenSymbol: userTokens.find((t) => t.mint)?.symbol,
+  //       trailingStopLossPercent: Number(trailingStopLossState[mint]) || 10,
+  //       trailingStopLossEnabled:
+  //         trailingStopLossEnabledState[mint] !== undefined
+  //           ? trailingStopLossEnabledState[mint]
+  //           : false,
+  //       timeBasedSellSec: Number(timeBasedSellState[mint]) || 0,
+  //       timeBasedSellEnabled:
+  //         timeBasedSellEnabledState[mint] !== undefined
+  //           ? timeBasedSellEnabledState[mint]
+  //           : false,
+  //       waitForBuyersBeforeSell: Number(waitForBuyersState[mint]) || 5,
+  //       waitForBuyersBeforeSellEnabled: checked,
+  //     };
+  //     const API_URL = import.meta.env.VITE_API_BASE_URL;
+  //     fetch(`${API_URL}/api/auto-sell/upsert`, {
+  //       method: "POST",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify(payload),
+  //     });
+  //   }
+  // };
 
   return (
     <>
@@ -1610,27 +1599,6 @@ const TokenListWithAge: React.FC = () => {
             setSelectedToken(null);
             setShowTokenPage(false);
           }}
-
-          onAutoSellToggle={handleAutoSellToggle}
-          onTakeProfitChange={handleTakeProfitChange}
-          onStopLossChange={handleStopLossChange}
-          onAutoSellPercentChange={handleAutoSellPercentChange}
-          onTrailingStopLossChange={handleTrailingStopLossChange}
-          onTrailingStopLossEnabledChange={handleTrailingStopLossEnabledChange}
-          onTimeBasedSellChange={handleTimeBasedSellChange}
-          onTimeBasedSellEnabledChange={handleTimeBasedSellEnabledChange}
-          onWaitForBuyersChange={handleWaitForBuyersChange}
-          onWaitForBuyersEnabledChange={handleWaitForBuyersEnabledChange}
-          autoSellEnabledState={autoSellEnabledState}
-          takeProfitState={takeProfitState}
-          stopLossState={stopLossState}
-          autoSellPercentState={autoSellPercentState}
-          trailingStopLossState={trailingStopLossState}
-          trailingStopLossEnabledState={trailingStopLossEnabledState}
-          timeBasedSellState={timeBasedSellState}
-          timeBasedSellEnabledState={timeBasedSellEnabledState}
-          waitForBuyersState={waitForBuyersState}
-          waitForBuyersEnabledState={waitForBuyersEnabledState}
         />
       ) : (
         <>
@@ -2481,26 +2449,7 @@ const TokenListWithAge: React.FC = () => {
             open={showTokenDetails}
             onClose={() => setShowTokenDetails(false)}
             token={selectedToken}
-            onAutoSellToggle={handleAutoSellToggle}
-            onTakeProfitChange={handleTakeProfitChange}
-            onStopLossChange={handleStopLossChange}
-            onAutoSellPercentChange={handleAutoSellPercentChange}
-            onTrailingStopLossChange={handleTrailingStopLossChange}
-            onTrailingStopLossEnabledChange={handleTrailingStopLossEnabledChange}
-            onTimeBasedSellChange={handleTimeBasedSellChange}
-            onTimeBasedSellEnabledChange={handleTimeBasedSellEnabledChange}
-            onWaitForBuyersChange={handleWaitForBuyersChange}
-            onWaitForBuyersEnabledChange={handleWaitForBuyersEnabledChange}
-            autoSellEnabledState={autoSellEnabledState}
-            takeProfitState={takeProfitState}
-            stopLossState={stopLossState}
-            autoSellPercentState={autoSellPercentState}
-            trailingStopLossState={trailingStopLossState}
-            trailingStopLossEnabledState={trailingStopLossEnabledState}
-            timeBasedSellState={timeBasedSellState}
-            timeBasedSellEnabledState={timeBasedSellEnabledState}
-            waitForBuyersState={waitForBuyersState}
-            waitForBuyersEnabledState={waitForBuyersEnabledState}
+            solBalance={solBalance}
           />
         </>
       )}
