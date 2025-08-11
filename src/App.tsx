@@ -17,6 +17,7 @@ import TokenListWithAge from './components/TokenListWIthAge';
 //import ActivePresetBar from "./components/ActivePresetBar";
 import PresetModal from "./components/PresetModal";
 import TokenDetectedNotification from "./components/TokenDetectedNotification";
+import TransactionLoadingNotification from "./components/TransactionLoadingNotification";
 
 /*function sendSetMode(ws: WebSocket | null, mode: 'manual' | 'automatic') {
   if (ws && ws.readyState === WebSocket.OPEN) {
@@ -364,6 +365,7 @@ const AppContent = () => {
             )*/}
 
             <TokenDetectedNotification />
+            <TransactionLoadingNotification />
           </>
         )}
       </div>

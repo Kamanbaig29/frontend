@@ -19,6 +19,14 @@ export interface WebSocketContextType {
   setShowTokenDetectedNotification: (show: boolean) => void;
   latestDetectedTokenMint: string | null;
   setLatestDetectedTokenMint: (mint: string | null) => void;
+  latestDetectedTokenName: string | null;
+  setLatestDetectedTokenName: (name: string | null) => void;
+  latestDetectedTokenCreator: string | null;
+  setLatestDetectedTokenCreator: (creator: string | null) => void;
+  latestDetectedTokenImage: string | null;
+  setLatestDetectedTokenImage: (imageUrl: string | null) => void;
+  transactionLoading: { type: 'buy' | 'sell' | null; message: string };
+  setTransactionLoading: (loading: { type: 'buy' | 'sell' | null; message: string }) => void;
 }
 
 // Create the context with a default value
@@ -38,6 +46,14 @@ const WebSocketContext = createContext<WebSocketContextType>({
   setShowTokenDetectedNotification: () => {},
   latestDetectedTokenMint: null,
   setLatestDetectedTokenMint: () => {},
+  latestDetectedTokenName: null,
+  setLatestDetectedTokenName: () => {},
+  latestDetectedTokenCreator: null,
+  setLatestDetectedTokenCreator: () => {},
+  latestDetectedTokenImage: null,
+  setLatestDetectedTokenImage: () => {},
+  transactionLoading: { type: null, message: '' },
+  setTransactionLoading: () => {},
 });
 
 // Custom hook to use the WebSocket context
@@ -63,6 +79,10 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
   const [activeSellPreset, setActiveSellPreset] = useState<number>(0);
   const [showTokenDetectedNotification, setShowTokenDetectedNotification] = useState(false);
   const [latestDetectedTokenMint, setLatestDetectedTokenMint] = useState<string | null>(null);
+  const [latestDetectedTokenName, setLatestDetectedTokenName] = useState<string | null>(null);
+  const [latestDetectedTokenCreator, setLatestDetectedTokenCreator] = useState<string | null>(null);
+  const [latestDetectedTokenImage, setLatestDetectedTokenImage] = useState<string | null>(null);
+  const [transactionLoading, setTransactionLoading] = useState<{ type: 'buy' | 'sell' | null; message: string }>({ type: null, message: '' });
 
   // Helper to send messages
   const sendMessage = (data: any) => {
@@ -122,6 +142,9 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
       if (data.type === "TOKEN_DETECTED" && data.mint) {
         setShowTokenDetectedNotification(true);
         setLatestDetectedTokenMint(data.mint);
+        setLatestDetectedTokenName(data.name || 'Unknown Token');
+        setLatestDetectedTokenCreator(data.creator || 'Unknown');
+        setLatestDetectedTokenImage(data.imageUrl || null);
       }
 
       if (data.type === 'AUTH_SUCCESS') {
@@ -192,6 +215,14 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
       setShowTokenDetectedNotification,
       latestDetectedTokenMint,
       setLatestDetectedTokenMint,
+      latestDetectedTokenName,
+      setLatestDetectedTokenName,
+      latestDetectedTokenCreator,
+      setLatestDetectedTokenCreator,
+      latestDetectedTokenImage,
+      setLatestDetectedTokenImage,
+      transactionLoading,
+      setTransactionLoading,
     }}>
       {children}
     </WebSocketContext.Provider>

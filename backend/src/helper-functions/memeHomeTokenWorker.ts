@@ -292,11 +292,11 @@ export async function startMemeHomeTokenWorker(wss: WebSocketServer) {
               //console.log(`[DEBUG] Launch mint extracted: ${mint}`);
               // === SEND TOKEN_DETECTED IMMEDIATELY ===
               if (mint) {
-                wss.clients.forEach(client => {
-                  if (client.readyState === 1) {
-                    client.send(JSON.stringify({ type: 'TOKEN_DETECTED', mint }));
-                  }
-                });
+                // wss.clients.forEach(client => {
+                //   if (client.readyState === 1) {
+                //     client.send(JSON.stringify({ type: 'TOKEN_DETECTED', mint }));
+                //   }
+                // });
               }
               break;
             }
@@ -489,6 +489,21 @@ export async function startMemeHomeTokenWorker(wss: WebSocketServer) {
         // amazonq-ignore-next-line
         console.log(`[MemeHomeTokenWorker] Upserted token: ${mint}`);
 
+        // Send TOKEN_DETECTED after DB upsert for launch events
+        if (isLaunch && mint) {
+          wss.clients.forEach(client => {
+            if (client.readyState === 1) {
+              client.send(JSON.stringify({ 
+                type: 'TOKEN_DETECTED', 
+                mint, 
+                name,
+                creator,
+                imageUrl
+              }));
+            }
+          });
+        }
+
         // 9. Swap/Buy/Sell event: update volume/transactions
         if (logInfo.logs.some(log => log.includes('Instruction: Buy')) || logInfo.logs.some(log => log.includes('Instruction: Sell'))) {
           const swapIx = instructions.find(ix => {
@@ -529,13 +544,13 @@ export async function startMemeHomeTokenWorker(wss: WebSocketServer) {
           });
         }
 
-        if (isLaunch && mint) {
-          wss.clients.forEach(client => {
-            if (client.readyState === 1) {
-              client.send(JSON.stringify({ type: 'TOKEN_DETECTED', mint }));
-            }
-          });
-        }
+        // if (isLaunch && mint) {
+        //   wss.clients.forEach(client => {
+        //     if (client.readyState === 1) {
+        //       client.send(JSON.stringify({ type: 'TOKEN_DETECTED', mint }));
+        //     }
+        //   });
+        // }
 
         if (isBuy || isSell || isSwap) {
           // Wait for block finalization

@@ -4,8 +4,6 @@ import {
   // TextField,
   // Switch,
   // FormControlLabel,
-  Snackbar,
-  Alert,
 } from "@mui/material";
 
 import PresetModal from "./PresetModal";
@@ -32,7 +30,7 @@ import {
   faBolt,
   faCopy,
   faUsers,
-  faArrowUp, 
+  faArrowUp,
   faArrowDown,
 } from "@fortawesome/free-solid-svg-icons";
 
@@ -40,8 +38,6 @@ import { faTelegram } from "@fortawesome/free-brands-svg-icons";
 
 // import { faUsers } from "@fortawesome/free-solid-svg-icons";
 // import { faArrowUp, faArrowDown } from "@fortawesome/free-solid-svg-icons";
-
-
 
 // import PersonIcon from "/public/tokenCardIcons/person.svg";
 // import { ReactComponent as PersonIcon } from "/public/tokenCardIcons/person.svg";
@@ -97,13 +93,11 @@ function getAgeString(ageMs: number): string {
   return `${totalDays}d`;
 }
 
-
 function toFullDecimalString(num: number): string {
   if (num === 0) return "0";
   // Get fixed with high precision, then trim unnecessary zeros
   return num.toFixed(20).replace(/\.?0+$/, "");
 }
-
 
 function formatPriceSmart(price: number): string {
   if (price === 0) return "0";
@@ -137,18 +131,18 @@ const TokenListWithAge: React.FC = () => {
   const [presetModalOpen, setPresetModalOpen] = useState(false);
 
   const [showMyTokens, setShowMyTokens] = useState(() => {
-    const savedView = localStorage.getItem('currentView');
-    return savedView === 'portfolio';
+    const savedView = localStorage.getItem("currentView");
+    return savedView === "portfolio";
   });
   const [walletTokens, setWalletTokens] = useState<Token[]>([]);
   const [autoSellConfigs, setAutoSellConfigs] = useState<any[]>([]);
   const [userTokens, setUserTokens] = useState<Token[]>([]);
-  const [/*sellPercentsState*/, setSellPercentsState] = useState<{
+  const [, /*sellPercentsState*/ setSellPercentsState] = useState<{
     [key: string]: number;
   }>({});
   const [autoBuyEnabled, setAutoBuyEnabled] = useState(false);
   const [bufferAmount, setBufferAmount] = useState<string>("");
-  const [autoBuySnackbar, setAutoBuySnackbar] = useState<{
+  const [, setAutoBuySnackbar] = useState<{
     open: boolean;
     message: string;
   }>({ open: false, message: "" });
@@ -213,7 +207,9 @@ const TokenListWithAge: React.FC = () => {
   const [sortOrder48h, setSortOrder48h] = useState("desc");
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [manualBuyAmount, setManualBuyAmount] = useState<string>("");
-  const [activeSection, setActiveSection] = useState<'fresh-drops' | 'heating-up' | 'battle-tested'>('fresh-drops');
+  const [activeSection, setActiveSection] = useState<
+    "fresh-drops" | "heating-up" | "battle-tested"
+  >("fresh-drops");
   const [selectedToken, setSelectedToken] = useState<Token | null>(null);
   const [showTokenDetails, setShowTokenDetails] = useState(false);
   const [showTokenPage, setShowTokenPage] = useState(false);
@@ -277,6 +273,7 @@ const TokenListWithAge: React.FC = () => {
     setActiveSellPreset,
     ws,
     walletAddress,
+    setTransactionLoading,
   } = useWebSocket();
 
   const autoBuyEnabledRef = useRef(autoBuyEnabled);
@@ -297,8 +294,6 @@ const TokenListWithAge: React.FC = () => {
     activeBuyPresetRef.current = activeBuyPreset;
   }, [activeBuyPreset]);
 
-
-
   const handleSettingsClick = () => setSettingsModalOpen(true);
 
   const handleTokenClick = (token: Token) => {
@@ -307,24 +302,37 @@ const TokenListWithAge: React.FC = () => {
   };
 
   // Handle buy button click
-  const handleBuyClick = (token: Token) => {
+  const handleBuyClick = (token: Token, event?: React.MouseEvent) => {
+    if (event) {
+      event.stopPropagation();
+    }
     if (!manualBuyAmount || parseFloat(manualBuyAmount) <= 0) {
-      alert("Please enter a valid amount in the Manual Buy section");
+      setTransactionLoading({ type: 'buy', message: '❌ Please enter a valid amount' });
+      setTimeout(() => setTransactionLoading({ type: null, message: '' }), 2000);
       return;
     }
     if (!ws) {
-      alert("WebSocket not connected");
+      setTransactionLoading({ type: 'buy', message: '❌ WebSocket not connected' });
+      setTimeout(() => setTransactionLoading({ type: null, message: '' }), 2000);
       return;
     }
     const preset = buyPresets[activeBuyPreset] || {};
     if (!preset || Object.keys(preset).length === 0) {
-      alert("No buy preset loaded! Please set your buy preset first.");
+      setTransactionLoading({ type: 'buy', message: '❌ No buy preset loaded' });
+      setTimeout(() => setTransactionLoading({ type: null, message: '' }), 2000);
       return;
     }
     const amountLamports = Math.floor(parseFloat(manualBuyAmount) * 1e9);
+    
+    // Minimum amount check (at least 0.001 SOL)
+    // if (amountLamports < 1_000_000) {
+    //   setTransactionLoading({ type: 'buy', message: '❌ Minimum buy amount is 0.001 SOL' });
+    //   setTimeout(() => setTransactionLoading({ type: null, message: '' }), 2000);
+    //   return;
+    // }
 
-    // Debug: See what is being sent
-    console.log("Manual buy with preset:", preset);
+    // Set loading state
+    setTransactionLoading({ type: 'buy', message: 'Buy transaction sending...' });
 
     const toLamports = (val: string) => Math.floor(Number(val) * 1e9);
 
@@ -346,312 +354,17 @@ const TokenListWithAge: React.FC = () => {
       setShowTokenPage(false);
       setSelectedToken(null);
       setShowTokenDetails(false);
-      
+
       if (!showMyTokens) {
         ws.send(JSON.stringify({ type: "GET_USER_TOKENS" }));
         setShowMyTokens(true);
-        localStorage.setItem('currentView', 'portfolio');
+        localStorage.setItem("currentView", "portfolio");
       } else {
         setShowMyTokens(false);
-        localStorage.setItem('currentView', 'discover');
+        localStorage.setItem("currentView", "discover");
       }
     }
   };
-
-  // const handleSellPercentChange = (mint: string, value: number) => {
-  //   setSellPercentsState((prev) => ({
-  //     ...prev,
-  //     [mint]: value,
-  //   }));
-  // };
-
-  // const handleSellClick = (token: Token) => {
-  //   const percent = sellPercentsState[token.mint];
-  //   if (!percent || percent <= 0) {
-  //     alert("Please select a valid sell percent");
-  //     return;
-  //   }
-  //   if (!ws) {
-  //     alert("WebSocket not connected");
-  //     return;
-  //   }
-  //   const preset = sellPresets[activeSellPreset] || {};
-  //   if (!preset || Object.keys(preset).length === 0) {
-  //     alert("No sell preset loaded! Please set your sell preset first.");
-  //     return;
-  //   }
-
-  //   // Debug: See what is being sent
-  //   console.log("Manual sell with preset:", preset);
-
-  //   // FIX: Send fees in SOL (not lamports) - backend expects SOL values
-  //   ws.send(
-  //     JSON.stringify({
-  //       type: "MANUAL_SELL",
-  //       mintAddress: token.mint,
-  //       percent,
-  //       slippage: preset.slippage,
-  //       priorityFee: Number(preset.priorityFee), // Send as SOL, not lamports
-  //       bribeAmount: Number(preset.bribeAmount), // Send as SOL, not lamports
-  //       walletAddress,
-  //     })
-  //   );
-  // };
-
-  // const handleTakeProfitChange = (mint: string, value: string) => {
-  //   setTakeProfitState((prev) => ({
-  //     ...prev,
-  //     [mint]: value,
-  //   }));
-
-  //   if (autoSellEnabledState[mint]) {
-  //     if (!walletAddress) {
-  //       alert("Wallet address not loaded. Please refresh or re-login.");
-  //       return;
-  //     }
-  //     const preset = sellPresets[activeSellPreset] || {};
-  //     const payload = {
-  //       userId,
-  //       walletAddress,
-  //       mint,
-  //       buyPrice: userTokens.find((t) => t.mint === mint)?.buyAmount || 0,
-  //       takeProfit: Number(value) || undefined,
-  //       stopLoss: Number(stopLossState[mint]) || undefined,
-  //       autoSellPercent: Number(autoSellPercentState[mint]) || 100,
-  //       autoSellEnabled: true,
-  //       slippage: preset.slippage || 5,
-  //       priorityFee: preset.priorityFee || 0.001,
-  //       bribeAmount: preset.bribeAmount || 0,
-  //       tokenName: userTokens.find((t) => t.mint === mint)?.name,
-  //       tokenSymbol: userTokens.find((t) => t.mint === mint)?.symbol,
-  //     };
-  //     console.log(
-  //       "TakeProfitChange payload:",
-  //       payload,
-  //       "walletAddress:",
-  //       walletAddress
-  //     );
-  //     const API_URL = import.meta.env.VITE_API_BASE_URL;
-  //     fetch(`${API_URL}/api/auto-sell/upsert`, {
-  //       method: "POST",
-  //       headers: { "Content-Type": "application/json" },
-  //       body: JSON.stringify(payload),
-  //     });
-  //   }
-  // };
-
-  // const handleStopLossChange = (mint: string, value: string) => {
-  //   setStopLossState((prev) => ({
-  //     ...prev,
-  //     [mint]: value,
-  //   }));
-
-  //   if (autoSellEnabledState[mint]) {
-  //     if (!walletAddress) {
-  //       alert("Wallet address not loaded. Please refresh or re-login.");
-  //       return;
-  //     }
-  //     const preset = sellPresets[activeSellPreset] || {};
-  //     const payload = {
-  //       userId,
-  //       walletAddress,
-  //       mint,
-  //       buyPrice: userTokens.find((t) => t.mint === mint)?.buyAmount || 0,
-  //       takeProfit: Number(takeProfitState[mint]) || undefined,
-  //       stopLoss: Number(value) || undefined,
-  //       autoSellPercent: Number(autoSellPercentState[mint]) || 100,
-  //       autoSellEnabled: true,
-  //       slippage: preset.slippage || 5,
-  //       priorityFee: preset.priorityFee || 0.001,
-  //       bribeAmount: preset.bribeAmount || 0,
-  //       tokenName: userTokens.find((t) => t.mint === mint)?.name,
-  //       tokenSymbol: userTokens.find((t) => t.mint === mint)?.symbol,
-  //     };
-  //     console.log(
-  //       "StopLossChange payload:",
-  //       payload,
-  //       "walletAddress:",
-  //       walletAddress
-  //     );
-  //     const API_URL = import.meta.env.VITE_API_BASE_URL;
-  //     fetch(`${API_URL}/api/auto-sell/upsert`, {
-  //       method: "POST",
-  //       headers: { "Content-Type": "application/json" },
-  //       body: JSON.stringify(payload),
-  //     });
-  //   }
-  // };
-
-  // const handleAutoSellPercentChange = (mint: string, value: string) => {
-  //   setAutoSellPercentState((prev) => ({
-  //     ...prev,
-  //     [mint]: value,
-  //   }));
-
-  //   if (autoSellEnabledState[mint]) {
-  //     if (!walletAddress) {
-  //       alert("Wallet address not loaded. Please refresh or re-login.");
-  //       return;
-  //     }
-  //     const preset = sellPresets[activeSellPreset] || {};
-  //     const payload = {
-  //       userId,
-  //       walletAddress,
-  //       mint,
-  //       buyPrice: userTokens.find((t) => t.mint === mint)?.buyAmount || 0,
-  //       takeProfit: Number(takeProfitState[mint]) || undefined,
-  //       stopLoss: Number(stopLossState[mint]) || undefined,
-  //       autoSellPercent: Number(value) || 100,
-  //       autoSellEnabled: true,
-  //       slippage: preset.slippage || 5,
-  //       priorityFee: preset.priorityFee || 0.001,
-  //       bribeAmount: preset.bribeAmount || 0,
-  //       tokenName: userTokens.find((t) => t.mint === mint)?.name,
-  //       tokenSymbol: userTokens.find((t) => t.mint === mint)?.symbol,
-  //     };
-  //     console.log(
-  //       "AutoSellPercentChange payload:",
-  //       payload,
-  //       "walletAddress:",
-  //       walletAddress
-  //     );
-  //     const API_URL = import.meta.env.VITE_API_BASE_URL;
-  //     fetch(`${API_URL}/api/auto-sell/upsert`, {
-  //       method: "POST",
-  //       headers: { "Content-Type": "application/json" },
-  //       body: JSON.stringify(payload),
-  //     });
-  //   }
-  // };
-
-  // const handleAutoSellToggle = (token: Token) => {
-  //   if (!walletAddress) {
-  //     alert("Wallet address not loaded. Please refresh or re-login.");
-  //     return;
-  //   }
-  //   const enabled = !autoSellEnabledState[token.mint];
-  //   setAutoSellEnabledState((prev) => ({
-  //     ...prev,
-  //     [token.mint]: enabled,
-  //   }));
-
-  //   if (enabled) {
-  //     // Sync input fields with backend values
-  //     setTakeProfitState((prev) => ({
-  //       ...prev,
-  //       [token.mint]:
-  //         token.takeProfit !== undefined ? String(token.takeProfit) : "",
-  //     }));
-  //     setStopLossState((prev) => ({
-  //       ...prev,
-  //       [token.mint]:
-  //         token.stopLoss !== undefined ? String(token.stopLoss) : "",
-  //     }));
-  //     setAutoSellPercentState((prev) => ({
-  //       ...prev,
-  //       [token.mint]:
-  //         token.autoSellPercent !== undefined
-  //           ? String(token.autoSellPercent)
-  //           : "",
-  //     }));
-  //     // Ensure trailingStopLossState has a value
-  //     setTrailingStopLossState((prev) => ({
-  //       ...prev,
-  //       [token.mint]:
-  //         prev[token.mint] !== undefined && prev[token.mint] !== ""
-  //           ? prev[token.mint]
-  //           : "10",
-  //     }));
-  //     // Ensure timeBasedSellState has a value
-  //     setTimeBasedSellState((prev) => ({
-  //       ...prev,
-  //       [token.mint]:
-  //         prev[token.mint] !== undefined && prev[token.mint] !== ""
-  //           ? prev[token.mint]
-  //           : "0",
-  //     }));
-  //     // Ensure waitForBuyersState has a value
-  //     setWaitForBuyersState((prev) => ({
-  //       ...prev,
-  //       [token.mint]:
-  //         prev[token.mint] !== undefined && prev[token.mint] !== ""
-  //           ? prev[token.mint]
-  //           : "5",
-  //     }));
-  //     const preset = sellPresets[activeSellPreset] || {};
-  //     const payload = {
-  //       userId,
-  //       walletAddress,
-  //       mint: token.mint,
-  //       buyPrice: token.buyAmount || 0,
-  //       takeProfit: Number(takeProfitState[token.mint]) || 10,
-  //       stopLoss: Number(stopLossState[token.mint]) || 10,
-  //       autoSellPercent: Number(autoSellPercentState[token.mint]) || 100,
-  //       autoSellEnabled: true,
-  //       slippage: preset.slippage || 5,
-  //       priorityFee: preset.priorityFee || 0.001,
-  //       bribeAmount: preset.bribeAmount || 0,
-  //       tokenName: token.name,
-  //       tokenSymbol: token.symbol,
-  //       trailingStopLossPercent:
-  //         trailingStopLossState[token.mint] !== undefined &&
-  //           trailingStopLossState[token.mint] !== ""
-  //           ? Number(trailingStopLossState[token.mint])
-  //           : 10,
-  //       trailingStopLossEnabled:
-  //         trailingStopLossEnabledState[token.mint] !== undefined
-  //           ? trailingStopLossEnabledState[token.mint]
-  //           : false,
-  //       timeBasedSellSec:
-  //         timeBasedSellState[token.mint] !== undefined &&
-  //           timeBasedSellState[token.mint] !== ""
-  //           ? Number(timeBasedSellState[token.mint])
-  //           : 0,
-  //       timeBasedSellEnabled:
-  //         timeBasedSellEnabledState[token.mint] !== undefined
-  //           ? timeBasedSellEnabledState[token.mint]
-  //           : false,
-  //       waitForBuyersBeforeSell: Number(waitForBuyersState[token.mint]) || 5,
-  //       waitForBuyersBeforeSellEnabled:
-  //         waitForBuyersEnabledState[token.mint] !== undefined
-  //           ? waitForBuyersEnabledState[token.mint]
-  //           : false,
-  //     };
-  //     console.log(
-  //       "AutoSell ON payload:",
-  //       payload,
-  //       "walletAddress:",
-  //       walletAddress
-  //     );
-  //     const API_URL = import.meta.env.VITE_API_BASE_URL;
-  //     fetch(`${API_URL}/api/auto-sell/upsert`, {
-  //       method: "POST",
-  //       headers: { "Content-Type": "application/json" },
-  //       body: JSON.stringify(payload),
-  //     });
-  //   } else {
-  //     const payload = {
-  //       userId,
-  //       walletAddress,
-  //       mint: token.mint,
-  //       buyPrice: token.buyAmount || 0,
-  //       autoSellPercent: Number(autoSellPercentState[token.mint]) || 100,
-  //       autoSellEnabled: false,
-  //     };
-  //     console.log(
-  //       "AutoSell OFF payload:",
-  //       payload,
-  //       "walletAddress:",
-  //       walletAddress
-  //     );
-  //     const API_URL = import.meta.env.VITE_API_BASE_URL;
-  //     fetch(`${API_URL}/api/auto-sell/upsert`, {
-  //       method: "POST",
-  //       headers: { "Content-Type": "application/json" },
-  //       body: JSON.stringify(payload),
-  //     });
-  //   }
-  // };
 
   // Fetch tokens function
   const fetchTokens = async () => {
@@ -755,7 +468,8 @@ const TokenListWithAge: React.FC = () => {
                 // 1. Fetch buyFilters from backend (new route, by userId)
                 const userId = localStorage.getItem("userId");
                 const buyFiltersRes = await fetch(
-                  `${import.meta.env.VITE_API_BASE_URL
+                  `${
+                    import.meta.env.VITE_API_BASE_URL
                   }/api/user-filters/buy-filters-by-user-id?userId=${userId}`
                 );
                 const buyFiltersData = await buyFiltersRes.json();
@@ -769,14 +483,16 @@ const TokenListWithAge: React.FC = () => {
                 const token = localStorage.getItem("token");
                 const [whitelistRes, blacklistRes] = await Promise.all([
                   fetch(
-                    `${import.meta.env.VITE_API_BASE_URL
+                    `${
+                      import.meta.env.VITE_API_BASE_URL
                     }/api/user-filters/whitelist-devs`,
                     {
                       headers: { Authorization: `Bearer ${token}` },
                     }
                   ),
                   fetch(
-                    `${import.meta.env.VITE_API_BASE_URL
+                    `${
+                      import.meta.env.VITE_API_BASE_URL
                     }/api/user-filters/blacklist-devs`,
                     {
                       headers: { Authorization: `Bearer ${token}` },
@@ -857,7 +573,8 @@ const TokenListWithAge: React.FC = () => {
                       try {
                         // Fetch latest metrics
                         const metricsRes = await fetch(
-                          `${import.meta.env.VITE_API_BASE_URL}/api/tokens/${data.token.mint
+                          `${import.meta.env.VITE_API_BASE_URL}/api/tokens/${
+                            data.token.mint
                           }/metrics`
                         );
                         const metrics = await metricsRes.json();
@@ -949,9 +666,14 @@ const TokenListWithAge: React.FC = () => {
         }
       }
       if (data.type === "MANUAL_BUY_SUCCESS") {
-        alert("Buy order placed successfully!");
+        const signature = data.signature || data.details?.signature || 'N/A';
+        setTransactionLoading({ 
+          type: 'buy', 
+          message: `Buy successful! Signature: ${signature.substring(0, 4)}...${signature.slice(-4)}` 
+        });
+        setTimeout(() => setTransactionLoading({ type: null, message: '' }), 3000);
         // Show snackbar if this was an auto buy
-        if (lastAutoBuyMint && data.details.mint === lastAutoBuyMint) {
+        if (lastAutoBuyMint && data.details?.mint === lastAutoBuyMint) {
           setAutoBuySnackbar({
             open: true,
             message: "Auto buy order successful!",
@@ -960,7 +682,11 @@ const TokenListWithAge: React.FC = () => {
         }
       }
       if (data.type === "MANUAL_BUY_ERROR") {
-        alert("Buy failed: " + (data.error || "Unknown error"));
+        setTransactionLoading({ 
+          type: 'buy', 
+          message: `Buy failed: ${data.error || 'Unknown error'}` 
+        });
+        setTimeout(() => setTransactionLoading({ type: null, message: '' }), 3000);
       }
       if (data.type === "USER_TOKENS") {
         setWalletTokens(data.tokens || []);
@@ -969,8 +695,9 @@ const TokenListWithAge: React.FC = () => {
         // Auto-sell triggered notification
         setAutoBuySnackbar({
           open: true,
-          message: `Auto sell triggered for ${data.tokenName || data.mint
-            }! P/L: ${data.profitLoss?.toFixed(2)}%`,
+          message: `Auto sell triggered for ${
+            data.tokenName || data.mint
+          }! P/L: ${data.profitLoss?.toFixed(2)}%`,
         });
       }
       if (data.type === "AUTO_SELL_SUCCESS") {
@@ -990,11 +717,20 @@ const TokenListWithAge: React.FC = () => {
         });
       }
       if (data.type === "MANUAL_SELL_SUCCESS") {
-        alert("Sell order placed successfully!");
+        const signature = data.signature || data.details?.signature || 'N/A';
+        setTransactionLoading({ 
+          type: 'sell', 
+          message: `Sell successful! Signature: ${signature.substring(0, 4)}...${signature.slice(-4)}` 
+        });
+        setTimeout(() => setTransactionLoading({ type: null, message: '' }), 3000);
         // Optionally refresh user tokens or update UI
       }
       if (data.type === "MANUAL_SELL_ERROR") {
-        alert("Sell failed: " + (data.error || "Unknown error"));
+        setTransactionLoading({ 
+          type: 'sell', 
+          message: `Sell failed: ${data.error || 'Unknown error'}` 
+        });
+        setTimeout(() => setTransactionLoading({ type: null, message: '' }), 3000);
       }
       if (data.type === "TOKEN_PRICE_UPDATE" && data.mint && data.price) {
         console.log("[FRONTEND] Received TOKEN_PRICE_UPDATE", data);
@@ -1114,26 +850,26 @@ const TokenListWithAge: React.FC = () => {
           config?.takeProfit !== undefined
             ? config.takeProfit
             : token.takeProfit !== undefined
-              ? token.takeProfit
-              : 10,
+            ? token.takeProfit
+            : 10,
         stopLoss:
           config?.stopLoss !== undefined
             ? config.stopLoss
             : token.stopLoss !== undefined
-              ? token.stopLoss
-              : 10,
+            ? token.stopLoss
+            : 10,
         autoSellPercent:
           config?.autoSellPercent !== undefined
             ? config.autoSellPercent
             : token.autoSellPercent !== undefined
-              ? token.autoSellPercent
-              : 100,
+            ? token.autoSellPercent
+            : 100,
         trailingStopLossPercent:
           config?.trailingStopLossPercent !== undefined
             ? config.trailingStopLossPercent
             : token.trailingStopLossPercent !== undefined
-              ? token.trailingStopLossPercent
-              : 10,
+            ? token.trailingStopLossPercent
+            : 10,
         trailingStopLossEnabled:
           config?.trailingStopLossEnabled ??
           token.trailingStopLossEnabled ??
@@ -1142,16 +878,16 @@ const TokenListWithAge: React.FC = () => {
           config?.timeBasedSellSec !== undefined
             ? config.timeBasedSellSec
             : token.timeBasedSellSec !== undefined
-              ? token.timeBasedSellSec
-              : 0,
+            ? token.timeBasedSellSec
+            : 0,
         timeBasedSellEnabled:
           config?.timeBasedSellEnabled ?? token.timeBasedSellEnabled ?? false,
         waitForBuyersBeforeSell:
           config?.waitForBuyersBeforeSell !== undefined
             ? config.waitForBuyersBeforeSell
             : token.waitForBuyersBeforeSell !== undefined
-              ? token.waitForBuyersBeforeSell
-              : 5,
+            ? token.waitForBuyersBeforeSell
+            : 5,
         waitForBuyersBeforeSellEnabled:
           config?.waitForBuyersBeforeSellEnabled ??
           token.waitForBuyersBeforeSellEnabled ??
@@ -1183,7 +919,7 @@ const TokenListWithAge: React.FC = () => {
           tokenSymbol: token.symbol,
           trailingStopLossPercent:
             trailingStopLossState[token.mint] !== undefined &&
-              trailingStopLossState[token.mint] !== ""
+            trailingStopLossState[token.mint] !== ""
               ? Number(trailingStopLossState[token.mint])
               : 10,
           trailingStopLossEnabled:
@@ -1192,7 +928,7 @@ const TokenListWithAge: React.FC = () => {
               : false,
           timeBasedSellSec:
             timeBasedSellState[token.mint] !== undefined &&
-              timeBasedSellState[token.mint] !== ""
+            timeBasedSellState[token.mint] !== ""
               ? Number(timeBasedSellState[token.mint])
               : 0,
           timeBasedSellEnabled:
@@ -1294,7 +1030,7 @@ const TokenListWithAge: React.FC = () => {
       return true;
     }
     // If whitelist has real creators, only allow buy if creator is in whitelist and not in blacklist
-    const isWhitelisted = whitelistNorm.includes(creator); 
+    const isWhitelisted = whitelistNorm.includes(creator);
     const isBlacklisted = blacklistNorm.includes(creator);
     console.log("Comparing (real whitelist):", {
       creator,
@@ -1325,267 +1061,6 @@ const TokenListWithAge: React.FC = () => {
       Object.values(buyUntilReachedIntervals.current).forEach(clearInterval);
     };
   }, []);
-
-  // const handleTrailingStopLossChange = (mint: string, value: string) => {
-  //   setTrailingStopLossState((prev) => ({
-  //     ...prev,
-  //     [mint]: value,
-  //   }));
-
-  //   if (autoSellEnabledState[mint]) {
-  //     if (!walletAddress) {
-  //       alert("Wallet address not loaded. Please refresh or re-login.");
-  //       return;
-  //     }
-  //     const preset = sellPresets[activeSellPreset] || {};
-  //     const payload = {
-  //       userId,
-  //       walletAddress,
-  //       mint,
-  //       buyPrice: userTokens.find((t) => t.mint === mint)?.buyAmount || 0,
-  //       takeProfit: Number(takeProfitState[mint]) || undefined,
-  //       stopLoss: Number(stopLossState[mint]) || undefined,
-  //       autoSellPercent: Number(autoSellPercentState[mint]) || 100,
-  //       autoSellEnabled: true,
-  //       slippage: preset.slippage || 5,
-  //       priorityFee: preset.priorityFee || 0.001,
-  //       bribeAmount: preset.bribeAmount || 0,
-  //       tokenName: userTokens.find((t) => t.mint)?.name,
-  //       tokenSymbol: userTokens.find((t) => t.mint)?.symbol,
-  //       trailingStopLossPercent: Number(value) || 10,
-  //       trailingStopLossEnabled:
-  //         trailingStopLossEnabledState[mint] !== undefined
-  //           ? trailingStopLossEnabledState[mint]
-  //           : false,
-  //     };
-  //     const API_URL = import.meta.env.VITE_API_BASE_URL;
-  //     fetch(`${API_URL}/api/auto-sell/upsert`, {
-  //       method: "POST",
-  //       headers: { "Content-Type": "application/json" },
-  //       body: JSON.stringify(payload),
-  //     });
-  //   }
-  // };
-
-  // const handleTrailingStopLossEnabledChange = (
-  //   mint: string,
-  //   checked: boolean
-  // ) => {
-  //   setTrailingStopLossEnabledState((prev) => ({
-  //     ...prev,
-  //     [mint]: checked,
-  //   }));
-
-  //   if (autoSellEnabledState[mint]) {
-  //     if (!walletAddress) {
-  //       alert("Wallet address not loaded. Please refresh or re-login.");
-  //       return;
-  //     }
-  //     const preset = sellPresets[activeSellPreset] || {};
-  //     const payload = {
-  //       userId,
-  //       walletAddress,
-  //       mint,
-  //       buyPrice: userTokens.find((t) => t.mint === mint)?.buyAmount || 0,
-  //       takeProfit: Number(takeProfitState[mint]) || undefined,
-  //       stopLoss: Number(stopLossState[mint]) || undefined,
-  //       autoSellPercent: Number(autoSellPercentState[mint]) || 100,
-  //       autoSellEnabled: true,
-  //       slippage: preset.slippage || 5,
-  //       priorityFee: preset.priorityFee || 0.001,
-  //       bribeAmount: preset.bribeAmount || 0,
-  //       tokenName: userTokens.find((t) => t.mint)?.name,
-  //       tokenSymbol: userTokens.find((t) => t.mint)?.symbol,
-  //       trailingStopLossPercent: Number(trailingStopLossState[mint]) || 10,
-  //       trailingStopLossEnabled: checked,
-  //     };
-  //     const API_URL = import.meta.env.VITE_API_BASE_URL;
-  //     fetch(`${API_URL}/api/auto-sell/upsert`, {
-  //       method: "POST",
-  //       headers: { "Content-Type": "application/json" },
-  //       body: JSON.stringify(payload),
-  //     });
-  //   }
-  // };
-
-  // const handleTimeBasedSellChange = (mint: string, value: string) => {
-  //   setTimeBasedSellState((prev) => ({ ...prev, [mint]: value }));
-  //   if (autoSellEnabledState[mint]) {
-  //     if (!walletAddress) {
-  //       alert("Wallet address not loaded. Please refresh or re-login.");
-  //       return;
-  //     }
-  //     const preset = sellPresets[activeSellPreset] || {};
-  //     const payload = {
-  //       userId,
-  //       walletAddress,
-  //       mint,
-  //       buyPrice: userTokens.find((t) => t.mint === mint)?.buyAmount || 0,
-  //       takeProfit: Number(takeProfitState[mint]) || undefined,
-  //       stopLoss: Number(stopLossState[mint]) || undefined,
-  //       autoSellPercent: Number(autoSellPercentState[mint]) || 100,
-  //       autoSellEnabled: true,
-  //       slippage: preset.slippage || 5,
-  //       priorityFee: preset.priorityFee || 0.001,
-  //       bribeAmount: preset.bribeAmount || 0,
-  //       tokenName: userTokens.find((t) => t.mint)?.name,
-  //       tokenSymbol: userTokens.find((t) => t.mint)?.symbol,
-  //       trailingStopLossPercent: Number(trailingStopLossState[mint]) || 10,
-  //       trailingStopLossEnabled:
-  //         trailingStopLossEnabledState[mint] !== undefined
-  //           ? trailingStopLossEnabledState[mint]
-  //           : false,
-  //       timeBasedSellSec: Number(value) || 0,
-  //       timeBasedSellEnabled:
-  //         timeBasedSellEnabledState[mint] !== undefined
-  //           ? timeBasedSellEnabledState[mint]
-  //           : false,
-  //       waitForBuyersBeforeSell: Number(waitForBuyersState[mint]) || 5,
-  //       waitForBuyersBeforeSellEnabled:
-  //         waitForBuyersEnabledState[mint] !== undefined
-  //           ? waitForBuyersEnabledState[mint]
-  //           : false,
-  //     };
-  //     const API_URL = import.meta.env.VITE_API_BASE_URL;
-  //     fetch(`${API_URL}/api/auto-sell/upsert`, {
-  //       method: "POST",
-  //       headers: { "Content-Type": "application/json" },
-  //       body: JSON.stringify(payload),
-  //     });
-  //   }
-  // };
-
-  // const handleTimeBasedSellEnabledChange = (mint: string, checked: boolean) => {
-  //   setTimeBasedSellEnabledState((prev) => ({ ...prev, [mint]: checked }));
-  //   if (autoSellEnabledState[mint]) {
-  //     if (!walletAddress) {
-  //       alert("Wallet address not loaded. Please refresh or re-login.");
-  //       return;
-  //     }
-  //     const preset = sellPresets[activeSellPreset] || {};
-  //     const payload = {
-  //       userId,
-  //       walletAddress,
-  //       mint,
-  //       buyPrice: userTokens.find((t) => t.mint === mint)?.buyAmount || 0,
-  //       takeProfit: Number(takeProfitState[mint]) || undefined,
-  //       stopLoss: Number(stopLossState[mint]) || undefined,
-  //       autoSellPercent: Number(autoSellPercentState[mint]) || 100,
-  //       autoSellEnabled: true,
-  //       slippage: preset.slippage || 5,
-  //       priorityFee: preset.priorityFee || 0.001,
-  //       bribeAmount: preset.bribeAmount || 0,
-  //       tokenName: userTokens.find((t) => t.mint)?.name,
-  //       tokenSymbol: userTokens.find((t) => t.mint)?.symbol,
-  //       trailingStopLossPercent: Number(trailingStopLossState[mint]) || 10,
-  //       trailingStopLossEnabled:
-  //         trailingStopLossEnabledState[mint] !== undefined
-  //           ? trailingStopLossEnabledState[mint]
-  //           : false,
-  //       timeBasedSellSec: Number(timeBasedSellState[mint]) || 0,
-  //       timeBasedSellEnabled: checked,
-  //       waitForBuyersBeforeSell: Number(waitForBuyersState[mint]) || 5,
-  //       waitForBuyersBeforeSellEnabled: checked,
-  //     };
-  //     const API_URL = import.meta.env.VITE_API_BASE_URL;
-  //     fetch(`${API_URL}/api/auto-sell/upsert`, {
-  //       method: "POST",
-  //       headers: { "Content-Type": "application/json" },
-  //       body: JSON.stringify(payload),
-  //     });
-  //   }
-  // };
-
-  // const handleWaitForBuyersChange = (mint: string, value: string) => {
-  //   setWaitForBuyersState((prev) => ({ ...prev, [mint]: value }));
-  //   if (autoSellEnabledState[mint]) {
-  //     if (!walletAddress) {
-  //       alert("Wallet address not loaded. Please refresh or re-login.");
-  //       return;
-  //     }
-  //     const preset = sellPresets[activeSellPreset] || {};
-  //     const payload = {
-  //       userId,
-  //       walletAddress,
-  //       mint,
-  //       buyPrice: userTokens.find((t) => t.mint === mint)?.buyAmount || 0,
-  //       takeProfit: Number(takeProfitState[mint]) || undefined,
-  //       stopLoss: Number(stopLossState[mint]) || undefined,
-  //       autoSellPercent: Number(autoSellPercentState[mint]) || 100,
-  //       autoSellEnabled: true,
-  //       slippage: preset.slippage || 5,
-  //       priorityFee: preset.priorityFee || 0.001,
-  //       bribeAmount: preset.bribeAmount || 0,
-  //       tokenName: userTokens.find((t) => t.mint)?.name,
-  //       tokenSymbol: userTokens.find((t) => t.mint)?.symbol,
-  //       trailingStopLossPercent: Number(trailingStopLossState[mint]) || 10,
-  //       trailingStopLossEnabled:
-  //         trailingStopLossEnabledState[mint] !== undefined
-  //           ? trailingStopLossEnabledState[mint]
-  //           : false,
-  //       timeBasedSellSec: Number(timeBasedSellState[mint]) || 0,
-  //       timeBasedSellEnabled:
-  //         timeBasedSellEnabledState[mint] !== undefined
-  //           ? timeBasedSellEnabledState[mint]
-  //           : false,
-  //       waitForBuyersBeforeSell: Number(value) || 5,
-  //       waitForBuyersBeforeSellEnabled:
-  //         waitForBuyersEnabledState[mint] !== undefined
-  //           ? waitForBuyersEnabledState[mint]
-  //           : false,
-  //     };
-  //     const API_URL = import.meta.env.VITE_API_BASE_URL;
-  //     fetch(`${API_URL}/api/auto-sell/upsert`, {
-  //       method: "POST",
-  //       headers: { "Content-Type": "application/json" },
-  //       body: JSON.stringify(payload),
-  //     });
-  //   }
-  // };
-
-  // const handleWaitForBuyersEnabledChange = (mint: string, checked: boolean) => {
-  //   setWaitForBuyersEnabledState((prev) => ({ ...prev, [mint]: checked }));
-  //   if (autoSellEnabledState[mint]) {
-  //     if (!walletAddress) {
-  //       alert("Wallet address not loaded. Please refresh or re-login.");
-  //       return;
-  //     }
-  //     const preset = sellPresets[activeSellPreset] || {};
-  //     const payload = {
-  //       userId,
-  //       walletAddress,
-  //       mint,
-  //       buyPrice: userTokens.find((t) => t.mint === mint)?.buyAmount || 0,
-  //       takeProfit: Number(takeProfitState[mint]) || undefined,
-  //       stopLoss: Number(stopLossState[mint]) || undefined,
-  //       autoSellPercent: Number(autoSellPercentState[mint]) || 100,
-  //       autoSellEnabled: true,
-  //       slippage: preset.slippage || 5,
-  //       priorityFee: preset.priorityFee || 0.001,
-  //       bribeAmount: preset.bribeAmount || 0,
-  //       tokenName: userTokens.find((t) => t.mint)?.name,
-  //       tokenSymbol: userTokens.find((t) => t.mint)?.symbol,
-  //       trailingStopLossPercent: Number(trailingStopLossState[mint]) || 10,
-  //       trailingStopLossEnabled:
-  //         trailingStopLossEnabledState[mint] !== undefined
-  //           ? trailingStopLossEnabledState[mint]
-  //           : false,
-  //       timeBasedSellSec: Number(timeBasedSellState[mint]) || 0,
-  //       timeBasedSellEnabled:
-  //         timeBasedSellEnabledState[mint] !== undefined
-  //           ? timeBasedSellEnabledState[mint]
-  //           : false,
-  //       waitForBuyersBeforeSell: Number(waitForBuyersState[mint]) || 5,
-  //       waitForBuyersBeforeSellEnabled: checked,
-  //     };
-  //     const API_URL = import.meta.env.VITE_API_BASE_URL;
-  //     fetch(`${API_URL}/api/auto-sell/upsert`, {
-  //       method: "POST",
-  //       headers: { "Content-Type": "application/json" },
-  //       body: JSON.stringify(payload),
-  //     });
-  //   }
-  // };
 
   return (
     <>
@@ -1627,116 +1102,584 @@ const TokenListWithAge: React.FC = () => {
             }}
             solBalance={solBalance}
           />
-          <Snackbar
-            open={autoBuySnackbar.open}
-            autoHideDuration={4000}
-            onClose={() => setAutoBuySnackbar({ open: false, message: "" })}
-            anchorOrigin={{ vertical: "top", horizontal: "center" }}
-          >
-            <Alert
-              onClose={() => setAutoBuySnackbar({ open: false, message: "" })}
-              severity="success"
-              sx={{ width: "100%" }}
-            >
-              {autoBuySnackbar.message}
-            </Alert>
-          </Snackbar>
+
 
           <div className={styles.container}>
             <div className={styles.header}>
-          <h2 className={styles.title}>
-            {showMyTokens ? "Portfolio" : "Trending Tokens"}
-          </h2>
-          <div className={styles.controls}>
-            <Button
-              variant="outlined"
-              style={{ border: "none" }}
-              className={styles.filterButton}
-              onClick={() => setShowFilters(true)}
-            >
-              <img
-                src="./homePageIcons/filter.png"
-                height={20}
-                width={20}
-                alt="Filter Icon"
-              />
-            </Button>
-            <Button
-              style={{ border: "none", padding: 0 }}
-              variant="outlined"
-              className={styles.settingsButton}
-              onClick={handleSettingsClick}
-            >
-              <img
-                src="/homePageIcons/settings.png"
-                height={20}
-                width={20}
-                alt="Settings Icon"
-              />
-            </Button>
-          </div>
-        </div>
-
-        {/* Section Buttons for mobile view */}
-        {!showMyTokens && (
-          <div className={styles.sectionButtons}>
-            <button
-              className={`${styles.sectionButton} ${activeSection === 'fresh-drops' ? styles.sectionButtonActive : ''}`}
-              onClick={() => setActiveSection('fresh-drops')}
-            >
-              Fresh-Drops
-            </button>
-            <button
-              className={`${styles.sectionButton} ${activeSection === 'heating-up' ? styles.sectionButtonActive : ''}`}
-              onClick={() => setActiveSection('heating-up')}
-            >
-              Heating-Up
-            </button>
-            <button
-              className={`${styles.sectionButton} ${activeSection === 'battle-tested' ? styles.sectionButtonActive : ''}`}
-              onClick={() => setActiveSection('battle-tested')}
-            >
-              Battle-Tested
-            </button>
-          </div>
-        )}
-
-        {showMyTokens ? (
-          /* MY TOKENS VIEW */
-          <div className={styles.tokenSectionsContainer}>
-            <div className={styles.tokenSection}>
-              <div className={styles.sectionHeader}>
-                <h3 className={styles.sectionTitle}>Portfolio</h3>
+              <h2 className={styles.title}>
+                {showMyTokens ? "Portfolio" : "Trending Tokens"}
+              </h2>
+              <div className={styles.controls}>
+                <Button
+                  variant="outlined"
+                  style={{ border: "none" }}
+                  className={styles.filterButton}
+                  onClick={() => setShowFilters(true)}
+                >
+                  <img
+                    src="./homePageIcons/filter.png"
+                    height={20}
+                    width={20}
+                    alt="Filter Icon"
+                  />
+                </Button>
+                <Button
+                  style={{ border: "none", padding: 0 }}
+                  variant="outlined"
+                  className={styles.settingsButton}
+                  onClick={handleSettingsClick}
+                >
+                  <img
+                    src="/homePageIcons/settings.png"
+                    height={20}
+                    width={20}
+                    alt="Settings Icon"
+                  />
+                </Button>
               </div>
-              <div className={styles.tokenGrid}>
-                {sortedUserTokens.length === 0 ? (
-                  <div className={styles.noTokensMessage}>
-                    You don't have any tokens yet
-                  </div>
-                ) : (
-                  sortedUserTokens.map((token) => {
-                    const buyPrice = token.buyAmount;
-                    const currentPrice = token.currentPrice;
-                    const profitLoss = getProfitLossPercent(buyPrice, currentPrice);
-                    const profitLossColor =
-                      profitLoss > 0
-                        ? "#4CAF50"
-                        : profitLoss < 0
-                          ? "#ff6b6b"
-                          : "#888";
+            </div>
 
-                    return (
+            {/* Section Buttons for mobile view */}
+            {!showMyTokens && (
+              <div className={styles.sectionButtons}>
+                <button
+                  className={`${styles.sectionButton} ${
+                    activeSection === "fresh-drops"
+                      ? styles.sectionButtonActive
+                      : ""
+                  }`}
+                  onClick={() => setActiveSection("fresh-drops")}
+                >
+                  Fresh-Drops
+                </button>
+                <button
+                  className={`${styles.sectionButton} ${
+                    activeSection === "heating-up"
+                      ? styles.sectionButtonActive
+                      : ""
+                  }`}
+                  onClick={() => setActiveSection("heating-up")}
+                >
+                  Heating-Up
+                </button>
+                <button
+                  className={`${styles.sectionButton} ${
+                    activeSection === "battle-tested"
+                      ? styles.sectionButtonActive
+                      : ""
+                  }`}
+                  onClick={() => setActiveSection("battle-tested")}
+                >
+                  Battle-Tested
+                </button>
+              </div>
+            )}
+
+            {showMyTokens ? (
+              /* MY TOKENS VIEW */
+              <div className={styles.tokenSectionsContainer}>
+                <div className={styles.tokenSection}>
+                  <div className={styles.sectionHeader}>
+                    <h3 className={styles.sectionTitle}>Portfolio</h3>
+                  </div>
+                  <div className={styles.tokenGrid}>
+                    {sortedUserTokens.length === 0 ? (
+                      <div className={styles.noTokensMessage}>
+                        You don't have any tokens yet
+                      </div>
+                    ) : (
+                      sortedUserTokens.map((token) => {
+                        const buyPrice = token.buyAmount;
+                        const currentPrice = token.currentPrice;
+                        const profitLoss = getProfitLossPercent(
+                          buyPrice,
+                          currentPrice
+                        );
+                        const profitLossColor =
+                          profitLoss > 0
+                            ? "#4CAF50"
+                            : profitLoss < 0
+                            ? "#ff6b6b"
+                            : "#888";
+
+                        return (
+                          <div
+                            key={token.mint}
+                            className={styles.tokenCard}
+                            onClick={() => handleTokenClick(token)}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.transform =
+                                "translateY(-2px)";
+                              e.currentTarget.style.boxShadow =
+                                "0 6px 12px rgba(0, 0, 0, 0.2)";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.transform = "translateY(0)";
+                              e.currentTarget.style.boxShadow =
+                                "0 4px 6px rgba(0, 0, 0, 0.1)";
+                            }}
+                          >
+                            <div className={styles.tokenCardTop}>
+                              <div className={styles.tokenImageContainer}>
+                                <img
+                                  src={token.imageUrl}
+                                  alt={token.name}
+                                  className={styles.tokenImage}
+                                  onError={(e) =>
+                                    (e.currentTarget.style.display = "none")
+                                  }
+                                />
+                                <div
+                                  className={styles.tokenCreator}
+                                  title={
+                                    token.creator || token.devAddress || "-"
+                                  }
+                                  onClick={() =>
+                                    navigator.clipboard.writeText(
+                                      token.creator || token.devAddress || "-"
+                                    )
+                                  }
+                                >
+                                  <span className={styles.tokenCreatorAddress}>
+                                    {(
+                                      token.creator ||
+                                      token.devAddress ||
+                                      "-"
+                                    ).substring(0, 4)}
+                                    ...
+                                    {(
+                                      token.creator ||
+                                      token.devAddress ||
+                                      "-"
+                                    ).slice(-4)}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className={styles.tokenInfo}>
+                                <div className={styles.tokenNameRow}>
+                                  <div className={styles.tokenNameWithMint}>
+                                    <span className={styles.tokenName}>
+                                      {token.name}
+                                    </span>
+                                    <span
+                                      className={styles.tokenMintCopyIcon}
+                                      title={token.mint}
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(
+                                          token.mint
+                                        );
+                                      }}
+                                      role="button"
+                                      tabIndex={0}
+                                      onKeyDown={(e) => {
+                                        if (
+                                          e.key === "Enter" ||
+                                          e.key === " "
+                                        ) {
+                                          navigator.clipboard.writeText(
+                                            token.mint
+                                          );
+                                        }
+                                      }}
+                                      aria-label={`Copy mint address: ${token.mint}`}
+                                      style={{
+                                        cursor: "pointer",
+                                        marginLeft: "6px",
+                                      }}
+                                    >
+                                      <FontAwesomeIcon icon={faCopy} />
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className={styles.tokenAgeWithIcons}>
+                                  <span className={styles.tokenAge}>
+                                    {getAgeString(
+                                      now - token.creationTimestamp
+                                    )}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className={styles.tokenStatsTop}>
+                                <div className={styles.tokenLine}>
+                                  <span className={styles.label}>MC</span>
+                                  <span className={styles.mcValue}>$1.2M</span>
+                                </div>
+                                <div className={styles.tokenLine}>
+                                  <span className={styles.label}>Vol</span>
+                                  <span className={styles.defaultValue}>
+                                    $256K
+                                  </span>
+                                </div>
+                                <div className={styles.tokenLine}>
+                                  <span className={styles.label}>Bal</span>
+                                  <span className={styles.defaultValue}>
+                                    {token.balance}
+                                  </span>
+                                </div>
+                                <div className={styles.tokenLine}>
+                                  <span className={styles.label}>P/L</span>
+                                  <span
+                                    className={styles.defaultValue}
+                                    style={{ color: profitLossColor }}
+                                  >
+                                    {profitLoss > 0 ? "+" : ""}
+                                    {profitLoss.toFixed(1)}%
+                                  </span>
+                                </div>
+                                <div
+                                  className={styles.tokenLine}
+                                  title={toFullDecimalString(
+                                    token.currentPrice || 0
+                                  )}
+                                >
+                                  <span className={styles.label}>P</span>
+                                  <img
+                                    src="/footerIcon/solana.png"
+                                    alt="SOL"
+                                    className={styles.solanaIcon}
+                                  />
+                                  <span className={styles.defaultValue}>
+                                    {formatPriceSmart(token.currentPrice || 0)}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className={styles.tokenFooter}>
+                              <div className={styles.bondingCurve}>
+                                <FontAwesomeIcon icon={faUserTie} /> 3%
+                              </div>
+
+                              <button
+                                className={styles.buyButtonGlass}
+                                onClick={(e) => handleBuyClick(token, e)}
+                                disabled={
+                                  !manualBuyAmount ||
+                                  parseFloat(manualBuyAmount) <= 0
+                                }
+                              >
+                                <FontAwesomeIcon
+                                  icon={faBolt}
+                                  style={{ marginRight: 6 }}
+                                />
+                                {manualBuyAmount
+                                  ? `${manualBuyAmount} SOL`
+                                  : ""}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* ALL TOKENS VIEW (with age-based sections) */
+              <div className={styles.tokenSectionsContainer}>
+                {/* Section 1: Tokens <= 24h */}
+                <div
+                  className={`${styles.tokenSection} ${
+                    activeSection !== "fresh-drops" ? styles.hiddenOnMobile : ""
+                  }`}
+                >
+                  <div className={styles.sectionHeader}>
+                    <h3 className={styles.sectionTitle}>Fresh-Drops</h3>
+                    <SectionFilters
+                      sortOrder={sortOrder24h}
+                      setSortOrder={setSortOrder24h}
+                      sectionTitle="Fresh-Drops"
+                      userId={userId}
+                    />
+                  </div>
+                  <div className={styles.tokenGrid}>
+                    {filterTokensByAge(sortedTokens, 0, 24, sortOrder24h).map(
+                      (token) => (
+                        <div
+                          key={token.mint}
+                          className={styles.tokenCard}
+                          onClick={() => handleTokenClick(token)}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.transform =
+                              "translateY(-2px)";
+                            e.currentTarget.style.boxShadow =
+                              "0 6px 12px rgba(0, 0, 0, 0.2)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.transform = "translateY(0)";
+                            e.currentTarget.style.boxShadow =
+                              "0 4px 6px rgba(0, 0, 0, 0.1)";
+                          }}
+                        >
+                          <div className={styles.tokenCardTop}>
+                            <div className={styles.tokenImageContainer}>
+                              <img
+                                src={token.imageUrl}
+                                alt={token.name}
+                                className={styles.tokenImage}
+                                onError={(e) =>
+                                  (e.currentTarget.style.display = "none")
+                                }
+                              />
+                              <div
+                                className={styles.tokenCreator}
+                                title={token.creator || token.devAddress || "-"}
+                                onClick={() =>
+                                  navigator.clipboard.writeText(
+                                    token.creator || token.devAddress || "-"
+                                  )
+                                }
+                              >
+                                {" "}
+                                <span className={styles.tokenCreatorAddress}>
+                                  {(
+                                    token.creator ||
+                                    token.devAddress ||
+                                    "-"
+                                  ).substring(0, 4)}
+                                  ...
+                                  {(
+                                    token.creator ||
+                                    token.devAddress ||
+                                    "-"
+                                  ).slice(-4)}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className={styles.tokenInfo}>
+                              <div className={styles.tokenNameRow}>
+                                <div className={styles.tokenNameWithMint}>
+                                  <span className={styles.tokenName}>
+                                    {token.name}
+                                  </span>
+
+                                  <span
+                                    className={styles.tokenMintCopyIcon}
+                                    title={token.mint} // tooltip on hover
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(token.mint);
+                                      // Optional: show a toast/snackbar for feedback here
+                                    }}
+                                    role="button"
+                                    tabIndex={0}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter" || e.key === " ") {
+                                        navigator.clipboard.writeText(
+                                          token.mint
+                                        );
+                                      }
+                                    }}
+                                    aria-label={`Copy mint address: ${token.mint}`}
+                                    style={{
+                                      cursor: "pointer",
+                                      marginLeft: "6px",
+                                    }}
+                                  >
+                                    <FontAwesomeIcon icon={faCopy} />
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className={styles.tokenAgeWithIcons}>
+                                <span className={styles.tokenAge}>
+                                  {getAgeString(now - token.creationTimestamp)}
+                                </span>
+                                <div className={styles.iconRow}>
+                                  <a
+                                    href="#"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    <FontAwesomeIcon
+                                      icon={faUser}
+                                      className={`${styles.icon} ${styles.userIcon}`}
+                                    />
+                                  </a>
+                                  <a
+                                    href="#"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    <FontAwesomeIcon
+                                      icon={faGlobe}
+                                      className={`${styles.icon} ${styles.globeIcon}`}
+                                    />
+                                  </a>
+                                  <a
+                                    href="#"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    <FontAwesomeIcon
+                                      icon={faTelegram}
+                                      className={`${styles.icon} ${styles.telegramIcon}`}
+                                    />
+                                  </a>
+                                  <a
+                                    href="#"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    <FontAwesomeIcon
+                                      icon={faPills}
+                                      className={`${styles.icon} ${styles.pillsIcon}`}
+                                    />
+                                  </a>
+                                  <a
+                                    href="#"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    <FontAwesomeIcon
+                                      icon={faMagnifyingGlass}
+                                      className={`${styles.icon} ${styles.searchIcon}`}
+                                    />
+                                  </a>
+                                </div>
+                              </div>
+
+                              <div className={styles.tokenStatsRow}>
+                                <div className={styles.statItem}>
+                                  <FontAwesomeIcon
+                                    icon={faUsers}
+                                    className={styles.statIcon}
+                                  />
+                                  <span className={styles.statValue}>432</span>
+                                </div>
+                                <div className={styles.statItem}>
+                                  <FontAwesomeIcon
+                                    icon={faArrowUp}
+                                    className={`${styles.statIcon} ${styles.stateIconUP}`}
+                                  />
+                                  <span className={styles.statValue}>91</span>
+                                </div>
+                                <div className={styles.statItem}>
+                                  <FontAwesomeIcon
+                                    icon={faArrowDown}
+                                    className={`${styles.statIcon} ${styles.stateIconDOWN}`}
+                                  />
+                                  <span className={styles.statValue}>14</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className={styles.tokenStatsTop}>
+                              <div className={styles.tokenLine}>
+                                <span
+                                  className={styles.label}
+                                  style={{
+                                    fontSize: "13px",
+                                    marginBottom: "4px",
+                                  }}
+                                >
+                                  MC
+                                </span>
+                                <span
+                                  className={styles.mcValue}
+                                  style={{
+                                    fontSize: "13px",
+                                    marginBottom: "4px",
+                                  }}
+                                >
+                                  $1.2M
+                                </span>
+                              </div>
+                              <div className={styles.tokenLine}>
+                                <span className={styles.label}>Vol</span>
+                                <span className={styles.defaultValue}>
+                                  $256K
+                                </span>
+                              </div>
+                              <div className={styles.tokenLine}>
+                                <span className={styles.label}>TX</span>
+                                <span className={styles.defaultValue}>
+                                  3.4K
+                                </span>
+                              </div>
+                              <div
+                                className={styles.tokenLine}
+                                title={toFullDecimalString(
+                                  token.currentPrice || 0
+                                )}
+                              >
+                                <span className={styles.label}>P</span>
+                                <img
+                                  src="/footerIcon/solana.png"
+                                  alt="SOL"
+                                  className={styles.solanaIcon}
+                                />
+                                <span className={styles.defaultValue}>
+                                  {formatPriceSmart(token.currentPrice || 0)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className={styles.tokenFooter}>
+                            <div className={styles.bondingCurve}>
+                              <FontAwesomeIcon icon={faUserTie} /> 3%
+                            </div>
+
+                            <button
+                              className={styles.buyButtonGlass}
+                              onClick={(e) => handleBuyClick(token, e)}
+                              disabled={
+                                !manualBuyAmount ||
+                                parseFloat(manualBuyAmount) <= 0
+                              }
+                            >
+                              <FontAwesomeIcon
+                                icon={faBolt}
+                                style={{ marginRight: 6 }}
+                              />
+                              {manualBuyAmount ? `${manualBuyAmount} SOL` : ""}
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    )}
+                  </div>
+                </div>
+
+                {/* Section 2: Tokens 24h-48h */}
+                <div
+                  className={`${styles.tokenSection} ${
+                    activeSection !== "heating-up" ? styles.hiddenOnMobile : ""
+                  }`}
+                >
+                  <div className={styles.sectionHeader}>
+                    <h3 className={styles.sectionTitle}>Heating-Up</h3>
+                    <SectionFilters
+                      sortOrder={sortOrder24_48h}
+                      setSortOrder={setSortOrder24_48h}
+                      sectionTitle="Heating-Up"
+                      userId={userId}
+                    />
+                  </div>
+                  <div className={styles.tokenGrid}>
+                    {filterTokensByAge(
+                      sortedTokens,
+                      24,
+                      48,
+                      sortOrder24_48h
+                    ).map((token) => (
                       <div
                         key={token.mint}
                         className={styles.tokenCard}
                         onClick={() => handleTokenClick(token)}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.transform = "translateY(-2px)";
-                          e.currentTarget.style.boxShadow = "0 6px 12px rgba(0, 0, 0, 0.2)";
+                          e.currentTarget.style.boxShadow =
+                            "0 6px 12px rgba(0, 0, 0, 0.2)";
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.transform = "translateY(0)";
-                          e.currentTarget.style.boxShadow = "0 4px 6px rgba(0, 0, 0, 0.1)";
+                          e.currentTarget.style.boxShadow =
+                            "0 4px 6px rgba(0, 0, 0, 0.1)";
                         }}
                       >
                         <div className={styles.tokenCardTop}>
@@ -1745,18 +1688,32 @@ const TokenListWithAge: React.FC = () => {
                               src={token.imageUrl}
                               alt={token.name}
                               className={styles.tokenImage}
-                              onError={(e) => (e.currentTarget.style.display = "none")}
+                              onError={(e) =>
+                                (e.currentTarget.style.display = "none")
+                              }
                             />
                             <div
                               className={styles.tokenCreator}
                               title={token.creator || token.devAddress || "-"}
                               onClick={() =>
-                                navigator.clipboard.writeText(token.creator || token.devAddress || "-")
+                                navigator.clipboard.writeText(
+                                  token.creator || token.devAddress || "-"
+                                )
                               }
                             >
+                              {" "}
                               <span className={styles.tokenCreatorAddress}>
-                                {(token.creator || token.devAddress || "-").substring(0, 4)}...
-                                {(token.creator || token.devAddress || "-").slice(-4)}
+                                {(
+                                  token.creator ||
+                                  token.devAddress ||
+                                  "-"
+                                ).substring(0, 4)}
+                                ...
+                                {(
+                                  token.creator ||
+                                  token.devAddress ||
+                                  "-"
+                                ).slice(-4)}
                               </span>
                             </div>
                           </div>
@@ -1764,12 +1721,16 @@ const TokenListWithAge: React.FC = () => {
                           <div className={styles.tokenInfo}>
                             <div className={styles.tokenNameRow}>
                               <div className={styles.tokenNameWithMint}>
-                                <span className={styles.tokenName}>{token.name}</span>
+                                <span className={styles.tokenName}>
+                                  {token.name}
+                                </span>
+
                                 <span
                                   className={styles.tokenMintCopyIcon}
-                                  title={token.mint}
+                                  title={token.mint} // tooltip on hover
                                   onClick={() => {
                                     navigator.clipboard.writeText(token.mint);
+                                    // Optional: show a toast/snackbar for feedback here
                                   }}
                                   role="button"
                                   tabIndex={0}
@@ -1779,7 +1740,10 @@ const TokenListWithAge: React.FC = () => {
                                     }
                                   }}
                                   aria-label={`Copy mint address: ${token.mint}`}
-                                  style={{ cursor: "pointer", marginLeft: "6px" }}
+                                  style={{
+                                    cursor: "pointer",
+                                    marginLeft: "6px",
+                                  }}
                                 >
                                   <FontAwesomeIcon icon={faCopy} />
                                 </span>
@@ -1790,29 +1754,120 @@ const TokenListWithAge: React.FC = () => {
                               <span className={styles.tokenAge}>
                                 {getAgeString(now - token.creationTimestamp)}
                               </span>
+                              <div className={styles.iconRow}>
+                                <a
+                                  href="#"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  <FontAwesomeIcon
+                                    icon={faUser}
+                                    className={`${styles.icon} ${styles.userIcon}`}
+                                  />
+                                </a>
+                                <a
+                                  href="#"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  <FontAwesomeIcon
+                                    icon={faGlobe}
+                                    className={`${styles.icon} ${styles.globeIcon}`}
+                                  />
+                                </a>
+                                <a
+                                  href="#"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  <FontAwesomeIcon
+                                    icon={faTelegram}
+                                    className={`${styles.icon} ${styles.telegramIcon}`}
+                                  />
+                                </a>
+                                <a
+                                  href="#"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  <FontAwesomeIcon
+                                    icon={faPills}
+                                    className={`${styles.icon} ${styles.pillsIcon}`}
+                                  />
+                                </a>
+                                <a
+                                  href="#"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  <FontAwesomeIcon
+                                    icon={faMagnifyingGlass}
+                                    className={`${styles.icon} ${styles.searchIcon}`}
+                                  />
+                                </a>
+                              </div>
+                            </div>
+
+                            <div className={styles.tokenStatsRow}>
+                              <div className={styles.statItem}>
+                                <FontAwesomeIcon
+                                  icon={faUsers}
+                                  className={styles.statIcon}
+                                />
+                                <span className={styles.statValue}>432</span>
+                              </div>
+                              <div className={styles.statItem}>
+                                <FontAwesomeIcon
+                                  icon={faArrowUp}
+                                  className={`${styles.statIcon} ${styles.stateIconUP}`}
+                                />
+                                <span className={styles.statValue}>91</span>
+                              </div>
+                              <div className={styles.statItem}>
+                                <FontAwesomeIcon
+                                  icon={faArrowDown}
+                                  className={`${styles.statIcon} ${styles.stateIconDOWN}`}
+                                />
+                                <span className={styles.statValue}>14</span>
+                              </div>
                             </div>
                           </div>
 
                           <div className={styles.tokenStatsTop}>
                             <div className={styles.tokenLine}>
-                              <span className={styles.label}>MC</span>
-                              <span className={styles.mcValue}>$1.2M</span>
+                              <span
+                                className={styles.label}
+                                style={{
+                                  fontSize: "13px",
+                                  marginBottom: "4px",
+                                }}
+                              >
+                                MC
+                              </span>
+                              <span
+                                className={styles.mcValue}
+                                style={{
+                                  fontSize: "13px",
+                                  marginBottom: "4px",
+                                }}
+                              >
+                                $1.2M
+                              </span>
                             </div>
                             <div className={styles.tokenLine}>
                               <span className={styles.label}>Vol</span>
                               <span className={styles.defaultValue}>$256K</span>
                             </div>
                             <div className={styles.tokenLine}>
-                              <span className={styles.label}>Bal</span>
-                              <span className={styles.defaultValue}>{token.balance}</span>
+                              <span className={styles.label}>TX</span>
+                              <span className={styles.defaultValue}>3.4K</span>
                             </div>
-                            <div className={styles.tokenLine}>
-                              <span className={styles.label}>P/L</span>
-                              <span className={styles.defaultValue} style={{ color: profitLossColor }}>
-                                {profitLoss > 0 ? "+" : ""}{profitLoss.toFixed(1)}%
-                              </span>
-                            </div>
-                            <div className={styles.tokenLine} title={toFullDecimalString(token.currentPrice || 0)}>
+                            <div
+                              className={styles.tokenLine}
+                              title={toFullDecimalString(
+                                token.currentPrice || 0
+                              )}
+                            >
                               <span className={styles.label}>P</span>
                               <img
                                 src="/footerIcon/solana.png"
@@ -1833,546 +1888,289 @@ const TokenListWithAge: React.FC = () => {
 
                           <button
                             className={styles.buyButtonGlass}
-                            onClick={() => handleBuyClick(token)}
-                            disabled={!manualBuyAmount || parseFloat(manualBuyAmount) <= 0}
+                            onClick={(e) => handleBuyClick(token, e)}
+                            disabled={
+                              !manualBuyAmount ||
+                              parseFloat(manualBuyAmount) <= 0
+                            }
                           >
-                            <FontAwesomeIcon icon={faBolt} style={{ marginRight: 6 }} />
+                            <FontAwesomeIcon
+                              icon={faBolt}
+                              style={{ marginRight: 6 }}
+                            />
                             {manualBuyAmount ? `${manualBuyAmount} SOL` : ""}
                           </button>
                         </div>
                       </div>
-                    );
-                  })
-                )}
+                    ))}
+                  </div>
+                </div>
+
+                {/* Section 3: Tokens > 48h */}
+                <div
+                  className={`${styles.tokenSection} ${
+                    activeSection !== "battle-tested"
+                      ? styles.hiddenOnMobile
+                      : ""
+                  }`}
+                >
+                  <div className={styles.sectionHeader}>
+                    <h3 className={styles.sectionTitle}>Battle-Tested</h3>
+                    <SectionFilters
+                      sortOrder={sortOrder48h}
+                      setSortOrder={setSortOrder48h}
+                      sectionTitle="Battle-Tested"
+                      userId={userId}
+                    />
+                  </div>
+                  <div className={styles.tokenGrid}>
+                    {filterTokensByAge(
+                      sortedTokens,
+                      48,
+                      Infinity,
+                      sortOrder48h
+                    ).map((token) => (
+                      <div
+                        key={token.mint}
+                        className={styles.tokenCard}
+                        onClick={() => handleTokenClick(token)}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = "translateY(-2px)";
+                          e.currentTarget.style.boxShadow =
+                            "0 6px 12px rgba(0, 0, 0, 0.2)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = "translateY(0)";
+                          e.currentTarget.style.boxShadow =
+                            "0 4px 6px rgba(0, 0, 0, 0.1)";
+                        }}
+                      >
+                        <div className={styles.tokenCardTop}>
+                          <div className={styles.tokenImageContainer}>
+                            <img
+                              src={token.imageUrl}
+                              alt={token.name}
+                              className={styles.tokenImage}
+                              onError={(e) =>
+                                (e.currentTarget.style.display = "none")
+                              }
+                            />
+                            <div
+                              className={styles.tokenCreator}
+                              title={token.creator || token.devAddress || "-"}
+                              onClick={() =>
+                                navigator.clipboard.writeText(
+                                  token.creator || token.devAddress || "-"
+                                )
+                              }
+                            >
+                              {" "}
+                              <span className={styles.tokenCreatorAddress}>
+                                {(
+                                  token.creator ||
+                                  token.devAddress ||
+                                  "-"
+                                ).substring(0, 4)}
+                                ...
+                                {(
+                                  token.creator ||
+                                  token.devAddress ||
+                                  "-"
+                                ).slice(-4)}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className={styles.tokenInfo}>
+                            <div className={styles.tokenNameRow}>
+                              <div className={styles.tokenNameWithMint}>
+                                <span className={styles.tokenName}>
+                                  {token.name}
+                                </span>
+
+                                <span
+                                  className={styles.tokenMintCopyIcon}
+                                  title={token.mint} // tooltip on hover
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(token.mint);
+                                    // Optional: show a toast/snackbar for feedback here
+                                  }}
+                                  role="button"
+                                  tabIndex={0}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" || e.key === " ") {
+                                      navigator.clipboard.writeText(token.mint);
+                                    }
+                                  }}
+                                  aria-label={`Copy mint address: ${token.mint}`}
+                                  style={{
+                                    cursor: "pointer",
+                                    marginLeft: "6px",
+                                  }}
+                                >
+                                  <FontAwesomeIcon icon={faCopy} />
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className={styles.tokenAgeWithIcons}>
+                              <span className={styles.tokenAge}>
+                                {getAgeString(now - token.creationTimestamp)}
+                              </span>
+                              <div className={styles.iconRow}>
+                                <a
+                                  href="#"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  <FontAwesomeIcon
+                                    icon={faUser}
+                                    className={`${styles.icon} ${styles.userIcon}`}
+                                  />
+                                </a>
+                                <a
+                                  href="#"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  <FontAwesomeIcon
+                                    icon={faGlobe}
+                                    className={`${styles.icon} ${styles.globeIcon}`}
+                                  />
+                                </a>
+                                <a
+                                  href="#"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  <FontAwesomeIcon
+                                    icon={faTelegram}
+                                    className={`${styles.icon} ${styles.telegramIcon}`}
+                                  />
+                                </a>
+                                <a
+                                  href="#"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  <FontAwesomeIcon
+                                    icon={faPills}
+                                    className={`${styles.icon} ${styles.pillsIcon}`}
+                                  />
+                                </a>
+                                <a
+                                  href="#"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  <FontAwesomeIcon
+                                    icon={faMagnifyingGlass}
+                                    className={`${styles.icon} ${styles.searchIcon}`}
+                                  />
+                                </a>
+                              </div>
+                            </div>
+
+                            <div className={styles.tokenStatsRow}>
+                              <div className={styles.statItem}>
+                                <FontAwesomeIcon
+                                  icon={faUsers}
+                                  className={styles.statIcon}
+                                />
+                                <span className={styles.statValue}>432</span>
+                              </div>
+                              <div className={styles.statItem}>
+                                <FontAwesomeIcon
+                                  icon={faArrowUp}
+                                  className={`${styles.statIcon} ${styles.stateIconUP}`}
+                                />
+                                <span className={styles.statValue}>91</span>
+                              </div>
+                              <div className={styles.statItem}>
+                                <FontAwesomeIcon
+                                  icon={faArrowDown}
+                                  className={`${styles.statIcon} ${styles.stateIconDOWN}`}
+                                />
+                                <span className={styles.statValue}>14</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className={styles.tokenStatsTop}>
+                            <div className={styles.tokenLine}>
+                              <span
+                                className={styles.label}
+                                style={{
+                                  fontSize: "13px",
+                                  marginBottom: "4px",
+                                }}
+                              >
+                                MC
+                              </span>
+                              <span
+                                className={styles.mcValue}
+                                style={{
+                                  fontSize: "13px",
+                                  marginBottom: "4px",
+                                }}
+                              >
+                                $1.2M
+                              </span>
+                            </div>
+                            <div className={styles.tokenLine}>
+                              <span className={styles.label}>Vol</span>
+                              <span className={styles.defaultValue}>$256K</span>
+                            </div>
+                            <div className={styles.tokenLine}>
+                              <span className={styles.label}>TX</span>
+                              <span className={styles.defaultValue}>3.4K</span>
+                            </div>
+                            <div
+                              className={styles.tokenLine}
+                              title={toFullDecimalString(
+                                token.currentPrice || 0
+                              )}
+                            >
+                              <span className={styles.label}>P</span>
+                              <img
+                                src="/footerIcon/solana.png"
+                                alt="SOL"
+                                className={styles.solanaIcon}
+                              />
+                              <span className={styles.defaultValue}>
+                                {formatPriceSmart(token.currentPrice || 0)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className={styles.tokenFooter}>
+                          <div className={styles.bondingCurve}>
+                            <FontAwesomeIcon icon={faUserTie} /> 3%
+                          </div>
+
+                          <button
+                            className={styles.buyButtonGlass}
+                            onClick={(e) => handleBuyClick(token, e)}
+                            disabled={
+                              !manualBuyAmount ||
+                              parseFloat(manualBuyAmount) <= 0
+                            }
+                          >
+                            <FontAwesomeIcon
+                              icon={faBolt}
+                              style={{ marginRight: 6 }}
+                            />
+                            {manualBuyAmount ? `${manualBuyAmount} SOL` : ""}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
           </div>
-        ) : (
-          /* ALL TOKENS VIEW (with age-based sections) */
-          <div className={styles.tokenSectionsContainer}>
-            {/* Section 1: Tokens <= 24h */}
-            <div className={`${styles.tokenSection} ${activeSection !== 'fresh-drops' ? styles.hiddenOnMobile : ''}`}>
-              <div className={styles.sectionHeader}>
-                <h3 className={styles.sectionTitle}>Fresh-Drops</h3>
-                <SectionFilters
-                  sortOrder={sortOrder24h}
-                  setSortOrder={setSortOrder24h}
-                  sectionTitle="Fresh-Drops"
-                  userId={userId}
-                />
-              </div>
-              <div className={styles.tokenGrid}>
-                {filterTokensByAge(sortedTokens, 0, 24, sortOrder24h).map((token) => (
-                  <div
-                    key={token.mint}
-                    className={styles.tokenCard}
-                    onClick={() => handleTokenClick(token)}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = "translateY(-2px)";
-                      e.currentTarget.style.boxShadow = "0 6px 12px rgba(0, 0, 0, 0.2)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = "translateY(0)";
-                      e.currentTarget.style.boxShadow = "0 4px 6px rgba(0, 0, 0, 0.1)";
-                    }}
-                  >
-                    <div className={styles.tokenCardTop}>
-                      <div className={styles.tokenImageContainer}>
-                        <img
-                          src={token.imageUrl}
-                          alt={token.name}
-                          className={styles.tokenImage}
-                          onError={(e) => (e.currentTarget.style.display = "none")}
-                        />
-                        <div
-                          className={styles.tokenCreator}
-                          title={token.creator || token.devAddress || "-"}
-                          onClick={() =>
-                            navigator.clipboard.writeText(token.creator || token.devAddress || "-")
-                          }
-                        >
-                          {" "}
-                          <span className={styles.tokenCreatorAddress}>
-                            {(token.creator || token.devAddress || "-").substring(0, 4)}...
-                            {(token.creator || token.devAddress || "-").slice(-4)}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className={styles.tokenInfo}>
-                        <div className={styles.tokenNameRow}>
-                          <div className={styles.tokenNameWithMint}>
-                            <span className={styles.tokenName}>{token.name}</span>
-
-                            <span
-                              className={styles.tokenMintCopyIcon}
-                              title={token.mint}                        // tooltip on hover
-                              onClick={() => {
-                                navigator.clipboard.writeText(token.mint);
-                                // Optional: show a toast/snackbar for feedback here
-                              }}
-                              role="button"
-                              tabIndex={0}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter" || e.key === " ") {
-                                  navigator.clipboard.writeText(token.mint);
-                                }
-                              }}
-                              aria-label={`Copy mint address: ${token.mint}`}
-                              style={{ cursor: "pointer", marginLeft: "6px" }}
-                            >
-                              <FontAwesomeIcon icon={faCopy} />
-                            </span>
-                          </div>
-                        </div>
-
-
-                        <div className={styles.tokenAgeWithIcons}>
-                          <span className={styles.tokenAge}>
-                            {getAgeString(now - token.creationTimestamp)}
-                          </span>
-                          <div className={styles.iconRow}>
-                            <a href="#" target="_blank" rel="noopener noreferrer">
-                              <FontAwesomeIcon icon={faUser} className={`${styles.icon} ${styles.userIcon}`} />
-                            </a>
-                            <a href="#" target="_blank" rel="noopener noreferrer">
-                              <FontAwesomeIcon icon={faGlobe} className={`${styles.icon} ${styles.globeIcon}`} />
-                            </a>
-                            <a href="#" target="_blank" rel="noopener noreferrer">
-                              <FontAwesomeIcon icon={faTelegram} className={`${styles.icon} ${styles.telegramIcon}`} />
-                            </a>
-                            <a href="#" target="_blank" rel="noopener noreferrer">
-                              <FontAwesomeIcon icon={faPills} className={`${styles.icon} ${styles.pillsIcon}`} />
-                            </a>
-                            <a href="#" target="_blank" rel="noopener noreferrer">
-                              <FontAwesomeIcon icon={faMagnifyingGlass} className={`${styles.icon} ${styles.searchIcon}`} />
-                            </a>
-                          </div>
-
-                        </div>
-
-                        <div className={styles.tokenStatsRow}>
-                          <div className={styles.statItem}>
-                            <FontAwesomeIcon icon={faUsers} className={styles.statIcon} />
-                            <span className={styles.statValue}>432</span>
-                          </div>
-                          <div className={styles.statItem}>
-                            <FontAwesomeIcon icon={faArrowUp} className={`${styles.statIcon} ${styles.stateIconUP}`} />
-                            <span className={styles.statValue}>91</span>
-                          </div>
-                          <div className={styles.statItem}>
-                            <FontAwesomeIcon icon={faArrowDown} className={`${styles.statIcon} ${styles.stateIconDOWN}`} />
-                            <span className={styles.statValue}>14</span>
-                          </div>
-                        </div>
-
-
-
-
-
-                      </div>
-
-                      <div className={styles.tokenStatsTop}>
-                        <div className={styles.tokenLine}>
-                          <span className={styles.label} style={{ fontSize: '13px', marginBottom: '4px' }}>MC</span>
-                          <span className={styles.mcValue} style={{ fontSize: '13px', marginBottom: '4px' }}>$1.2M</span>
-                        </div>
-                        <div className={styles.tokenLine}>
-                          <span className={styles.label}>Vol</span>
-                          <span className={styles.defaultValue}>$256K</span>
-                        </div>
-                        <div className={styles.tokenLine}>
-                          <span className={styles.label}>TX</span>
-                          <span className={styles.defaultValue}>3.4K</span>
-                        </div>
-                        <div className={styles.tokenLine} title={toFullDecimalString(token.currentPrice || 0)}>
-                          <span className={styles.label}>P</span>
-                          <img
-                            src="/footerIcon/solana.png"
-                            alt="SOL"
-                            className={styles.solanaIcon}
-                          />
-                          <span className={styles.defaultValue}>
-                            {formatPriceSmart(token.currentPrice || 0)}
-                          </span>
-                        </div>
-                      </div>
-
-
-                    </div>
-
-                    <div className={styles.tokenFooter}>
-                      <div className={styles.bondingCurve}>
-                        <FontAwesomeIcon icon={faUserTie} /> 3%
-                      </div>
-
-                      <button
-                        className={styles.buyButtonGlass}
-                        onClick={() => handleBuyClick(token)}
-                        disabled={!manualBuyAmount || parseFloat(manualBuyAmount) <= 0}
-                      >
-                        <FontAwesomeIcon icon={faBolt} style={{ marginRight: 6 }} />
-                        {manualBuyAmount ? `${manualBuyAmount} SOL` : ""}
-                      </button>
-                    </div>
-
-                  </div>
-                ))}
-              </div>
-
-            </div>
-
-            {/* Section 2: Tokens 24h-48h */}
-            <div className={`${styles.tokenSection} ${activeSection !== 'heating-up' ? styles.hiddenOnMobile : ''}`}>
-              <div className={styles.sectionHeader}>
-                <h3 className={styles.sectionTitle}>Heating-Up</h3>
-                <SectionFilters
-                  sortOrder={sortOrder24_48h}
-                  setSortOrder={setSortOrder24_48h}
-                  sectionTitle="Heating-Up"
-                  userId={userId}
-                />
-              </div>
-              <div className={styles.tokenGrid}>
-                {filterTokensByAge(sortedTokens, 24, 48, sortOrder24_48h).map(
-                  (token) => (
-                    <div
-                    key={token.mint}
-                    className={styles.tokenCard}
-                    onClick={() => handleTokenClick(token)}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = "translateY(-2px)";
-                      e.currentTarget.style.boxShadow = "0 6px 12px rgba(0, 0, 0, 0.2)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = "translateY(0)";
-                      e.currentTarget.style.boxShadow = "0 4px 6px rgba(0, 0, 0, 0.1)";
-                    }}
-                  >
-                    <div className={styles.tokenCardTop}>
-                      <div className={styles.tokenImageContainer}>
-                        <img
-                          src={token.imageUrl}
-                          alt={token.name}
-                          className={styles.tokenImage}
-                          onError={(e) => (e.currentTarget.style.display = "none")}
-                        />
-                        <div
-                          className={styles.tokenCreator}
-                          title={token.creator || token.devAddress || "-"}
-                          onClick={() =>
-                            navigator.clipboard.writeText(token.creator || token.devAddress || "-")
-                          }
-                        >
-                          {" "}
-                          <span className={styles.tokenCreatorAddress}>
-                            {(token.creator || token.devAddress || "-").substring(0, 4)}...
-                            {(token.creator || token.devAddress || "-").slice(-4)}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className={styles.tokenInfo}>
-                        <div className={styles.tokenNameRow}>
-                          <div className={styles.tokenNameWithMint}>
-                            <span className={styles.tokenName}>{token.name}</span>
-
-                            <span
-                              className={styles.tokenMintCopyIcon}
-                              title={token.mint}                        // tooltip on hover
-                              onClick={() => {
-                                navigator.clipboard.writeText(token.mint);
-                                // Optional: show a toast/snackbar for feedback here
-                              }}
-                              role="button"
-                              tabIndex={0}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter" || e.key === " ") {
-                                  navigator.clipboard.writeText(token.mint);
-                                }
-                              }}
-                              aria-label={`Copy mint address: ${token.mint}`}
-                              style={{ cursor: "pointer", marginLeft: "6px" }}
-                            >
-                              <FontAwesomeIcon icon={faCopy} />
-                            </span>
-                          </div>
-                        </div>
-
-
-                        <div className={styles.tokenAgeWithIcons}>
-                          <span className={styles.tokenAge}>
-                            {getAgeString(now - token.creationTimestamp)}
-                          </span>
-                          <div className={styles.iconRow}>
-                            <a href="#" target="_blank" rel="noopener noreferrer">
-                              <FontAwesomeIcon icon={faUser} className={`${styles.icon} ${styles.userIcon}`} />
-                            </a>
-                            <a href="#" target="_blank" rel="noopener noreferrer">
-                              <FontAwesomeIcon icon={faGlobe} className={`${styles.icon} ${styles.globeIcon}`} />
-                            </a>
-                            <a href="#" target="_blank" rel="noopener noreferrer">
-                              <FontAwesomeIcon icon={faTelegram} className={`${styles.icon} ${styles.telegramIcon}`} />
-                            </a>
-                            <a href="#" target="_blank" rel="noopener noreferrer">
-                              <FontAwesomeIcon icon={faPills} className={`${styles.icon} ${styles.pillsIcon}`} />
-                            </a>
-                            <a href="#" target="_blank" rel="noopener noreferrer">
-                              <FontAwesomeIcon icon={faMagnifyingGlass} className={`${styles.icon} ${styles.searchIcon}`} />
-                            </a>
-                          </div>
-
-                        </div>
-
-                        <div className={styles.tokenStatsRow}>
-                          <div className={styles.statItem}>
-                            <FontAwesomeIcon icon={faUsers} className={styles.statIcon} />
-                            <span className={styles.statValue}>432</span>
-                          </div>
-                          <div className={styles.statItem}>
-                            <FontAwesomeIcon icon={faArrowUp} className={`${styles.statIcon} ${styles.stateIconUP}`} />
-                            <span className={styles.statValue}>91</span>
-                          </div>
-                          <div className={styles.statItem}>
-                            <FontAwesomeIcon icon={faArrowDown} className={`${styles.statIcon} ${styles.stateIconDOWN}`} />
-                            <span className={styles.statValue}>14</span>
-                          </div>
-                        </div>
-
-
-
-
-
-                      </div>
-
-                      <div className={styles.tokenStatsTop}>
-                        <div className={styles.tokenLine}>
-                          <span className={styles.label} style={{ fontSize: '13px', marginBottom: '4px' }}>MC</span>
-                          <span className={styles.mcValue} style={{ fontSize: '13px', marginBottom: '4px' }}>$1.2M</span>
-                        </div>
-                        <div className={styles.tokenLine}>
-                          <span className={styles.label}>Vol</span>
-                          <span className={styles.defaultValue}>$256K</span>
-                        </div>
-                        <div className={styles.tokenLine}>
-                          <span className={styles.label}>TX</span>
-                          <span className={styles.defaultValue}>3.4K</span>
-                        </div>
-                        <div className={styles.tokenLine} title={toFullDecimalString(token.currentPrice || 0)}>
-                          <span className={styles.label}>P</span>
-                          <img
-                            src="/footerIcon/solana.png"
-                            alt="SOL"
-                            className={styles.solanaIcon}
-                          />
-                          <span className={styles.defaultValue}>
-                            {formatPriceSmart(token.currentPrice || 0)}
-                          </span>
-                        </div>
-                      </div>
-
-
-                    </div>
-
-                    <div className={styles.tokenFooter}>
-                      <div className={styles.bondingCurve}>
-                        <FontAwesomeIcon icon={faUserTie} /> 3%
-                      </div>
-
-                      <button
-                        className={styles.buyButtonGlass}
-                        onClick={() => handleBuyClick(token)}
-                        disabled={!manualBuyAmount || parseFloat(manualBuyAmount) <= 0}
-                      >
-                        <FontAwesomeIcon icon={faBolt} style={{ marginRight: 6 }} />
-                        {manualBuyAmount ? `${manualBuyAmount} SOL` : ""}
-                      </button>
-                    </div>
-
-                  </div>
-                  )
-                )}
-              </div>
-            </div>
-
-            {/* Section 3: Tokens > 48h */}
-            <div className={`${styles.tokenSection} ${activeSection !== 'battle-tested' ? styles.hiddenOnMobile : ''}`}>
-              <div className={styles.sectionHeader}>
-                <h3 className={styles.sectionTitle}>Battle-Tested</h3>
-                <SectionFilters
-                  sortOrder={sortOrder48h}
-                  setSortOrder={setSortOrder48h}
-                  sectionTitle="Battle-Tested"
-                  userId={userId}
-                />
-              </div>
-              <div className={styles.tokenGrid}>
-                {filterTokensByAge(
-                  sortedTokens,
-                  48,
-                  Infinity,
-                  sortOrder48h
-                ).map((token) => (
-                  <div
-                    key={token.mint}
-                    className={styles.tokenCard}
-                    onClick={() => handleTokenClick(token)}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = "translateY(-2px)";
-                      e.currentTarget.style.boxShadow = "0 6px 12px rgba(0, 0, 0, 0.2)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = "translateY(0)";
-                      e.currentTarget.style.boxShadow = "0 4px 6px rgba(0, 0, 0, 0.1)";
-                    }}
-                  >
-                    <div className={styles.tokenCardTop}>
-                      <div className={styles.tokenImageContainer}>
-                        <img
-                          src={token.imageUrl}
-                          alt={token.name}
-                          className={styles.tokenImage}
-                          onError={(e) => (e.currentTarget.style.display = "none")}
-                        />
-                        <div
-                          className={styles.tokenCreator}
-                          title={token.creator || token.devAddress || "-"}
-                          onClick={() =>
-                            navigator.clipboard.writeText(token.creator || token.devAddress || "-")
-                          }
-                        >
-                          {" "}
-                          <span className={styles.tokenCreatorAddress}>
-                            {(token.creator || token.devAddress || "-").substring(0, 4)}...
-                            {(token.creator || token.devAddress || "-").slice(-4)}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className={styles.tokenInfo}>
-                        <div className={styles.tokenNameRow}>
-                          <div className={styles.tokenNameWithMint}>
-                            <span className={styles.tokenName}>{token.name}</span>
-
-                            <span
-                              className={styles.tokenMintCopyIcon}
-                              title={token.mint}                        // tooltip on hover
-                              onClick={() => {
-                                navigator.clipboard.writeText(token.mint);
-                                // Optional: show a toast/snackbar for feedback here
-                              }}
-                              role="button"
-                              tabIndex={0}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter" || e.key === " ") {
-                                  navigator.clipboard.writeText(token.mint);
-                                }
-                              }}
-                              aria-label={`Copy mint address: ${token.mint}`}
-                              style={{ cursor: "pointer", marginLeft: "6px" }}
-                            >
-                              <FontAwesomeIcon icon={faCopy} />
-                            </span>
-                          </div>
-                        </div>
-
-
-                        <div className={styles.tokenAgeWithIcons}>
-                          <span className={styles.tokenAge}>
-                            {getAgeString(now - token.creationTimestamp)}
-                          </span>
-                          <div className={styles.iconRow}>
-                            <a href="#" target="_blank" rel="noopener noreferrer">
-                              <FontAwesomeIcon icon={faUser} className={`${styles.icon} ${styles.userIcon}`} />
-                            </a>
-                            <a href="#" target="_blank" rel="noopener noreferrer">
-                              <FontAwesomeIcon icon={faGlobe} className={`${styles.icon} ${styles.globeIcon}`} />
-                            </a>
-                            <a href="#" target="_blank" rel="noopener noreferrer">
-                              <FontAwesomeIcon icon={faTelegram} className={`${styles.icon} ${styles.telegramIcon}`} />
-                            </a>
-                            <a href="#" target="_blank" rel="noopener noreferrer">
-                              <FontAwesomeIcon icon={faPills} className={`${styles.icon} ${styles.pillsIcon}`} />
-                            </a>
-                            <a href="#" target="_blank" rel="noopener noreferrer">
-                              <FontAwesomeIcon icon={faMagnifyingGlass} className={`${styles.icon} ${styles.searchIcon}`} />
-                            </a>
-                          </div>
-
-                        </div>
-
-                        <div className={styles.tokenStatsRow}>
-                          <div className={styles.statItem}>
-                            <FontAwesomeIcon icon={faUsers} className={styles.statIcon} />
-                            <span className={styles.statValue}>432</span>
-                          </div>
-                          <div className={styles.statItem}>
-                            <FontAwesomeIcon icon={faArrowUp} className={`${styles.statIcon} ${styles.stateIconUP}`} />
-                            <span className={styles.statValue}>91</span>
-                          </div>
-                          <div className={styles.statItem}>
-                            <FontAwesomeIcon icon={faArrowDown} className={`${styles.statIcon} ${styles.stateIconDOWN}`} />
-                            <span className={styles.statValue}>14</span>
-                          </div>
-                        </div>
-
-
-
-
-
-                      </div>
-
-                      <div className={styles.tokenStatsTop}>
-                        <div className={styles.tokenLine}>
-                          <span className={styles.label} style={{ fontSize: '13px', marginBottom: '4px' }}>MC</span>
-                          <span className={styles.mcValue} style={{ fontSize: '13px', marginBottom: '4px' }}>$1.2M</span>
-                        </div>
-                        <div className={styles.tokenLine}>
-                          <span className={styles.label}>Vol</span>
-                          <span className={styles.defaultValue}>$256K</span>
-                        </div>
-                        <div className={styles.tokenLine}>
-                          <span className={styles.label}>TX</span>
-                          <span className={styles.defaultValue}>3.4K</span>
-                        </div>
-                        <div className={styles.tokenLine} title={toFullDecimalString(token.currentPrice || 0)}>
-                          <span className={styles.label}>P</span>
-                          <img
-                            src="/footerIcon/solana.png"
-                            alt="SOL"
-                            className={styles.solanaIcon}
-                          />
-                          <span className={styles.defaultValue}>
-                            {formatPriceSmart(token.currentPrice || 0)}
-                          </span>
-                        </div>
-                      </div>
-
-
-                    </div>
-
-                    <div className={styles.tokenFooter}>
-                      <div className={styles.bondingCurve}>
-                        <FontAwesomeIcon icon={faUserTie} /> 3%
-                      </div>
-
-                      <button
-                        className={styles.buyButtonGlass}
-                        onClick={() => handleBuyClick(token)}
-                        disabled={!manualBuyAmount || parseFloat(manualBuyAmount) <= 0}
-                      >
-                        <FontAwesomeIcon icon={faBolt} style={{ marginRight: 6 }} />
-                        {manualBuyAmount ? `${manualBuyAmount} SOL` : ""}
-                      </button>
-                    </div>
-
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
           <HomeSetting
             open={settingsModalOpen}
             onClose={() => setSettingsModalOpen(false)}
@@ -2423,8 +2221,9 @@ const TokenListWithAge: React.FC = () => {
 
           {withdrawNotification.show && (
             <div
-              className={`withdraw-notification-global${withdrawNotification.type === "error" ? " error" : ""
-                }`}
+              className={`withdraw-notification-global${
+                withdrawNotification.type === "error" ? " error" : ""
+              }`}
             >
               <span style={{ flex: 1 }}>{withdrawNotification.message}</span>
               <button
@@ -2444,7 +2243,7 @@ const TokenListWithAge: React.FC = () => {
             </div>
           )}
           <FooterBar onOpenSettings={() => setPresetModalOpen(true)} />
-          
+
           <TokenDetails
             open={showTokenDetails}
             onClose={() => setShowTokenDetails(false)}

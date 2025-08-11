@@ -84,6 +84,7 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
     activeSellPreset,
     setActiveBuyPreset,
     setActiveSellPreset,
+    setTransactionLoading,
   } = useWebSocket();
   const userId = localStorage.getItem("userId") || "default";
   const [solBalance, setSolBalance] = useState<number>(propSolBalance || 0);
@@ -234,7 +235,8 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
 
   const handleAutoSellToggle = (token: Token) => {
     if (!walletAddress) {
-      alert("Wallet address not loaded. Please refresh or re-login.");
+      setTransactionLoading({ type: 'sell', message: '❌ Wallet address not loaded' });
+      setTimeout(() => setTransactionLoading({ type: null, message: '' }), 2000);
       return;
     }
     const enabled = !autoSellConfig.autoSellEnabled;
@@ -466,6 +468,8 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
     const amountLamports = Math.floor(Number(buyAmount) * 1e9);
     const toLamports = (val: string) => Math.floor(Number(val) * 1e9);
 
+    setTransactionLoading({ type: 'buy', message: 'Buy transaction sending...' });
+
     ws.send(
       JSON.stringify({
         type: "MANUAL_BUY",
@@ -511,6 +515,8 @@ const TokenDetails: React.FC<TokenDetailsProps> = ({
 
     const preset = sellPresets[activeSellPreset] || {};
     const sellPercent = Number(sellPercentage);
+    
+    setTransactionLoading({ type: 'sell', message: 'Sell transaction sending...' });
     
     ws.send(
       JSON.stringify({
