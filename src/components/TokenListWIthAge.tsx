@@ -70,6 +70,17 @@ type Token = {
   waitForBuyersBeforeSell?: number; // Added for backend sync
   waitForBuyersBeforeSellEnabled?: boolean; // Added for backend sync
   buyTime?: number; // Added for backend sync
+  // PumpFun specific fields
+  marketCap?: number;
+  volume?: number;
+  holders?: number;
+  buys?: number;
+  sells?: number;
+  bondingCurveProgress?: number;
+  website?: string;
+  twitter?: string;
+  telegram?: string;
+  pumpLink?: string;
 };
 
 function getAgeString(ageMs: number): string {
@@ -398,6 +409,12 @@ const TokenListWithAge: React.FC = () => {
       }
 
       const data = await res.json();
+      console.log('[DEBUG] API Response:', data);
+      console.log('[DEBUG] First token:', data.tokens?.[0]);
+      console.log('[DEBUG] First token marketCap:', data.tokens?.[0]?.marketCap);
+      console.log('[DEBUG] First token volume:', data.tokens?.[0]?.volume);
+      console.log('[DEBUG] First token buys:', data.tokens?.[0]?.buys);
+      console.log('[DEBUG] First token sells:', data.tokens?.[0]?.sells);
       setTokens(data.tokens || []);
       setLoading(false);
     } catch (err: any) {
@@ -428,22 +445,44 @@ const TokenListWithAge: React.FC = () => {
         window.location.href = "/login";
         return;
       }
-      if (data.type === "NEW_TOKEN" && data.token) {
+      if ((data.type === "NEW_TOKEN" || data.type === "NEW_PUMPFUN_TOKEN") && (data.token || data.data)) {
+        const tokenData = data.token || data.data;
+        
+        // Transform PumpFun token data if needed
+        const transformedToken = data.type === "NEW_PUMPFUN_TOKEN" ? {
+          mint: tokenData.metadata.mint,
+          name: tokenData.metadata.name,
+          symbol: tokenData.metadata.symbol,
+          imageUrl: tokenData.metadata.image,
+          creationTimestamp: new Date(tokenData.metadata.createdAt).getTime(),
+          currentPrice: tokenData.tokenAnalytics.priceNative,
+          creator: tokenData.metadata.creator,
+          marketCap: tokenData.tokenAnalytics.marketCap,
+          volume: tokenData.tokenAnalytics.volume,
+          holders: tokenData.holderStats.totalHolders,
+          buys: tokenData.tokenAnalytics.buys,
+          sells: tokenData.tokenAnalytics.sells,
+          bondingCurveProgress: tokenData.bondingCurveProgress.bondingCurveProgress,
+          website: tokenData.metadata.website,
+          twitter: tokenData.metadata.twitter,
+          telegram: tokenData.metadata.telegram,
+          pumpLink: tokenData.metadata.pumpLink
+        } : tokenData;
         // 1. Always update token list
         setTokens((prev) => {
-          const exists = prev.find((t) => t.mint === data.token.mint);
+          const exists = prev.find((t) => t.mint === transformedToken.mint);
           if (exists) {
             return prev.map((t) =>
-              t.mint === data.token.mint ? data.token : t
+              t.mint === transformedToken.mint ? transformedToken : t
             );
           }
-          return [data.token, ...prev];
+          return [transformedToken, ...prev];
         });
 
         // 2. Token detected notification
         setAutoBuySnackbar({
           open: true,
-          message: `Token detected: ${data.token.name || data.token.mint}`,
+          message: `Token detected: ${transformedToken.name || transformedToken.mint}`,
         });
 
         // 3. Only trigger auto-buy if eventType is 'launch'
@@ -505,7 +544,7 @@ const TokenListWithAge: React.FC = () => {
                 const blacklistDevs = blacklistData.blacklistDevs || [];
                 if (
                   !autoBuyFilter(
-                    data.token,
+                    transformedToken,
                     blacklistDevs,
                     whitelistDevs,
                     setAutoBuySnackbar
@@ -548,14 +587,14 @@ const TokenListWithAge: React.FC = () => {
                 ws.send(
                   JSON.stringify({
                     type: "MANUAL_BUY",
-                    mintAddress: data.token.mint,
+                    mintAddress: transformedToken.mint,
                     amount: amountLamports,
                     slippage: preset.slippage,
                     priorityFee: toLamports(preset.priorityFee),
                     bribeAmount: bribeAmountToSend,
                   })
                 );
-                setLastAutoBuyMint(data.token.mint);
+                setLastAutoBuyMint(transformedToken.mint);
 
                 const buyUntilReached = !!userBuyFilters.buyUntilReached;
                 const buyUntilMarketCap =
@@ -566,15 +605,15 @@ const TokenListWithAge: React.FC = () => {
 
                 if (buyUntilReached) {
                   // If an interval is already running for this token, do nothing
-                  if (buyUntilReachedIntervals.current[data.token.mint]) return;
+                  if (buyUntilReachedIntervals.current[transformedToken.mint]) return;
                   // Start polling for this token
-                  buyUntilReachedIntervals.current[data.token.mint] =
+                  buyUntilReachedIntervals.current[transformedToken.mint] =
                     setInterval(async () => {
                       try {
                         // Fetch latest metrics
                         const metricsRes = await fetch(
                           `${import.meta.env.VITE_API_BASE_URL}/api/tokens/${
-                            data.token.mint
+                            transformedToken.mint
                           }/metrics`
                         );
                         const metrics = await metricsRes.json();
@@ -615,10 +654,10 @@ const TokenListWithAge: React.FC = () => {
                               "Auto-buy blocked: Buy Until Reached condition met.",
                           });
                           clearInterval(
-                            buyUntilReachedIntervals.current[data.token.mint]
+                            buyUntilReachedIntervals.current[transformedToken.mint]
                           );
                           delete buyUntilReachedIntervals.current[
-                            data.token.mint
+                            transformedToken.mint
                           ];
                           return;
                         }
@@ -640,7 +679,7 @@ const TokenListWithAge: React.FC = () => {
                         ws.send(
                           JSON.stringify({
                             type: "MANUAL_BUY",
-                            mintAddress: data.token.mint,
+                            mintAddress: transformedToken.mint,
                             amount: amountLamports,
                             slippage: preset.slippage,
                             priorityFee: toLamports(preset.priorityFee),
@@ -749,6 +788,16 @@ const TokenListWithAge: React.FC = () => {
           prevTokens.map((token) =>
             token.mint === data.mint
               ? { ...token, currentPrice: data.price }
+              : token
+          )
+        );
+      }
+      if (data.type === "TOKEN_HOLDER_UPDATE" && data.mint && data.holderStats) {
+        console.log("[FRONTEND] Received TOKEN_HOLDER_UPDATE", data);
+        setTokens((prevTokens) =>
+          prevTokens.map((token) =>
+            token.mint === data.mint
+              ? { ...token, holders: data.holderStats.totalHolders }
               : token
           )
         );
@@ -1061,6 +1110,20 @@ const TokenListWithAge: React.FC = () => {
       Object.values(buyUntilReachedIntervals.current).forEach(clearInterval);
     };
   }, []);
+
+  function formatNumber(value: number): string {
+  if (value >= 1_000_000_000) {
+    return `${(value / 1_000_000_000).toFixed(2)}B`;
+  } else if (value >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(2)}M`;
+  } else if (value >= 1_000) {
+    return `${(value / 1_000).toFixed(2)}K`;
+  } else {
+    return value.toFixed(2);
+  }
+}
+
+
 
   return (
     <>
@@ -1490,7 +1553,7 @@ const TokenListWithAge: React.FC = () => {
                                 </span>
                                 <div className={styles.iconRow}>
                                   <a
-                                    href="#"
+                                    href={token.pumpLink || "#"}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                   >
@@ -1500,7 +1563,7 @@ const TokenListWithAge: React.FC = () => {
                                     />
                                   </a>
                                   <a
-                                    href="#"
+                                    href={token.website || "#"}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                   >
@@ -1510,7 +1573,7 @@ const TokenListWithAge: React.FC = () => {
                                     />
                                   </a>
                                   <a
-                                    href="#"
+                                    href={token.telegram || "#"}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                   >
@@ -1520,7 +1583,7 @@ const TokenListWithAge: React.FC = () => {
                                     />
                                   </a>
                                   <a
-                                    href="#"
+                                    href={token.pumpLink || "#"}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                   >
@@ -1530,7 +1593,7 @@ const TokenListWithAge: React.FC = () => {
                                     />
                                   </a>
                                   <a
-                                    href="#"
+                                    href={`https://solscan.io/token/${token.mint}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                   >
@@ -1548,21 +1611,21 @@ const TokenListWithAge: React.FC = () => {
                                     icon={faUsers}
                                     className={styles.statIcon}
                                   />
-                                  <span className={styles.statValue}>432</span>
+                                  <span className={styles.statValue}>{token.holders || 0}</span>
                                 </div>
                                 <div className={styles.statItem}>
                                   <FontAwesomeIcon
                                     icon={faArrowUp}
                                     className={`${styles.statIcon} ${styles.stateIconUP}`}
                                   />
-                                  <span className={styles.statValue}>91</span>
+                                  <span className={styles.statValue}>{token.buys || 0}</span>
                                 </div>
                                 <div className={styles.statItem}>
                                   <FontAwesomeIcon
                                     icon={faArrowDown}
                                     className={`${styles.statIcon} ${styles.stateIconDOWN}`}
                                   />
-                                  <span className={styles.statValue}>14</span>
+                                  <span className={styles.statValue}>{token.sells || 0}</span>
                                 </div>
                               </div>
                             </div>
@@ -1585,19 +1648,24 @@ const TokenListWithAge: React.FC = () => {
                                     marginBottom: "4px",
                                   }}
                                 >
-                                  $1.2M
+                                  {/* {token.marketCap ? `$${(token.marketCap).toFixed(4)}M` : '$0'} */}
+                                  {token.marketCap ? `$${formatNumber(token.marketCap)}` : '$0'}
+
                                 </span>
                               </div>
                               <div className={styles.tokenLine}>
                                 <span className={styles.label}>Vol</span>
                                 <span className={styles.defaultValue}>
-                                  $256K
+                                  {/* {token.volume ? `$${(token.volume / 1000).toFixed(0)}K` : '$0'} */}
+                                  {token.volume ? `$${formatNumber(token.volume)}` : '$0'}
                                 </span>
                               </div>
                               <div className={styles.tokenLine}>
                                 <span className={styles.label}>TX</span>
                                 <span className={styles.defaultValue}>
-                                  3.4K
+                                  {/* {token.buys && token.sells ? `${((token.buys + token.sells))}` : '0'} */}
+                                  {`${(token.buys || 0) + (token.sells || 0)}`}
+
                                 </span>
                               </div>
                               <div
@@ -1621,7 +1689,7 @@ const TokenListWithAge: React.FC = () => {
 
                           <div className={styles.tokenFooter}>
                             <div className={styles.bondingCurve}>
-                              <FontAwesomeIcon icon={faUserTie} /> 3%
+                              <FontAwesomeIcon icon={faUserTie} /> {token.bondingCurveProgress ? `${token.bondingCurveProgress.toFixed(1)}%` : '0%'}
                             </div>
 
                             <button
@@ -1756,7 +1824,7 @@ const TokenListWithAge: React.FC = () => {
                               </span>
                               <div className={styles.iconRow}>
                                 <a
-                                  href="#"
+                                  href={token.pumpLink || "#"}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                 >
@@ -1766,7 +1834,7 @@ const TokenListWithAge: React.FC = () => {
                                   />
                                 </a>
                                 <a
-                                  href="#"
+                                  href={token.website || "#"}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                 >
@@ -1776,7 +1844,7 @@ const TokenListWithAge: React.FC = () => {
                                   />
                                 </a>
                                 <a
-                                  href="#"
+                                  href={token.telegram || "#"}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                 >
@@ -1786,7 +1854,7 @@ const TokenListWithAge: React.FC = () => {
                                   />
                                 </a>
                                 <a
-                                  href="#"
+                                  href={token.pumpLink || "#"}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                 >
@@ -1796,7 +1864,7 @@ const TokenListWithAge: React.FC = () => {
                                   />
                                 </a>
                                 <a
-                                  href="#"
+                                  href={`https://solscan.io/token/${token.mint}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                 >
@@ -1814,21 +1882,21 @@ const TokenListWithAge: React.FC = () => {
                                   icon={faUsers}
                                   className={styles.statIcon}
                                 />
-                                <span className={styles.statValue}>432</span>
+                                <span className={styles.statValue}>{token.holders || 0}</span>
                               </div>
                               <div className={styles.statItem}>
                                 <FontAwesomeIcon
                                   icon={faArrowUp}
                                   className={`${styles.statIcon} ${styles.stateIconUP}`}
                                 />
-                                <span className={styles.statValue}>91</span>
+                                <span className={styles.statValue}>{token.buys || 0}</span>
                               </div>
                               <div className={styles.statItem}>
                                 <FontAwesomeIcon
                                   icon={faArrowDown}
                                   className={`${styles.statIcon} ${styles.stateIconDOWN}`}
                                 />
-                                <span className={styles.statValue}>14</span>
+                                <span className={styles.statValue}>{token.sells || 0}</span>
                               </div>
                             </div>
                           </div>
@@ -1851,16 +1919,20 @@ const TokenListWithAge: React.FC = () => {
                                   marginBottom: "4px",
                                 }}
                               >
-                                $1.2M
+                                {token.marketCap ? `$${(token.marketCap / 1000000).toFixed(1)}M` : '$0'}
                               </span>
                             </div>
                             <div className={styles.tokenLine}>
                               <span className={styles.label}>Vol</span>
-                              <span className={styles.defaultValue}>$256K</span>
+                              <span className={styles.defaultValue}>
+                                {token.volume ? `$${(token.volume / 1000).toFixed(0)}K` : '$0'}
+                              </span>
                             </div>
                             <div className={styles.tokenLine}>
                               <span className={styles.label}>TX</span>
-                              <span className={styles.defaultValue}>3.4K</span>
+                              <span className={styles.defaultValue}>
+                                {token.buys && token.sells ? `${((token.buys + token.sells) / 1000).toFixed(1)}K` : '0'}
+                              </span>
                             </div>
                             <div
                               className={styles.tokenLine}
@@ -1883,7 +1955,7 @@ const TokenListWithAge: React.FC = () => {
 
                         <div className={styles.tokenFooter}>
                           <div className={styles.bondingCurve}>
-                            <FontAwesomeIcon icon={faUserTie} /> 3%
+                            <FontAwesomeIcon icon={faUserTie} /> {token.bondingCurveProgress ? `${token.bondingCurveProgress.toFixed(1)}%` : '0%'}
                           </div>
 
                           <button
@@ -2019,7 +2091,7 @@ const TokenListWithAge: React.FC = () => {
                               </span>
                               <div className={styles.iconRow}>
                                 <a
-                                  href="#"
+                                  href={token.pumpLink || "#"}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                 >
@@ -2029,7 +2101,7 @@ const TokenListWithAge: React.FC = () => {
                                   />
                                 </a>
                                 <a
-                                  href="#"
+                                  href={token.website || "#"}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                 >
@@ -2039,7 +2111,7 @@ const TokenListWithAge: React.FC = () => {
                                   />
                                 </a>
                                 <a
-                                  href="#"
+                                  href={token.telegram || "#"}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                 >
@@ -2049,7 +2121,7 @@ const TokenListWithAge: React.FC = () => {
                                   />
                                 </a>
                                 <a
-                                  href="#"
+                                  href={token.pumpLink || "#"}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                 >
@@ -2059,7 +2131,7 @@ const TokenListWithAge: React.FC = () => {
                                   />
                                 </a>
                                 <a
-                                  href="#"
+                                  href={`https://solscan.io/token/${token.mint}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                 >
@@ -2077,21 +2149,21 @@ const TokenListWithAge: React.FC = () => {
                                   icon={faUsers}
                                   className={styles.statIcon}
                                 />
-                                <span className={styles.statValue}>432</span>
+                                <span className={styles.statValue}>{token.holders || 0}</span>
                               </div>
                               <div className={styles.statItem}>
                                 <FontAwesomeIcon
                                   icon={faArrowUp}
                                   className={`${styles.statIcon} ${styles.stateIconUP}`}
                                 />
-                                <span className={styles.statValue}>91</span>
+                                <span className={styles.statValue}>{token.buys || 0}</span>
                               </div>
                               <div className={styles.statItem}>
                                 <FontAwesomeIcon
                                   icon={faArrowDown}
                                   className={`${styles.statIcon} ${styles.stateIconDOWN}`}
                                 />
-                                <span className={styles.statValue}>14</span>
+                                <span className={styles.statValue}>{token.sells || 0}</span>
                               </div>
                             </div>
                           </div>
@@ -2114,16 +2186,20 @@ const TokenListWithAge: React.FC = () => {
                                   marginBottom: "4px",
                                 }}
                               >
-                                $1.2M
+                                {token.marketCap ? `$${(token.marketCap / 1000000).toFixed(1)}M` : '$0'}
                               </span>
                             </div>
                             <div className={styles.tokenLine}>
                               <span className={styles.label}>Vol</span>
-                              <span className={styles.defaultValue}>$256K</span>
+                              <span className={styles.defaultValue}>
+                                {token.volume ? `$${(token.volume / 1000).toFixed(0)}K` : '$0'}
+                              </span>
                             </div>
                             <div className={styles.tokenLine}>
                               <span className={styles.label}>TX</span>
-                              <span className={styles.defaultValue}>3.4K</span>
+                              <span className={styles.defaultValue}>
+                                {token.buys && token.sells ? `${((token.buys + token.sells) / 1000).toFixed(1)}K` : '0'}
+                              </span>
                             </div>
                             <div
                               className={styles.tokenLine}
@@ -2146,7 +2222,7 @@ const TokenListWithAge: React.FC = () => {
 
                         <div className={styles.tokenFooter}>
                           <div className={styles.bondingCurve}>
-                            <FontAwesomeIcon icon={faUserTie} /> 3%
+                            <FontAwesomeIcon icon={faUserTie} /> {token.bondingCurveProgress ? `${token.bondingCurveProgress.toFixed(1)}%` : '0%'}
                           </div>
 
                           <button

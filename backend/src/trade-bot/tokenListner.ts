@@ -1493,6 +1493,37 @@ wss.on("connection", (ws: WSWithUser) => {
           break;
         }
 
+        case "NEW_PUMPFUN_TOKEN": {
+          // Broadcast new PumpFun token to all connected clients
+          console.log(`📢 Broadcasting new PumpFun token ${data.data?.metadata?.name} to all clients.`);
+          wss.clients.forEach(client => {
+            const userClient = client as WSWithUser;
+            if (userClient.readyState === WebSocket.OPEN && userClient.userId !== 'auto-sell-worker') {
+              client.send(JSON.stringify({
+                type: "NEW_PUMPFUN_TOKEN",
+                data: data.data
+              }));
+            }
+          });
+          break;
+        }
+
+        case "TOKEN_HOLDER_UPDATE": {
+          // Broadcast holder stats update to all connected clients
+          console.log(`📢 Broadcasting holder update for ${data.mint} to all clients.`);
+          wss.clients.forEach(client => {
+            const userClient = client as WSWithUser;
+            if (userClient.readyState === WebSocket.OPEN && userClient.userId !== 'auto-sell-worker') {
+              client.send(JSON.stringify({
+                type: "TOKEN_HOLDER_UPDATE",
+                mint: data.mint,
+                holderStats: data.holderStats
+              }));
+            }
+          });
+          break;
+        }
+
         case "WITHDRAW_SUCCESS": {
           // Send updated SOL balance after withdrawal
           if (ws.userId && data.newBalance !== undefined) {

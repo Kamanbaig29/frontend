@@ -26,6 +26,8 @@ import { connectDatabase } from "./config/database";
 import { createWebSocketServer, setupWebSocketHandlers } from './trade-bot/tokenListner';
 import { startMemeHomeTokenWorker } from './helper-functions/memeHomeTokenWorker';
 import { startAutoSellWorker, stopAutoSellWorker } from './helper-functions/autosellworker';
+import { startPumpFunTokenWorker } from './helper-functions/pumpFunTokenWorker';
+import { updateExistingTokenPrices } from './helper-functions/updateExistingTokens';
 
 // import { startDbStatsBroadcaster } from './helper-functions/dbStatsBroadcaster';
 
@@ -104,7 +106,7 @@ async function main() {
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 API & WebSocket Server listening on http://localhost:${PORT}`);
     // Start the AutoSell worker only after server is ready
-    startAutoSellWorker();
+    // startAutoSellWorker();
   });
   // --- 3. Start Existing Bot Services ---
   //const connection = new Connection(process.env.RPC_ENDPOINT!);
@@ -113,7 +115,15 @@ async function main() {
   //setInterval(() => checkAndExecuteAllAutoSells(connection), 5000);
 
   // Start MemeHome token worker
-  startMemeHomeTokenWorker(wss);
+  // startMemeHomeTokenWorker(wss);
+  
+  // Start PumpFun token worker
+  startPumpFunTokenWorker(wss);
+  
+  // Update existing tokens with price data
+  setTimeout(() => {
+    updateExistingTokenPrices();
+  }, 5000); // Wait 5 seconds after server start
 
   // REMOVE or COMMENT OUT these lines:
   // console.log("Wallet watcher Activated");

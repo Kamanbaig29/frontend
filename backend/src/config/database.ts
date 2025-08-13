@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 //import { WalletToken } from '../models/WalletToken';
 //import { AutoSell } from '../models/autoSell';
 import { UserToken } from '../models/userToken'; // Import the new model
+import { PumpFunToken } from '../models/PumpFunToken';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -32,7 +33,8 @@ export async function connectDatabase() {
       //TokenStats.createCollection(),
       //WalletToken.createCollection(),
       //AutoSell.createCollection(),
-      UserToken.createCollection() // Ensure UserToken collection is created
+      UserToken.createCollection(), // Ensure UserToken collection is created
+      PumpFunToken.createCollection() // Ensure PumpFunToken collection is created
     ]);
 
     // Get database instance with type checking
